@@ -5,14 +5,10 @@ namespace XactJobs.TestWorker
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<Worker> _logger;
 
-        private readonly XactJobRunner _xactJobRunner;
-
         public Worker(IServiceScopeFactory scopeFactory, ILogger<Worker> logger)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
-
-            _xactJobRunner = new XactJobRunner(scopeFactory, logger);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -26,7 +22,7 @@ namespace XactJobs.TestWorker
                     _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
                 }
 
-                await _xactJobRunner.RunJobAsync(job, stoppingToken);
+                //await _xactJobRunner.RunJobAsync(job, stoppingToken);
 
                 await Task.Delay(1000, stoppingToken);
             }

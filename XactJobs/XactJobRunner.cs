@@ -1,27 +1,98 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text.Json;
 
 namespace XactJobs
 {
-    public sealed class XactJobRunner
+    public sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
         private static readonly ConcurrentDictionary<XactJobDispatchKey, Func<IServiceProvider, object?[], CancellationToken, Task?>> _compiledJobs = new();
 
+        private readonly XactJobsOptions _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(XactJobsOptions options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
+            _options = options;
             _scopeFactory = scopeFactory;
             _logger = logger;
         }
 
+        public async Task ExecuteAsync(CancellationToken stoppingToken)
+        {
+            var sql = _options.Dialect.GetFetchJobsSql(_options.BatchSize);
+
+            var parallelOptions = new ParallelOptions
+            {
+                CancellationToken = stoppingToken,
+                MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism
+            };
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    await RunJobsAsync(sql, parallelOptions, stoppingToken).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Running Jobs failed. Retrying in 10 seconds");
+
+                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                }
+            }
+        }
+
+        private async Task RunJobsAsync(string sql, ParallelOptions parallelOptions, CancellationToken stoppingToken)
+        {
+            using var scope = _scopeFactory.CreateScope();
+
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+            using var xact = await dbContext.Database.BeginTransactionAsync(stoppingToken)
+                .ConfigureAwait(false);
+
+            var jobs = await dbContext.Set<XactJob>().FromSqlRaw(sql)
+                .ToListAsync(stoppingToken)
+                .ConfigureAwait(false);
+
+            await Parallel.ForEachAsync(jobs, parallelOptions, async (job, stoppingToken) =>
+            {
+                try
+                {
+                    await RunJobAsync(job, stoppingToken)
+                        .ConfigureAwait(false);
+
+                    job.MarkCompleted();
+
+                    if (_logger.IsEnabled(LogLevel.Debug))
+                    {
+                        _logger.LogDebug("Job completed: {TypeName}.{MethodName} ({Id})", job.TypeName, job.MethodName, job.Id);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    job.MarkFailed(ex);
+                    _logger.LogError(ex, "Job failed: {TypeName}.{MethodName} ({Id})", job.TypeName, job.MethodName, job.Id);
+                }
+            })
+                .ConfigureAwait(false);
+
+            await dbContext.SaveChangesAsync(stoppingToken)
+                .ConfigureAwait(false);
+
+            await xact.CommitAsync(stoppingToken)
+                .ConfigureAwait(false);
+        }
+
         public async Task RunJobAsync(XactJob job, CancellationToken stoppingToken)
         {
-            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, job.Args.Length);
+            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, job.MethodArgs.Length);
 
             var compiled = _compiledJobs.GetOrAdd(key, k =>
             {
@@ -31,7 +102,9 @@ namespace XactJobs
 
             using var scope = _scopeFactory.CreateScope();
 
-            var resultTask = compiled(scope.ServiceProvider, job.Args, stoppingToken);
+            var args = JsonSerializer.Deserialize<object?[]>(job.MethodArgs) ?? [];
+
+            var resultTask = compiled(scope.ServiceProvider, args, stoppingToken);
 
             if (resultTask != null)
             {

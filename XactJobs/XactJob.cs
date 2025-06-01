@@ -2,6 +2,7 @@
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace XactJobs
 {
@@ -11,6 +12,17 @@ namespace XactJobs
         private static readonly ConcurrentDictionary<XactJobDispatchKey, MethodInfo[]> _overloadsCache = new();
 
         public long Id { get; private set; }
+
+        /// <summary>
+        /// Job status
+        /// </summary>
+        public XactJobStatus Status { get; private set; }
+
+        public DateTime CreatedAt { get; private set; }
+
+        public DateTime ScheduledAt { get; private set; }
+
+        public DateTime? UpdatedAt { get; private set; }
 
         /// <summary>
         /// Assembly qualified name of the declaring type
@@ -25,17 +37,62 @@ namespace XactJobs
         /// <summary>
         /// Arguments to be passed to the method
         /// </summary>
-        public object?[] Args { get; private set; } = [];
+        public string MethodArgs { get; private set; }
 
         public string? Queue { get; private set; }
 
-        public XactJob(long id, string typeName, string methodName, object?[] args, string? queue = null)
+        public int ErrorCount { get; private set; }
+
+        public string? ErrorMessage { get; private set; }
+
+        public string? ErrorStackTrace { get; private set; }
+
+        public XactJob(long id,
+                       DateTime createdAt,
+                       DateTime scheduledAt,
+                       string typeName,
+                       string methodName,
+                       string methodArgs,
+                       string? queue = null,
+                       DateTime? updatedAt = null,
+                       int errorCount = 0,
+                       string? lastErrorMessage = null,
+                       string? lastErrorStackTrace = null)
         {
             Id = id;
             TypeName = typeName;
             MethodName = methodName;
-            Args = args;
+            MethodArgs = methodArgs;
             Queue = queue;
+            CreatedAt = createdAt;
+            ScheduledAt = scheduledAt;
+            UpdatedAt = updatedAt;
+            ErrorCount = errorCount;
+            ErrorMessage = lastErrorMessage;
+            ErrorStackTrace = lastErrorStackTrace;
+        }
+
+        internal void MarkCompleted()
+        {
+            UpdatedAt = DateTime.Now;
+            Status = XactJobStatus.Completed;
+        }
+
+        internal void MarkFailed(Exception ex)
+        {
+            UpdatedAt = DateTime.UtcNow;
+            ErrorCount = ErrorCount + 1;
+            ErrorMessage = ex.Message;
+            ErrorStackTrace = ex.StackTrace;
+
+            // TODO Add retry strategy
+
+            Status = ErrorCount <= 10 ? XactJobStatus.Failed : XactJobStatus.Cancelled;
+            
+            if (Status == XactJobStatus.Failed)
+            {
+                ScheduledAt = DateTime.UtcNow.AddSeconds(10);
+            }
         }
 
         internal static XactJob FromExpression(LambdaExpression lambdaExp, string? queue)
@@ -54,7 +111,11 @@ namespace XactJobs
 
             var args = GetExpressionValues(callExpression.Arguments);
 
-            return new XactJob(0, typeName, methodName, args, queue);
+            var serializedArgs = JsonSerializer.Serialize(args);
+
+            var scheduledAt = DateTime.UtcNow;
+
+            return new XactJob(0, scheduledAt, scheduledAt, typeName, methodName, serializedArgs, queue);
         }
 
         internal (Type, MethodInfo) ToMethodInfo()
@@ -62,14 +123,14 @@ namespace XactJobs
             var type = Type.GetType(TypeName)
                 ?? throw new InvalidOperationException($"Type '{TypeName}' could not be loaded.");
 
-            var methods = _overloadsCache.GetOrAdd(GetMethodCacheKey(TypeName, MethodName, Args.Length), _ =>
+            var methods = _overloadsCache.GetOrAdd(GetMethodCacheKey(TypeName, MethodName, MethodArgs.Length), _ =>
             [
                 .. type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                    .Where(m => m.Name == MethodName && m.GetParameters().Length == Args.Length)
+                    .Where(m => m.Name == MethodName && m.GetParameters().Length == MethodArgs.Length)
             ]);
 
             var method = methods.FirstOrDefault()
-                ?? throw new MissingMethodException($"Method '{MethodName}' with {Args.Length} parameter(s) not found on type '{type.FullName}'.");
+                ?? throw new MissingMethodException($"Method '{MethodName}' with {MethodArgs.Length} parameter(s) not found on type '{type.FullName}'.");
 
             return (type, method);
         }
@@ -169,9 +230,7 @@ namespace XactJobs
 
         private static object? GetExpressionValue(Expression expression)
         {
-            var constantExpression = expression as ConstantExpression;
-
-            return constantExpression != null
+            return expression is ConstantExpression constantExpression
                 ? constantExpression.Value
                 : CachedExpressionCompiler.Evaluate(expression);
         }
