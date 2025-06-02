@@ -92,17 +92,18 @@ namespace XactJobs
 
         public async Task RunJobAsync(XactJob job, CancellationToken stoppingToken)
         {
-            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, job.MethodArgs.Length);
+            var args = JsonSerializer.Deserialize<object?[]>(job.MethodArgs) ?? [];
+
+            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
 
             var compiled = _compiledJobs.GetOrAdd(key, k =>
             {
-                var (type, method) = job.ToMethodInfo();
+                var (type, method) = job.ToMethodInfo(args.Length);
                 return BuildJobDelegate(type, method);
             });
 
             using var scope = _scopeFactory.CreateScope();
 
-            var args = JsonSerializer.Deserialize<object?[]>(job.MethodArgs) ?? [];
 
             var resultTask = compiled(scope.ServiceProvider, args, stoppingToken);
 

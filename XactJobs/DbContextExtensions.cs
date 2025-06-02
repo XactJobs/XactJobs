@@ -30,7 +30,7 @@ namespace XactJobs
 
         private static XactJob AddJob(DbContext? dbContext, LambdaExpression lambdaExp)
         {
-            var job = XactJob.FromExpression(lambdaExp, null);
+            var job = XactJobSerializer.FromExpression(lambdaExp, null);
 
             dbContext?.Set<XactJob>().Add(job);
 
