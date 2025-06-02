@@ -2,7 +2,7 @@
 {
     public class XactJob
     {
-        public long Id { get; private set; }
+        public Guid Id { get; private set; }
 
         /// <summary>
         /// Job status
@@ -14,6 +14,8 @@
         public DateTime ScheduledAt { get; private set; }
 
         public DateTime? UpdatedAt { get; private set; }
+
+        public DateTime? LeasedUntil { get; private set; }
 
         /// <summary>
         /// Assembly qualified name of the declaring type
@@ -38,7 +40,7 @@
 
         public string? ErrorStackTrace { get; private set; }
 
-        public XactJob(long id,
+        public XactJob(Guid id,
                        DateTime createdAt,
                        DateTime scheduledAt,
                        string typeName,
@@ -46,6 +48,7 @@
                        string methodArgs,
                        string? queue = null,
                        DateTime? updatedAt = null,
+                       DateTime? leasedUntil = null,
                        int errorCount = 0,
                        string? lastErrorMessage = null,
                        string? lastErrorStackTrace = null)
@@ -58,6 +61,7 @@
             CreatedAt = createdAt;
             ScheduledAt = scheduledAt;
             UpdatedAt = updatedAt;
+            LeasedUntil = leasedUntil;
             ErrorCount = errorCount;
             ErrorMessage = lastErrorMessage;
             ErrorStackTrace = lastErrorStackTrace;

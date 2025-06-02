@@ -104,7 +104,6 @@ namespace XactJobs
 
             using var scope = _scopeFactory.CreateScope();
 
-
             var resultTask = compiled(scope.ServiceProvider, args, stoppingToken);
 
             if (resultTask != null)

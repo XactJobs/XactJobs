@@ -1,7 +1,7 @@
 ﻿using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
-
+using UUIDNext;
 using XactJobs.Annotations;
 
 namespace XactJobs
@@ -28,9 +28,11 @@ namespace XactJobs
             return AddJob(dbContext, jobExpression);
         }
 
-        private static XactJob AddJob(DbContext? dbContext, LambdaExpression lambdaExp)
+        private static XactJob AddJob(DbContext? dbContext, LambdaExpression lambdaExp, string? queue = null)
         {
-            var job = XactJobSerializer.FromExpression(lambdaExp, null);
+            var id = Uuid.NewSequential();
+
+            var job = XactJobSerializer.FromExpression(lambdaExp, id, queue);
 
             dbContext?.Set<XactJob>().Add(job);
 

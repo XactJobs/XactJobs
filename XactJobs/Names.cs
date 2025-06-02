@@ -7,6 +7,7 @@
         public const string ColId = "id";
         public const string ColCreatedAt = "created_at";
         public const string ColUpdatedAt = "updated_at";
+        public const string ColLeasedUntil = "leased_until";
         public const string ColScheduledAt = "created_at";
         public const string ColTypeName = "type_name";
         public const string ColMethodName = "method_name";

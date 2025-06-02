@@ -11,7 +11,7 @@ namespace XactJobs
         private static readonly ConcurrentDictionary<MethodInfo, AsyncStateMachineAttribute?> _asyncStateMachineAttributeCache = new();
         private static readonly ConcurrentDictionary<XactJobDispatchKey, MethodInfo[]> _overloadsCache = new();
 
-        internal static XactJob FromExpression(LambdaExpression lambdaExp, string? queue)
+        internal static XactJob FromExpression(LambdaExpression lambdaExp, Guid id, string? queue)
         {
             var callExpression = lambdaExp.Body as MethodCallExpression 
                 ?? throw new ArgumentException("Expression body should be a simple method call.", nameof(lambdaExp));
@@ -31,7 +31,7 @@ namespace XactJobs
 
             var scheduledAt = DateTime.UtcNow;
 
-            return new XactJob(0, scheduledAt, scheduledAt, typeName, methodName, serializedArgs, queue);
+            return new XactJob(id, scheduledAt, scheduledAt, typeName, methodName, serializedArgs, queue);
         }
 
         internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)
