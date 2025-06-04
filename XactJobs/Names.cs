@@ -2,13 +2,15 @@
 {
     internal class Names
     {
-        public const string TableXactJob = "xact_job";
+        public const string XactJobSchema = "xact_jobs";
+        public const string XactJobTable = "job";
 
         public const string ColId = "id";
         public const string ColCreatedAt = "created_at";
         public const string ColUpdatedAt = "updated_at";
-        public const string ColLeasedUntil = "leased_until";
         public const string ColScheduledAt = "created_at";
+        public const string ColLeasedUntil = "leased_until";
+        public const string ColLeaser = "leaser";
         public const string ColTypeName = "type_name";
         public const string ColMethodName = "method_name";
         public const string ColMethodArgs = "method_args";

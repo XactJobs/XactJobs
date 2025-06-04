@@ -1,52 +1,37 @@
-﻿namespace XactJobs
+﻿using XactJobs.SqlDialects;
+
+namespace XactJobs
 {
     public interface ISqlDialect
     {
-        string GetFetchJobsSql(int maxJobs);
+        string DateTimeColumnType { get; }
+
+        /// <summary>
+        /// Optional, if a database does not support update returning (MySQL).
+        /// If a database supports update returning, it should return null here
+        /// </summary>
+        /// <param name="leaser"></param>
+        /// <param name="maxJobs"></param>
+        /// <returns></returns>
+        string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds);
+
+        string GetFetchJobsSql(int maxJobs, Guid leaser, int leaseDurationInSeconds);
+
+        string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds);
     }
 
-    public class PostgresDialect : ISqlDialect
+    internal static class SqlDialectExtensions
     {
-        public string GetFetchJobsSql(int maxJobs) => $@"
-SELECT * FROM ""{Names.TableXactJob}""
-WHERE ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-    AND ""{Names.ColScheduledAt}"" <= current_timestamp
-ORDER BY ""{Names.ColScheduledAt}""
-FOR UPDATE SKIP LOCKED
-LIMIT {maxJobs}
-";
-    }
+        public static ISqlDialect ToSqlDialect(this string? providerName)
+        {
+            providerName = providerName?.ToLowerInvariant() ?? "";
 
-    public class MsSqlDialect : ISqlDialect
-    {
-        public string GetFetchJobsSql(int maxJobs) => $@"
-SELECT TOP ({maxJobs}) *
-FROM [{Names.TableXactJob}] WITH (ROWLOCK, READPAST, UPDLOCK)
-WHERE [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-    AND [{Names.ColScheduledAt}] <= getutcdate()
-ORDER BY [{Names.ColScheduledAt}]
-";
-    }
+            if (providerName.EndsWith(".sqlserver")) return new MsSqlDialect();
+            if (providerName.EndsWith(".postgresql")) return new PostgresDialect();
+            if (providerName.EndsWith(".mysql")) return new MySqlDialect();
+            if (providerName.EndsWith(".oracle")) return new OracleDialect();
 
-    public class MySqlDialect : ISqlDialect
-    {
-        public string GetFetchJobsSql(int maxJobs) => $@"
-SELECT * FROM `{Names.TableXactJob}`
-WHERE `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-    AND `{Names.ColScheduledAt}` <= utc_timestamp()
-ORDER BY `{Names.ColScheduledAt}`
-LIMIT {maxJobs} FOR UPDATE SKIP LOCKED
-";
-    }
-
-    public class OracleDialect : ISqlDialect
-    {
-        public string GetFetchJobsSql(int maxJobs) => $@"
-SELECT * FROM {Names.TableXactJob}
-WHERE {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-    AND {Names.ColScheduledAt} <= sys_extract_utc(current_timestamp)
-ORDER BY {Names.ColScheduledAt}
-FOR UPDATE SKIP LOCKED
-FETCH FIRST {maxJobs} ROWS ONLY";
+            throw new NotSupportedException($"XactJobs does not support provider '{providerName}'.");
+        }
     }
 }

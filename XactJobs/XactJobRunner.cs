@@ -1,16 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Text.Json;
 
 namespace XactJobs
 {
     public sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, Func<IServiceProvider, object?[], CancellationToken, Task?>> _compiledJobs = new();
+        private readonly Guid _leaser = Guid.NewGuid();
 
         private readonly XactJobsOptions _options;
         private readonly IServiceScopeFactory _scopeFactory;
@@ -25,19 +21,17 @@ namespace XactJobs
 
         public async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var sql = _options.Dialect.GetFetchJobsSql(_options.BatchSize);
-
             var parallelOptions = new ParallelOptions
             {
                 CancellationToken = stoppingToken,
                 MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism
             };
-
+            
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await RunJobsAsync(sql, parallelOptions, stoppingToken).ConfigureAwait(false);
+                    await RunJobsAsync(parallelOptions, stoppingToken).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -48,16 +42,33 @@ namespace XactJobs
             }
         }
 
-        private async Task RunJobsAsync(string sql, ParallelOptions parallelOptions, CancellationToken stoppingToken)
+        private async Task RunJobsAsync(ParallelOptions parallelOptions, CancellationToken stoppingToken)
         {
             using var scope = _scopeFactory.CreateScope();
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            using var xact = await dbContext.Database.BeginTransactionAsync(stoppingToken)
-                .ConfigureAwait(false);
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            var jobs = await dbContext.Set<XactJob>().FromSqlRaw(sql)
+            var extendLeaseSql = dialect.GetExtendLeaseSql(_leaser, _options.LeaseDurationInSeconds);
+            var acquireLeaseSql = dialect.GetAcquireLeaseSql(_options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
+            var fetchJobsSql = dialect.GetFetchJobsSql(_options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
+
+            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), async token =>
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(extendLeaseSql, token)
+                    .ConfigureAwait(false);
+            });
+
+            extendLeaseTimer.Start();
+
+            if (acquireLeaseSql != null)
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(acquireLeaseSql, stoppingToken)
+                    .ConfigureAwait(false);
+            }
+
+            var jobs = await dbContext.Set<XactJob>().FromSqlRaw(fetchJobsSql)
                 .ToListAsync(stoppingToken)
                 .ConfigureAwait(false);
 
@@ -67,8 +78,6 @@ namespace XactJobs
                 {
                     await RunJobAsync(job, stoppingToken)
                         .ConfigureAwait(false);
-
-                    job.MarkCompleted();
 
                     if (_logger.IsEnabled(LogLevel.Debug))
                     {
@@ -86,85 +95,51 @@ namespace XactJobs
             await dbContext.SaveChangesAsync(stoppingToken)
                 .ConfigureAwait(false);
 
-            await xact.CommitAsync(stoppingToken)
+            await extendLeaseTimer.StopAsync()
                 .ConfigureAwait(false);
         }
 
         public async Task RunJobAsync(XactJob job, CancellationToken stoppingToken)
         {
-            var args = JsonSerializer.Deserialize<object?[]>(job.MethodArgs) ?? [];
-
-            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
-
-            var compiled = _compiledJobs.GetOrAdd(key, k =>
-            {
-                var (type, method) = job.ToMethodInfo(args.Length);
-                return BuildJobDelegate(type, method);
-            });
-
             using var scope = _scopeFactory.CreateScope();
 
-            var resultTask = compiled(scope.ServiceProvider, args, stoppingToken);
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            if (resultTask != null)
+            try
             {
-                await resultTask.ConfigureAwait(false);
-            }
-        }
+                dbContext.Attach(job);
 
-        private static Func<IServiceProvider, object?[], CancellationToken, Task?> BuildJobDelegate(Type type, MethodInfo method)
-        {
-            var spParam = Expression.Parameter(typeof(IServiceProvider), "serviceProvider");
-            var argsParam = Expression.Parameter(typeof(object[]), "args");
-            var ctParam = Expression.Parameter(typeof(CancellationToken), "stoppingToken");
+                await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
+                    .ConfigureAwait(false);
 
-            var parameters = method.GetParameters();
-            var callArgs = new Expression[parameters.Length];
+                job.MarkCompleted();
 
-            for (int i = 0; i < parameters.Length; i++)
-            {
-                var argAccess = Expression.ArrayIndex(argsParam, Expression.Constant(i));
-                var paramType = parameters[i].ParameterType;
+                await dbContext.SaveChangesAsync(stoppingToken)
+                    .ConfigureAwait(false);
 
-                if (paramType == typeof(CancellationToken))
+                if (dbContext.Database.CurrentTransaction != null)
                 {
-                    callArgs[i] = ctParam;
-                }
-                else
-                {
-                    callArgs[i] = Expression.Convert(argAccess, paramType);
+                    await dbContext.Database.CurrentTransaction.CommitAsync(stoppingToken)
+                        .ConfigureAwait(false);
                 }
             }
-
-            Expression? instanceExpr = method.IsStatic
-                ? null
-                : Expression.Convert(
-                    Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService), [type], spParam),
-                    type
-                );
-
-            var callExpr = Expression.Call(instanceExpr, method, callArgs);
-
-            Expression bodyExpr;
-
-            if (typeof(Task).IsAssignableFrom(method.ReturnType))
+            catch
             {
-                bodyExpr = Expression.Convert(callExpr, typeof(Task));
+                if (dbContext.Database.CurrentTransaction != null)
+                {
+                    await dbContext.Database.CurrentTransaction.RollbackAsync(stoppingToken)
+                        .ConfigureAwait(false);
+                }
+                throw;
             }
-            else
+            finally
             {
-                var completedTaskProp = typeof(Task).GetProperty(nameof(Task.CompletedTask))!;
-                var completedTaskExpr = Expression.Property(null, completedTaskProp);
-
-                // callExpr returns void, so use a Block to sequence call + completedTask
-                bodyExpr = Expression.Block(callExpr, completedTaskExpr);
+                if (dbContext.Database.CurrentTransaction != null)
+                {
+                    await dbContext.Database.CurrentTransaction.DisposeAsync()
+                        .ConfigureAwait(false);
+                }
             }
-
-            var lambda = Expression.Lambda<Func<IServiceProvider, object?[], CancellationToken, Task?>>(
-                bodyExpr, spParam, argsParam, ctParam);
-
-            return lambda.Compile();
         }
-
     }
 }

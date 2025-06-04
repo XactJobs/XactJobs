@@ -17,6 +17,8 @@
 
         public DateTime? LeasedUntil { get; private set; }
 
+        public Guid? Leaser { get; set; }
+
         /// <summary>
         /// Assembly qualified name of the declaring type
         /// </summary>
@@ -76,6 +78,7 @@
         internal void MarkFailed(Exception ex)
         {
             UpdatedAt = DateTime.UtcNow;
+
             ErrorCount = ErrorCount + 1;
             ErrorMessage = ex.Message;
             ErrorStackTrace = ex.StackTrace;
@@ -86,6 +89,9 @@
             
             if (Status == XactJobStatus.Failed)
             {
+                Leaser = null;
+                LeasedUntil = null;
+
                 ScheduledAt = DateTime.UtcNow.AddSeconds(10);
             }
         }

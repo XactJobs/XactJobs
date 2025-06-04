@@ -3,19 +3,35 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace XactJobs.EntityConfigurations
 {
-    internal class XactJobEntityConfiguration : IEntityTypeConfiguration<XactJob>
+    public class XactJobEntityConfiguration : IEntityTypeConfiguration<XactJob>
     {
+        private readonly ISqlDialect _sqlDialect;
+
+        public XactJobEntityConfiguration(string providerName)
+        {
+            _sqlDialect = providerName.ToSqlDialect();
+        }
+
         public void Configure(EntityTypeBuilder<XactJob> builder)
         {
-            builder.ToTable(Names.TableXactJob);
+            builder.ToTable(Names.XactJobTable, Names.XactJobSchema);
 
-            builder.HasKey(x => x.Id).HasName($"pk_{Names.TableXactJob}_{Names.ColId}");
-
+            builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobTable}_{Names.ColId}");
             builder.Property(x => x.Id).HasColumnName(Names.ColId);
-            builder.Property(x => x.CreatedAt).HasColumnName(Names.ColCreatedAt);
-            builder.Property(x => x.UpdatedAt).HasColumnName(Names.ColUpdatedAt);
-            builder.Property(x => x.LeasedUntil).HasColumnName(Names.ColLeasedUntil);
-            builder.Property(x => x.ScheduledAt).HasColumnName(Names.ColScheduledAt);
+
+            builder.Property(x => x.CreatedAt).HasColumnName(Names.ColCreatedAt)
+                .HasColumnType(_sqlDialect.DateTimeColumnType);
+
+            builder.Property(x => x.UpdatedAt).HasColumnName(Names.ColUpdatedAt)
+                .HasColumnType(_sqlDialect.DateTimeColumnType);
+
+            builder.Property(x => x.LeasedUntil).HasColumnName(Names.ColLeasedUntil)
+                .HasColumnType(_sqlDialect.DateTimeColumnType);
+
+            builder.Property(x => x.ScheduledAt).HasColumnName(Names.ColScheduledAt)
+                .HasColumnType(_sqlDialect.DateTimeColumnType);
+
+            builder.Property(x => x.Leaser).HasColumnName(Names.ColLeaser);
             builder.Property(x => x.TypeName).HasColumnName(Names.ColTypeName);
             builder.Property(x => x.MethodName).HasColumnName(Names.ColMethodName);
             builder.Property(x => x.MethodArgs).HasColumnName(Names.ColMethodArgs);
