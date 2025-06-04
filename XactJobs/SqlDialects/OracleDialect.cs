@@ -1,8 +1,12 @@
-﻿namespace XactJobs.SqlDialects
+﻿using UUIDNext;
+
+namespace XactJobs.SqlDialects
 {
     public class OracleDialect : ISqlDialect
     {
         public string DateTimeColumnType { get; } = "timestamp with time zone";
+
+        public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.Other);
 
         public string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
 

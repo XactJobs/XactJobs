@@ -1,8 +1,12 @@
-﻿namespace XactJobs.SqlDialects
+﻿using UUIDNext;
+
+namespace XactJobs.SqlDialects
 {
-    public class MsSqlDialect : ISqlDialect
+    public class SqlServerDialect : ISqlDialect
     {
         public string DateTimeColumnType { get; } = "datetime2";
+
+        public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.SqlServer);
 
         public string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
 

@@ -1,8 +1,12 @@
-﻿namespace XactJobs.SqlDialects
+﻿using UUIDNext;
+
+namespace XactJobs.SqlDialects
 {
     public class MySqlDialect : ISqlDialect
     {
         public string DateTimeColumnType { get; } = "datetime(6)";
+
+        public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.Other);
 
         public string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 UPDATE `{Names.XactJobSchema}`.`{Names.XactJobTable}`

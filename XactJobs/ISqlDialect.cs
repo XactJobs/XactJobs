@@ -1,4 +1,5 @@
-﻿using XactJobs.SqlDialects;
+﻿using System.Collections.Concurrent;
+using XactJobs.SqlDialects;
 
 namespace XactJobs
 {
@@ -18,20 +19,27 @@ namespace XactJobs
         string GetFetchJobsSql(int maxJobs, Guid leaser, int leaseDurationInSeconds);
 
         string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds);
+
+        Guid NewJobId();
     }
 
     internal static class SqlDialectExtensions
     {
+        private static readonly ConcurrentDictionary<string, ISqlDialect> _cachedDialects = new();
+
         public static ISqlDialect ToSqlDialect(this string? providerName)
         {
-            providerName = providerName?.ToLowerInvariant() ?? "";
+            return _cachedDialects.GetOrAdd(providerName ?? "", key =>
+            {
+                key = key.ToLowerInvariant();
 
-            if (providerName.EndsWith(".sqlserver")) return new MsSqlDialect();
-            if (providerName.EndsWith(".postgresql")) return new PostgresDialect();
-            if (providerName.EndsWith(".mysql")) return new MySqlDialect();
-            if (providerName.EndsWith(".oracle")) return new OracleDialect();
+                if (key.EndsWith(".sqlserver")) return new SqlServerDialect();
+                if (key.EndsWith(".postgresql")) return new PostgreSqlDialect();
+                if (key.EndsWith(".mysql")) return new MySqlDialect();
+                if (key.EndsWith(".oracle")) return new OracleDialect();
 
-            throw new NotSupportedException($"XactJobs does not support provider '{providerName}'.");
+                throw new NotSupportedException($"XactJobs does not support provider '{key}'.");
+            });
         }
     }
 }

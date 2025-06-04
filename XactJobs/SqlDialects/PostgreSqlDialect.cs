@@ -1,8 +1,12 @@
-﻿namespace XactJobs.SqlDialects
+﻿using UUIDNext;
+
+namespace XactJobs.SqlDialects
 {
-    public class PostgresDialect : ISqlDialect
+    public class PostgreSqlDialect : ISqlDialect
     {
         public string DateTimeColumnType { get; } = "timestamptz";
+
+        public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.PostgreSql);
 
         public string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
 
