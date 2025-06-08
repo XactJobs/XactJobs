@@ -6,14 +6,15 @@ namespace XactJobs
 {
     public sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
+        private readonly string? _queueName;
         private readonly Guid _leaser = Guid.NewGuid();
-
         private readonly XactJobsOptions _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(XactJobsOptions options, IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(string? queueName, XactJobsOptions options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
+            _queueName = queueName;
             _options = options;
             _scopeFactory = scopeFactory;
             _logger = logger;
@@ -51,8 +52,8 @@ namespace XactJobs
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
             var extendLeaseSql = dialect.GetExtendLeaseSql(_leaser, _options.LeaseDurationInSeconds);
-            var acquireLeaseSql = dialect.GetAcquireLeaseSql(_options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
-            var fetchJobsSql = dialect.GetFetchJobsSql(_options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
+            var acquireLeaseSql = dialect.GetAcquireLeaseSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
+            var fetchJobsSql = dialect.GetFetchJobsSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
 
             using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), async token =>
             {

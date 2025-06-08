@@ -8,7 +8,7 @@ namespace XactJobs.SqlDialects
 
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.Other);
 
-        public string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 UPDATE `{Names.XactJobSchema}`.`{Names.XactJobTable}`
 SET `{Names.ColLeaser}` = '{leaser}',
     `{Names.ColLeasedUntil}` = UTC_TIMESTAMP + INTERVAL {leaseDurationInSeconds} SECOND
@@ -17,17 +17,19 @@ WHERE `{Names.ColId}` IN (
     FROM `{Names.XactJobSchema}`.`{Names.XactJobTable}`
     WHERE `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND (`{Names.ColLeasedUntil}` IS NULL OR `{Names.ColLeasedUntil}` < UTC_TIMESTAMP)
+      AND {GetQueueCondition(queueName)}
     ORDER BY `{Names.ColId}`
     LIMIT {maxJobs}
     FOR UPDATE SKIP LOCKED
 );
 ";
 
-        public string GetFetchJobsSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 SELECT *
 FROM `{Names.XactJobSchema}`.`{Names.XactJobTable}`
 WHERE `{Names.ColLeaser}` = '{leaser}'
   AND `{Names.ColLeasedUntil}` > UTC_TIMESTAMP
+  AND {GetQueueCondition(queueName)}
 LIMIT {maxJobs};
 ";
 
@@ -37,5 +39,13 @@ SET leased_until = UTC_TIMESTAMP + INTERVAL {leaseDurationInSeconds} SECOND
 WHERE leaser = '{leaser}'
   AND status IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed});
 ";
+
+        private static string GetQueueCondition(string? queueName)
+        {
+            return string.IsNullOrEmpty(queueName)
+                ? $"`{Names.ColQueue}` IS NULL"
+                : $"`{Names.ColQueue}` = '{queueName}'";
+        }
+
     }
 }

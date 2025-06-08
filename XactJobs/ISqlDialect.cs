@@ -14,9 +14,9 @@ namespace XactJobs
         /// <param name="leaser"></param>
         /// <param name="maxJobs"></param>
         /// <returns></returns>
-        string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds);
+        string? GetAcquireLeaseSql(string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds);
 
-        string GetFetchJobsSql(int maxJobs, Guid leaser, int leaseDurationInSeconds);
+        string GetFetchJobsSql(string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds);
 
         string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds);
 

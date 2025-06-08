@@ -8,14 +8,15 @@ namespace XactJobs.SqlDialects
 
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.PostgreSql);
 
-        public string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
+        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
 
-        public string GetFetchJobsSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 WITH cte AS (
   SELECT ""{Names.ColId}""
   FROM ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
   WHERE ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
     AND (""{Names.ColLeasedUntil}"" IS NULL OR ""{Names.ColLeasedUntil}"" < current_timestamp)
+    AND {GetQueueCondition(queueName)}
   ORDER BY ""{Names.ColId}""
   FOR UPDATE SKIP LOCKED
   LIMIT {maxJobs}
@@ -33,5 +34,12 @@ SET ""{Names.ColLeasedUntil}"" = current_timestamp + interval '{leaseDurationInS
 WHERE ""{Names.ColLeaser}"" = '{leaser}'::uuid
   AND ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed});
 ";
+
+        private static string GetQueueCondition(string? queueName)
+        {
+            return string.IsNullOrEmpty(queueName)
+                ? $"\"{Names.ColQueue}\" IS NULL"
+                : $"\"{Names.ColQueue}\" = '{queueName}'";
+        }
     }
 }

@@ -8,14 +8,15 @@ namespace XactJobs.SqlDialects
 
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.SqlServer);
 
-        public string? GetAcquireLeaseSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
+        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
 
-        public string GetFetchJobsSql(int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 WITH cte AS (
     SELECT TOP ({maxJobs}) [{Names.ColId}]
     FROM [{Names.XactJobSchema}].[{Names.XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
     WHERE [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND ([{Names.ColLeasedUntil}] IS NULL OR [{Names.ColLeasedUntil}] < SYSUTCDATETIME())
+      AND {GetQueueCondition(queueName)}
     ORDER BY [{Names.ColId}]
 )
 UPDATE target
@@ -32,5 +33,12 @@ SET leased_until = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
 WHERE leaser = CAST('{leaser}' AS UNIQUEIDENTIFIER)
   AND status IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed});
 ";
+
+        private static string GetQueueCondition(string? queueName)
+        {
+            return string.IsNullOrEmpty(queueName)
+                ? $"[{Names.ColQueue}] IS NULL"
+                : $"[{Names.ColQueue}] = '{queueName}'";
+        }
     }
 }
