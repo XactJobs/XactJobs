@@ -17,9 +17,9 @@ WHERE `{Names.ColId}` IN (
     FROM `{Names.XactJobSchema}`.`{Names.XactJobTable}`
     WHERE `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND `{Names.ColScheduledAt}` <= UTC_TIMESTAMP 
-      AND {GetQueueCondition(queueName)}
+      AND `{Names.ColQueue}` = '{queueName ?? Names.DefaultQueue}'
       AND (`{Names.ColLeasedUntil}` IS NULL OR `{Names.ColLeasedUntil}` < UTC_TIMESTAMP)
-    ORDER BY `{Names.ColId}`
+    ORDER BY `{Names.ColScheduledAt}`
     LIMIT {maxJobs}
     FOR UPDATE SKIP LOCKED
 )
@@ -30,7 +30,7 @@ SELECT *
 FROM `{Names.XactJobSchema}`.`{Names.XactJobTable}`
 WHERE `{Names.ColLeaser}` = '{leaser}'
   AND `{Names.ColLeasedUntil}` > UTC_TIMESTAMP
-  AND {GetQueueCondition(queueName)}
+  AND `{Names.ColQueue}` = '{queueName ?? Names.DefaultQueue}'
 LIMIT {maxJobs}
 ";
 
@@ -47,14 +47,5 @@ SET `{Names.ColLeaser}` = NULL, `{Names.ColLeasedUntil}` = NULL
 WHERE `{Names.ColLeaser}` = '{leaser}'
   AND `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
-
-
-        private static string GetQueueCondition(string? queueName)
-        {
-            return string.IsNullOrEmpty(queueName)
-                ? $"`{Names.ColQueue}` IS NULL"
-                : $"`{Names.ColQueue}` = '{queueName}'";
-        }
-
     }
 }

@@ -16,9 +16,9 @@ WITH cte AS (
     FROM {Names.XactJobSchema}.{Names.XactJobTable}
     WHERE {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND {Names.ColScheduledAt} <= SYSTIMESTAMP AT TIME ZONE 'UTC'
-      AND {GetQueueCondition(queueName)}
+      AND {Names.ColQueue} = '{queueName ?? Names.DefaultQueue}'
       AND ({Names.ColLeasedUntil} IS NULL OR {Names.ColLeasedUntil} < SYSTIMESTAMP AT TIME ZONE 'UTC')
-    ORDER BY {Names.ColId}
+    ORDER BY {Names.ColScheduledAt}
     FOR UPDATE SKIP LOCKED
     FETCH FIRST {maxJobs} ROWS ONLY
 )
@@ -42,13 +42,5 @@ SET {Names.ColLeaser} = NULL, {Names.ColLeasedUntil} = NULL
 WHERE {Names.ColLeaser} = HEXTORAW('{leaser:N}')
   AND {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
-
-        private static string GetQueueCondition(string? queueName)
-        {
-            return string.IsNullOrEmpty(queueName)
-                ? $"{Names.ColQueue} IS NULL"
-                : $"{Names.ColQueue} = '{queueName}'";
-        }
-
     }
 }

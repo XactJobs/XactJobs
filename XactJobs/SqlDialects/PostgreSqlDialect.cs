@@ -16,9 +16,9 @@ WITH cte AS (
   FROM ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
   WHERE ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
     AND ""{Names.ColScheduledAt}"" <= current_timestamp
-    AND {GetQueueCondition(queueName)}
+    AND ""{Names.ColQueue}"" = '{queueName ?? Names.DefaultQueue}'
     AND (""{Names.ColLeasedUntil}"" IS NULL OR ""{Names.ColLeasedUntil}"" < current_timestamp)
-  ORDER BY ""{Names.ColId}""
+  ORDER BY ""{Names.ColScheduledAt}""
   FOR UPDATE SKIP LOCKED
   LIMIT {maxJobs}
 )
@@ -42,12 +42,5 @@ SET ""{Names.ColLeaser}"" = NULL, ""{Names.ColLeasedUntil}"" = NULL
 WHERE ""{Names.ColLeaser}"" = '{leaser}'::uuid
   AND ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
-
-        private static string GetQueueCondition(string? queueName)
-        {
-            return string.IsNullOrEmpty(queueName)
-                ? $"\"{Names.ColQueue}\" IS NULL"
-                : $"\"{Names.ColQueue}\" = '{queueName}'";
-        }
     }
 }

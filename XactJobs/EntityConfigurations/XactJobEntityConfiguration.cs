@@ -7,7 +7,7 @@ namespace XactJobs.EntityConfigurations
     {
         private readonly ISqlDialect _sqlDialect;
 
-        public XactJobEntityConfiguration(string providerName)
+        public XactJobEntityConfiguration(string? providerName)
         {
             _sqlDialect = providerName.ToSqlDialect();
         }
@@ -16,7 +16,8 @@ namespace XactJobs.EntityConfigurations
         {
             builder.ToTable(Names.XactJobTable, Names.XactJobSchema);
 
-            builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobTable}_{Names.ColId}");
+            builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobTable}");
+
             builder.Property(x => x.Id).HasColumnName(Names.ColId);
 
             builder.Property(x => x.CreatedAt).HasColumnName(Names.ColCreatedAt)
@@ -40,6 +41,9 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.ErrorCount).HasColumnName(Names.ColErrorCount);
             builder.Property(x => x.ErrorMessage).HasColumnName(Names.ColErrorMessage);
             builder.Property(x => x.ErrorStackTrace).HasColumnName(Names.ColErrorStackTrace);
+
+            builder.HasIndex(x => new { x.Queue, x.Status, x.ScheduledAt })
+                .HasDatabaseName($"ix_{Names.ColQueue}_{Names.ColStatus}_{Names.ColScheduledAt}");
         }
     }
 }

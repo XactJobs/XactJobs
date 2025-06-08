@@ -34,9 +34,11 @@ namespace XactJobs
 
             var serializedArgs = JsonSerializer.Serialize(args);
 
-            var scheduledAt = scheduleAtUtc ?? DateTime.UtcNow;
+            scheduleAtUtc ??= DateTime.UtcNow;
 
-            return new XactJob(id, scheduledAt, scheduledAt, typeName, methodName, serializedArgs, queue);
+            queue ??= Names.DefaultQueue;
+
+            return new XactJob(id, scheduleAtUtc.Value, scheduleAtUtc.Value, typeName, methodName, serializedArgs, queue);
         }
 
         internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)

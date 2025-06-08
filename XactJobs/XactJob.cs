@@ -34,7 +34,7 @@
         /// </summary>
         public string MethodArgs { get; private set; }
 
-        public string? Queue { get; private set; }
+        public string Queue { get; private set; }
 
         public int ErrorCount { get; private set; }
 
@@ -48,12 +48,12 @@
                        string typeName,
                        string methodName,
                        string methodArgs,
-                       string? queue = null,
+                       string queue,
                        DateTime? updatedAt = null,
                        DateTime? leasedUntil = null,
                        int errorCount = 0,
-                       string? lastErrorMessage = null,
-                       string? lastErrorStackTrace = null)
+                       string? errorMessage = null,
+                       string? errorStackTrace = null)
         {
             Id = id;
             TypeName = typeName;
@@ -65,8 +65,8 @@
             UpdatedAt = updatedAt;
             LeasedUntil = leasedUntil;
             ErrorCount = errorCount;
-            ErrorMessage = lastErrorMessage;
-            ErrorStackTrace = lastErrorStackTrace;
+            ErrorMessage = errorMessage;
+            ErrorStackTrace = errorStackTrace;
         }
 
         internal void MarkCompleted()
