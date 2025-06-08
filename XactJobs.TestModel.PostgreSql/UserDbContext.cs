@@ -33,7 +33,7 @@ namespace XactJobs.TestModel.PostgreSql
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.ApplyConfiguration(new XactJobEntityConfiguration(Database.ProviderName));
+            modelBuilder.ApplyConfiguration(new XactJobEntityConfiguration(Database.ProviderName, false));
         }
 
     }

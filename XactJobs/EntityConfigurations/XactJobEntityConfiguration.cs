@@ -6,14 +6,18 @@ namespace XactJobs.EntityConfigurations
     public class XactJobEntityConfiguration : IEntityTypeConfiguration<XactJob>
     {
         private readonly ISqlDialect _sqlDialect;
+        private readonly bool _excludeFromMigrations;
 
-        public XactJobEntityConfiguration(string? providerName)
+        public XactJobEntityConfiguration(string? providerName, bool excludeFromMigrations = true)
         {
             _sqlDialect = providerName.ToSqlDialect();
+            _excludeFromMigrations = excludeFromMigrations;
         }
 
         public void Configure(EntityTypeBuilder<XactJob> builder)
         {
+            builder.Metadata.SetIsTableExcludedFromMigrations(_excludeFromMigrations);
+
             builder.ToTable(Names.XactJobTable, Names.XactJobSchema);
 
             builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobTable}");
