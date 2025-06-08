@@ -40,7 +40,7 @@ namespace XactJobs
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Running Jobs failed. Retrying in 10 seconds");
+                    _logger.LogError(ex, "Running Jobs failed. Retrying in {RetryIn} seconds", _options.WorkerErrorRetryDelayInSeconds);
 
                     await Task.Delay(TimeSpan.FromSeconds(_options.WorkerErrorRetryDelayInSeconds), stoppingToken);
                 }
