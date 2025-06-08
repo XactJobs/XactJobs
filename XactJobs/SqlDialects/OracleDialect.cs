@@ -26,14 +26,21 @@ UPDATE {Names.XactJobSchema}.{Names.XactJobTable} tgt
 SET {Names.ColLeaser} = HEXTORAW('{leaser:N}'),
     {Names.ColLeasedUntil} = SYSTIMESTAMP AT TIME ZONE 'UTC' + INTERVAL '{leaseDurationInSeconds}' SECOND
 WHERE tgt.{Names.ColId} IN (SELECT {Names.ColId} FROM cte)
-RETURNING tgt.*;
+RETURNING tgt.*
 ";
 
         public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
 UPDATE {Names.XactJobSchema}.{Names.XactJobTable}
-SET leased_until = SYSTIMESTAMP + NUMTODSINTERVAL({leaseDurationInSeconds}, 'SECOND')
-WHERE leaser = HEXTORAW('{leaser:N}')
-  AND status IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed});
+SET {Names.ColLeasedUntil} = SYSTIMESTAMP + NUMTODSINTERVAL({leaseDurationInSeconds}, 'SECOND')
+WHERE {Names.ColLeaser} = HEXTORAW('{leaser:N}')
+  AND {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+";
+
+        public string GetClearLeaseSql(Guid leaser) => $@"
+UPDATE {Names.XactJobSchema}.{Names.XactJobTable}
+SET {Names.ColLeaser} = NULL, {Names.ColLeasedUntil} = NULL
+WHERE {Names.ColLeaser} = HEXTORAW('{leaser:N}')
+  AND {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         private static string GetQueueCondition(string? queueName)

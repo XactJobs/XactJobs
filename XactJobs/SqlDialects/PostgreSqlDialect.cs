@@ -25,7 +25,7 @@ WITH cte AS (
 UPDATE ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
 SET ""{Names.ColLeaser}"" = '{leaser}'::uuid, ""{Names.ColLeasedUntil}"" = current_timestamp + interval '{leaseDurationInSeconds} seconds'
 FROM cte
-WHERE ""{Names.XactJobSchema}"".""{Names.XactJobTable}"".""{Names.ColId}"" = cte.""{Names.ColId}"";
+WHERE ""{Names.XactJobSchema}"".""{Names.XactJobTable}"".""{Names.ColId}"" = cte.""{Names.ColId}""
 RETURNING ""{Names.XactJobSchema}"".""{Names.XactJobTable}"".*
 ";
 
@@ -33,7 +33,14 @@ RETURNING ""{Names.XactJobSchema}"".""{Names.XactJobTable}"".*
 UPDATE ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
 SET ""{Names.ColLeasedUntil}"" = current_timestamp + interval '{leaseDurationInSeconds} seconds'
 WHERE ""{Names.ColLeaser}"" = '{leaser}'::uuid
-  AND ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed});
+  AND ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+";
+
+        public string GetClearLeaseSql(Guid leaser) => $@"
+UPDATE ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
+SET ""{Names.ColLeaser}"" = NULL, ""{Names.ColLeasedUntil}"" = NULL
+WHERE ""{Names.ColLeaser}"" = '{leaser}'::uuid
+  AND ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         private static string GetQueueCondition(string? queueName)

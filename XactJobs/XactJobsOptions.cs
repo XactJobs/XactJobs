@@ -18,5 +18,16 @@
         /// Database polling interval in seconds (Default 2 seconds)
         /// </summary>
         public int PollingIntervalInSeconds { get; set; } = 2;
+
+        /// <summary>
+        /// Time the workers will wait for to clear pending leases, on worker stop. (Default 10 seconds)
+        /// </summary>
+        public int ClearLeaseTimeoutInSeconds { get; set; } = 10;
+
+        /// <summary>
+        /// Time the workers will wait for before retrying when a DB error occurs. (Default 10 seconds).
+        /// These are internal worker errors (usually when the worker cannot reach the database) - not job errors.
+        /// </summary>
+        public int WorkerErrorRetryDelayInSeconds { get; set; } = 10;
     }
 }

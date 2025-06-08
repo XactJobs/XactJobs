@@ -20,6 +20,8 @@ namespace XactJobs
 
         string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds);
 
+        string GetClearLeaseSql(Guid leaser);
+
         Guid NewJobId();
     }
 

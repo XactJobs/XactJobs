@@ -42,9 +42,32 @@ namespace XactJobs
                 {
                     _logger.LogError(ex, "Running Jobs failed. Retrying in 10 seconds");
 
-                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                    await Task.Delay(TimeSpan.FromSeconds(_options.WorkerErrorRetryDelayInSeconds), stoppingToken);
                 }
             }
+
+            try
+            {
+                await ClearLeases();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed clearing leases for leaser '{Leaser}' during shutdown", _leaser);
+            }
+        }
+
+        private async Task ClearLeases()
+        {
+            using var scope = _scopeFactory.CreateScope();
+
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+            await dbContext.Database.ExecuteSqlRawAsync(dialect.GetClearLeaseSql(_leaser), cts.Token)
+                .ConfigureAwait(false);
         }
 
         private async Task RunJobsAsync(ParallelOptions parallelOptions, CancellationToken stoppingToken)

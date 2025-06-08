@@ -25,15 +25,23 @@ SET [{Names.ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER),
     [{Names.ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
 OUTPUT inserted.*
 FROM [{Names.XactJobSchema}].[{Names.XactJobTable}] AS target
-INNER JOIN cte ON target.[{Names.ColId}] = cte.[{Names.ColId}];
+INNER JOIN cte ON target.[{Names.ColId}] = cte.[{Names.ColId}]
 ";
 
         public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
 UPDATE [{Names.XactJobSchema}].[{Names.XactJobTable}]
-SET leased_until = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
-WHERE leaser = CAST('{leaser}' AS UNIQUEIDENTIFIER)
-  AND status IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed});
+SET [{Names.ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
+WHERE [{Names.ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
+  AND [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
+
+        public string GetClearLeaseSql(Guid leaser) => $@"
+UPDATE [{Names.XactJobSchema}].[{Names.XactJobTable}]
+SET [{Names.ColLeaser}] = NULL, [{Names.ColLeasedUntil}] = NULL
+WHERE [{Names.ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
+  AND [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+";
+
 
         private static string GetQueueCondition(string? queueName)
         {
