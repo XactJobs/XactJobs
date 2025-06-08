@@ -6,7 +6,7 @@ namespace TestConsole
     {
         static void Main(string[] args)
         {
-            var job = DbContextExtensions.Enqueue(null, () => MyJob(1, "test job", Guid.NewGuid()));
+            //DbContextExtensions.Enqueue(null, () => MyJob(1, "test job", Guid.NewGuid()));
         }
 
 

@@ -15,8 +15,9 @@ WITH cte AS (
   SELECT ""{Names.ColId}""
   FROM ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
   WHERE ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-    AND (""{Names.ColLeasedUntil}"" IS NULL OR ""{Names.ColLeasedUntil}"" < current_timestamp)
+    AND ""{Names.ColScheduledAt}"" <= current_timestamp
     AND {GetQueueCondition(queueName)}
+    AND (""{Names.ColLeasedUntil}"" IS NULL OR ""{Names.ColLeasedUntil}"" < current_timestamp)
   ORDER BY ""{Names.ColId}""
   FOR UPDATE SKIP LOCKED
   LIMIT {maxJobs}

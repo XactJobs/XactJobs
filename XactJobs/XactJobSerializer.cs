@@ -11,8 +11,13 @@ namespace XactJobs
         private static readonly ConcurrentDictionary<MethodInfo, AsyncStateMachineAttribute?> _asyncStateMachineAttributeCache = new();
         private static readonly ConcurrentDictionary<XactJobDispatchKey, MethodInfo[]> _overloadsCache = new();
 
-        internal static XactJob FromExpression(LambdaExpression lambdaExp, Guid id, string? queue)
+        internal static XactJob FromExpression(LambdaExpression lambdaExp, Guid id, DateTime? scheduleAtUtc, string? queue)
         {
+            if (scheduleAtUtc.HasValue && scheduleAtUtc.Value.Kind != DateTimeKind.Utc)
+            {
+                throw new ArgumentException("Job scheduled time must have DateTimeKind.Utc", nameof(lambdaExp));
+            }
+
             var callExpression = lambdaExp.Body as MethodCallExpression 
                 ?? throw new ArgumentException("Expression body should be a simple method call.", nameof(lambdaExp));
 
@@ -29,7 +34,7 @@ namespace XactJobs
 
             var serializedArgs = JsonSerializer.Serialize(args);
 
-            var scheduledAt = DateTime.UtcNow;
+            var scheduledAt = scheduleAtUtc ?? DateTime.UtcNow;
 
             return new XactJob(id, scheduledAt, scheduledAt, typeName, methodName, serializedArgs, queue);
         }

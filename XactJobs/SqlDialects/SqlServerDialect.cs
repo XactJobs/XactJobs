@@ -15,8 +15,9 @@ WITH cte AS (
     SELECT TOP ({maxJobs}) [{Names.ColId}]
     FROM [{Names.XactJobSchema}].[{Names.XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
     WHERE [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-      AND ([{Names.ColLeasedUntil}] IS NULL OR [{Names.ColLeasedUntil}] < SYSUTCDATETIME())
+      AND [{Names.ColScheduledAt}] <= SYSUTCDATETIME()
       AND {GetQueueCondition(queueName)}
+      AND ([{Names.ColLeasedUntil}] IS NULL OR [{Names.ColLeasedUntil}] < SYSUTCDATETIME())
     ORDER BY [{Names.ColId}]
 )
 UPDATE target

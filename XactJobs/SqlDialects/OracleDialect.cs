@@ -15,8 +15,9 @@ WITH cte AS (
     SELECT {Names.ColId}
     FROM {Names.XactJobSchema}.{Names.XactJobTable}
     WHERE {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-      AND ({Names.ColLeasedUntil} IS NULL OR {Names.ColLeasedUntil} < SYSTIMESTAMP AT TIME ZONE 'UTC')
+      AND {Names.ColScheduledAt} <= SYSTIMESTAMP AT TIME ZONE 'UTC'
       AND {GetQueueCondition(queueName)}
+      AND ({Names.ColLeasedUntil} IS NULL OR {Names.ColLeasedUntil} < SYSTIMESTAMP AT TIME ZONE 'UTC')
     ORDER BY {Names.ColId}
     FOR UPDATE SKIP LOCKED
     FETCH FIRST {maxJobs} ROWS ONLY

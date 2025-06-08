@@ -16,8 +16,9 @@ WHERE `{Names.ColId}` IN (
     SELECT `{Names.ColId}`
     FROM `{Names.XactJobSchema}`.`{Names.XactJobTable}`
     WHERE `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-      AND (`{Names.ColLeasedUntil}` IS NULL OR `{Names.ColLeasedUntil}` < UTC_TIMESTAMP)
+      AND `{Names.ColScheduledAt}` <= UTC_TIMESTAMP 
       AND {GetQueueCondition(queueName)}
+      AND (`{Names.ColLeasedUntil}` IS NULL OR `{Names.ColLeasedUntil}` < UTC_TIMESTAMP)
     ORDER BY `{Names.ColId}`
     LIMIT {maxJobs}
     FOR UPDATE SKIP LOCKED
