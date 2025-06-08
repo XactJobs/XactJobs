@@ -13,5 +13,10 @@
         /// Default 120 (jobs runner will prolong the lease every 1/2 of this time)
         /// </summary>
         public int LeaseDurationInSeconds { get; set; } = 120;
+
+        /// <summary>
+        /// Database polling interval in seconds (Default 2 seconds)
+        /// </summary>
+        public int PollingIntervalInSeconds { get; set; } = 2;
     }
 }

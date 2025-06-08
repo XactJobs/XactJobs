@@ -32,7 +32,11 @@ namespace XactJobs
             {
                 try
                 {
-                    await RunJobsAsync(parallelOptions, stoppingToken).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(_options.PollingIntervalInSeconds), stoppingToken)
+                        .ConfigureAwait(false);
+
+                    await RunJobsAsync(parallelOptions, stoppingToken)
+                        .ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
