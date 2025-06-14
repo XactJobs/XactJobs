@@ -8,11 +8,11 @@ namespace XactJobs
     {
         private readonly string? _queueName;
         private readonly Guid _leaser = Guid.NewGuid();
-        private readonly XactJobsOptions<TDbContext> _options;
+        private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(string? queueName, XactJobsOptions<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(string? queueName, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
             _queueName = queueName;
             _options = options;
@@ -52,7 +52,7 @@ namespace XactJobs
 
                     if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                     {
-                        _logger.LogError(ex, "Running Jobs failed. Retrying in {RetryIn} seconds", _options.WorkerErrorRetryDelayInSeconds);
+                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds", GetQueueDisplayName(), _options.WorkerErrorRetryDelayInSeconds);
                     }
                 }
             }
@@ -63,7 +63,7 @@ namespace XactJobs
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed clearing leases for leaser '{Leaser}' during shutdown", _leaser);
+                _logger.LogError(ex, "{Queue}: Failed clearing leases for leaser '{Leaser}' during shutdown", GetQueueDisplayName(), _leaser);
             }
         }
 
@@ -120,13 +120,13 @@ namespace XactJobs
 
                     if (_logger.IsEnabled(LogLevel.Debug))
                     {
-                        _logger.LogDebug("Job completed: {TypeName}.{MethodName} ({Id})", job.TypeName, job.MethodName, job.Id);
+                        _logger.LogDebug("{Queue}: Job completed - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
                     }
                 }
                 catch (Exception ex)
                 {
                     job.MarkFailed(ex);
-                    _logger.LogError(ex, "Job failed: {TypeName}.{MethodName} ({Id})", job.TypeName, job.MethodName, job.Id);
+                    _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
                 }
             })
                 .ConfigureAwait(false);
@@ -179,6 +179,11 @@ namespace XactJobs
                         .ConfigureAwait(false);
                 }
             }
+        }
+
+        private string GetQueueDisplayName()
+        {
+            return _queueName ?? "Default";
         }
     }
 }

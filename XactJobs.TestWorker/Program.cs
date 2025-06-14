@@ -9,14 +9,18 @@ namespace XactJobs.TestWorker
         {
             var builder = Host.CreateApplicationBuilder(args);
 
-            builder.Services.AddDbContext<UserDbContext>(x =>
+            builder.Services.AddDbContext<UserDbContext>(options =>
             {
-                x.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnectionString"));
+                options
+                    .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnectionString"));
             });
 
-            builder.Services.AddXactJobs<UserDbContext>(x =>
+            builder.Services.AddXactJobs<UserDbContext>(options =>
             {
-                x.WithPollingInterval(2);
+                options
+                    .WithPollingInterval(2)
+                    .WithIsolatedQueue("long_running", x => x.WithPollingInterval(30))
+                    .WithIsolatedQueue("test");
             });
 
             builder.Services.AddTransient<TestJob>();

@@ -25,11 +25,11 @@ namespace XactJobs.DependencyInjection
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            StartRunner(null, stoppingToken);
+            StartRunner(null, _options, stoppingToken);
 
-            foreach (var queueName in _options.IsolatedQueues)
+            foreach (var (queueName, queueOptions) in _options.IsolatedQueues)
             {
-                StartRunner(queueName, stoppingToken);
+                StartRunner(queueName, queueOptions, stoppingToken);
             }
 
             await Task.WhenAll(_runnerTasks);
@@ -37,13 +37,15 @@ namespace XactJobs.DependencyInjection
             _runnerTasks.Clear();
         }
 
-        private void StartRunner(string? queueName, CancellationToken stoppingToken)
+        private void StartRunner(string? queueName, XactJobsOptionsBase<TDbContext> options, CancellationToken stoppingToken)
         {
             try
             {
-                var logger = _loggerFactory.CreateLogger<XactJobRunner<TDbContext>>();
+                _logger.LogInformation("Starting the runner for the {Queue} queue", queueName ?? "default");
 
-                var runner = new XactJobRunner<TDbContext>(queueName, _options, _scopeFactory, logger);
+                var runnerLogger = _loggerFactory.CreateLogger<XactJobRunner<TDbContext>>();
+
+                var runner = new XactJobRunner<TDbContext>(queueName, options, _scopeFactory, runnerLogger);
 
                 _runnerTasks.Add(runner.ExecuteAsync(stoppingToken));
             }

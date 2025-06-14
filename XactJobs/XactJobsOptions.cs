@@ -2,7 +2,7 @@
 
 namespace XactJobs
 {
-    public class XactJobsOptions<TDbContext> where TDbContext: DbContext
+    public class XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
     {
         /// <summary>
         /// How many jobs to fetch and executee at a time. Default is 100.
@@ -34,10 +34,13 @@ namespace XactJobs
         /// These are internal worker errors (usually when the worker cannot reach the database) - not job errors.
         /// </summary>
         public int WorkerErrorRetryDelayInSeconds { get; set; } = 10;
+    }
 
+    public class XactJobsOptions<TDbContext>: XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
+    {
         /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>
-        public List<string> IsolatedQueues { get; set; } = [];
+        public Dictionary<string, XactJobsOptionsBase<TDbContext>> IsolatedQueues { get; set; } = [];
     }
 }
