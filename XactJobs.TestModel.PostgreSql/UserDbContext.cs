@@ -1,8 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 
-using XactJobs.EntityConfigurations;
-
 namespace XactJobs.TestModel.PostgreSql
 {
     public class UserDbContext: DbContext
@@ -33,7 +31,7 @@ namespace XactJobs.TestModel.PostgreSql
         {
             base.OnModelCreating(modelBuilder);
 
-            modelBuilder.ApplyConfiguration(new XactJobEntityConfiguration(Database.ProviderName, false));
+            modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, false);
         }
 
     }
