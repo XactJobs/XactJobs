@@ -1,7 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
-using XactJobs;
+
+using XactJobs.TestModel;
 using XactJobs.TestModel.PostgreSql;
 
 namespace XactJobs.TestConsole
@@ -12,13 +13,9 @@ namespace XactJobs.TestConsole
         {
             var db = new DbContextFactory().CreateDbContext(args);
 
-        }
+            db.JobEnqueue(() => User.MyJob(1, "Sina", Guid.NewGuid()));
 
-        public static void MyJob(int id, string name, Guid guid)
-        {
-            Console.WriteLine(id);
-            Console.WriteLine(name);
-            Console.WriteLine(guid);
+            db.SaveChanges();
         }
     }
 

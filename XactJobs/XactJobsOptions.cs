@@ -1,8 +1,13 @@
-﻿namespace XactJobs
+﻿using Microsoft.EntityFrameworkCore;
+
+namespace XactJobs
 {
-    public class XactJobsOptions
+    public class XactJobsOptions<TDbContext> where TDbContext: DbContext
     {
-        public int BatchSize { get; set; }
+        /// <summary>
+        /// How many jobs to fetch and executee at a time. Default is 100.
+        /// </summary>
+        public int BatchSize { get; set; } = 100;
 
         /// <summary>
         /// Default -1 (means ProcessorCount)
@@ -29,5 +34,10 @@
         /// These are internal worker errors (usually when the worker cannot reach the database) - not job errors.
         /// </summary>
         public int WorkerErrorRetryDelayInSeconds { get; set; } = 10;
+
+        /// <summary>
+        /// List of isolated queues for which workers will be started
+        /// </summary>
+        public List<string> IsolatedQueues { get; set; } = [];
     }
 }

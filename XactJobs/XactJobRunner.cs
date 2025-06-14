@@ -8,11 +8,11 @@ namespace XactJobs
     {
         private readonly string? _queueName;
         private readonly Guid _leaser = Guid.NewGuid();
-        private readonly XactJobsOptions _options;
+        private readonly XactJobsOptions<TDbContext> _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(string? queueName, XactJobsOptions options, IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(string? queueName, XactJobsOptions<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
             _queueName = queueName;
             _options = options;
@@ -27,12 +27,20 @@ namespace XactJobs
                 CancellationToken = stoppingToken,
                 MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism
             };
-            
+
+            var lastRunFailed = false;
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(_options.PollingIntervalInSeconds), stoppingToken)
+                    var delaySec = lastRunFailed 
+                        ? _options.WorkerErrorRetryDelayInSeconds 
+                        : _options.PollingIntervalInSeconds;
+
+                    lastRunFailed = false;
+
+                    await Task.Delay(TimeSpan.FromSeconds(delaySec), stoppingToken)
                         .ConfigureAwait(false);
 
                     await RunJobsAsync(parallelOptions, stoppingToken)
@@ -40,9 +48,12 @@ namespace XactJobs
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Running Jobs failed. Retrying in {RetryIn} seconds", _options.WorkerErrorRetryDelayInSeconds);
+                    lastRunFailed = true;
 
-                    await Task.Delay(TimeSpan.FromSeconds(_options.WorkerErrorRetryDelayInSeconds), stoppingToken);
+                    if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                    {
+                        _logger.LogError(ex, "Running Jobs failed. Retrying in {RetryIn} seconds", _options.WorkerErrorRetryDelayInSeconds);
+                    }
                 }
             }
 

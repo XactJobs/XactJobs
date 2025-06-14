@@ -71,7 +71,7 @@
 
         internal void MarkCompleted()
         {
-            UpdatedAt = DateTime.Now;
+            UpdatedAt = DateTime.UtcNow;
             Status = XactJobStatus.Completed;
         }
 

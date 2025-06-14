@@ -14,5 +14,12 @@
             LastName = lastName;
             Email = email;
         }
+
+        public static void MyJob(int id, string name, Guid guid)
+        {
+            Console.WriteLine(id);
+            Console.WriteLine(name);
+            Console.WriteLine(guid);
+        }
     }
 }

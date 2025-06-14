@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
@@ -8,21 +7,43 @@ namespace XactJobs
 {
     internal class XactJobCompiler
     {
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, Func<IServiceProvider, object?[], CancellationToken, Task?>> _compiledJobs = new();
+        // not using concurrent dictionary because GetOrAdd suffers from the "stampede" problem
+        private static readonly Dictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], CancellationToken, Task?>, ParameterInfo[])> _compiledJobs = new();
         
         public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, CancellationToken stoppingToken)
         {
-            var args = JsonSerializer.Deserialize<object?[]>(job.MethodArgs) ?? [];
+            var jsonArgs = JsonDocument.Parse(job.MethodArgs);
+
+            var args = new object?[jsonArgs.RootElement.GetArrayLength()];
 
             var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
 
-            var compiled = _compiledJobs.GetOrAdd(key, k =>
-            {
-                var (type, method) = job.ToMethodInfo(args.Length);
-                return BuildJobDelegate(type, method);
-            });
+            Func<IServiceProvider, object?[], CancellationToken, Task?> compiledFunc;
 
-            var resultTask = compiled(scope.ServiceProvider, args, stoppingToken);
+            ParameterInfo[] parameters;
+
+            lock (_compiledJobs)
+            {
+                if (!_compiledJobs.TryGetValue(key, out var compiledJob))
+                {
+                    var (type, method) = job.ToMethodInfo(args.Length);
+
+                    compiledJob = (BuildJobDelegate(type, method), method.GetParameters());
+
+                    _compiledJobs.Add(key, compiledJob);   
+                }
+
+                compiledFunc = compiledJob.Item1;
+                parameters = compiledJob.Item2;
+            }
+
+            // set the args
+            for (var i = 0; i < args.Length; i++)
+            {
+                args[i] = JsonSerializer.Deserialize(jsonArgs.RootElement[i], parameters[i].ParameterType);
+            }
+
+            var resultTask = compiledFunc(scope.ServiceProvider, args, stoppingToken);
 
             if (resultTask != null)
             {
