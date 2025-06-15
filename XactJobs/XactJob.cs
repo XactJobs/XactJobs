@@ -117,15 +117,15 @@
             ErrorMessage = ex.Message;
             ErrorStackTrace = ex.StackTrace;
 
-            // TODO Add retry strategy
+            Leaser = null;
+            LeasedUntil = null;
+
+            // TODO Implement retry strategy
 
             Status = ErrorCount < 10 ? XactJobStatus.Failed : XactJobStatus.Cancelled;
 
             if (Status == XactJobStatus.Failed)
             {
-                Leaser = null;
-                LeasedUntil = null;
-
                 ScheduledAt = DateTime.UtcNow.AddSeconds(10);
             }
         }
