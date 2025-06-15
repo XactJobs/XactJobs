@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace XactJobs
 {
@@ -39,6 +40,14 @@ namespace XactJobs
         /// Time the workers will wait for to clear pending leases, on worker stop. (Default 10 seconds)
         /// </summary>
         public int ClearLeaseTimeoutInSeconds { get; set; } = 10;
+
+        /// <summary>
+        /// Gets or sets the collection of periodic jobs, each defined by a unique identifier,  a job expression, and a
+        /// cron schedule.
+        /// </summary>
+        /// <remarks>The cron schedule string must follow the standard cron format. Ensure that the  <see
+        /// cref="LambdaExpression"/> provided for each job is valid and executable.</remarks>
+        public Dictionary<string, (LambdaExpression JobExpression, string CronExpression)> PeriodicJobs { get; set; } = [];
     }
 
     public class XactJobsOptions<TDbContext>: XactJobsOptionsBase<TDbContext> where TDbContext: DbContext

@@ -17,7 +17,7 @@ WHERE `{Names.ColId}` IN (
     FROM `{Names.XactJobSchema}`.`{Names.XactJobTable}`
     WHERE `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND `{Names.ColScheduledAt}` <= UTC_TIMESTAMP 
-      AND `{Names.ColQueue}` = '{queueName ?? Names.DefaultQueue}'
+      AND `{Names.ColQueue}` = '{queueName ?? Names.QueueDefault}'
       AND (`{Names.ColLeasedUntil}` IS NULL OR `{Names.ColLeasedUntil}` < UTC_TIMESTAMP)
     ORDER BY `{Names.ColScheduledAt}`
     LIMIT {maxJobs}
@@ -30,7 +30,7 @@ SELECT *
 FROM `{Names.XactJobSchema}`.`{Names.XactJobTable}`
 WHERE `{Names.ColLeaser}` = '{leaser}'
   AND `{Names.ColLeasedUntil}` > UTC_TIMESTAMP
-  AND `{Names.ColQueue}` = '{queueName ?? Names.DefaultQueue}'
+  AND `{Names.ColQueue}` = '{queueName ?? Names.QueueDefault}'
 LIMIT {maxJobs}
 ";
 

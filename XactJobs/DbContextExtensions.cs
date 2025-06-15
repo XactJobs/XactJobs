@@ -67,6 +67,26 @@ namespace XactJobs
             return AddJob(dbContext, jobExpression, DateTime.UtcNow.Add(delay), queue);
         }
 
+        public static XactJobPeriodic JobSchedulePeriodic(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action> jobExpression)
+        {
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+        }
+
+        public static XactJobPeriodic JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression)
+        {
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+        }
+
+        public static XactJobPeriodic JobSchedulePeriodic(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression)
+        {
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+        }
+
+        public static XactJobPeriodic JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression)
+        {
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+        }
+
         private static XactJob AddJob(DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
         {
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
@@ -76,6 +96,15 @@ namespace XactJobs
             var job = XactJobSerializer.FromExpression(lambdaExp, id, scheduledAt, queue);
 
             dbContext.Set<XactJob>().Add(job);
+
+            return job;
+        }
+
+        internal static XactJobPeriodic AddJobPeriodic(this DbContext dbContext, LambdaExpression lambdaExp, string id, string cronExp)
+        {
+            var job = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, cronExp);
+
+            dbContext.Set<XactJobPeriodic>().Add(job);
 
             return job;
         }

@@ -16,7 +16,7 @@ WITH cte AS (
   FROM ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
   WHERE ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
     AND ""{Names.ColScheduledAt}"" <= current_timestamp
-    AND ""{Names.ColQueue}"" = '{queueName ?? Names.DefaultQueue}'
+    AND ""{Names.ColQueue}"" = '{queueName ?? Names.QueueDefault}'
     AND (""{Names.ColLeasedUntil}"" IS NULL OR ""{Names.ColLeasedUntil}"" < current_timestamp)
   ORDER BY ""{Names.ColScheduledAt}""
   FOR UPDATE SKIP LOCKED

@@ -16,7 +16,7 @@ WITH cte AS (
     FROM [{Names.XactJobSchema}].[{Names.XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
     WHERE [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND [{Names.ColScheduledAt}] <= SYSUTCDATETIME()
-      AND [{Names.ColQueue}] = '{queueName ?? Names.DefaultQueue}'
+      AND [{Names.ColQueue}] = '{queueName ?? Names.QueueDefault}'
       AND ([{Names.ColLeasedUntil}] IS NULL OR [{Names.ColLeasedUntil}] < SYSUTCDATETIME())
     ORDER BY [{Names.ColScheduledAt}]
 )

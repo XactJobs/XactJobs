@@ -37,6 +37,24 @@
 
             return $"{time.Seconds} {time.Minutes} {time.Hours} * * *";
         }
+
+        public static string EveryWeekDayAt(TimeSpan time, DayOfWeek day, params DayOfWeek[] additionalDays)
+        {
+            if (time.TotalHours >= 24)
+                throw new ArgumentOutOfRangeException(nameof(time), "Time must be within a 24-hour period.");
+
+            DayOfWeek[] days = [ day, .. additionalDays ];
+
+            // Map DayOfWeek (0=Sunday, 6=Saturday) to cron format (0=Sunday, 6=Saturday)
+            var dayValues = days
+                .Distinct()
+                .Select(d => ((int)d).ToString())
+                .OrderBy(s => s);
+
+            var daysField = string.Join(",", dayValues);
+
+            return $"{time.Seconds} {time.Minutes} {time.Hours} * * {daysField}";
+        }
     }
 
 }

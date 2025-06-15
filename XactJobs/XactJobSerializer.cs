@@ -36,9 +36,30 @@ namespace XactJobs
 
             scheduleAtUtc ??= DateTime.UtcNow;
 
-            queue ??= Names.DefaultQueue;
+            queue ??= Names.QueueDefault;
 
             return new XactJob(id, scheduleAtUtc.Value, XactJobStatus.Queued, typeName, methodName, serializedArgs, queue);
+        }
+
+        internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, string id, string cronExp)
+        {
+            var callExpression = lambdaExp.Body as MethodCallExpression 
+                ?? throw new ArgumentException("Expression body should be a simple method call.", nameof(lambdaExp));
+
+            Validate(callExpression);
+
+            var type = callExpression.Object?.Type ?? callExpression.Method.DeclaringType
+                ?? throw new NotSupportedException("XactJobs does not support global methods.");
+
+            var typeName = GetSimpleTypeName(type);
+
+            var methodName = callExpression.Method.Name;
+
+            var args = GetExpressionValues(callExpression.Arguments);
+
+            var serializedArgs = JsonSerializer.Serialize(args);
+
+            return new XactJobPeriodic(id, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, Names.QueueDefault);
         }
 
         internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)

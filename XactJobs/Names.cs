@@ -2,11 +2,12 @@
 {
     internal class Names
     {
-        public const string DefaultQueue = "*";
+        public const string QueueDefault = "*";
 
         public const string XactJobSchema = "xact_jobs";
         public const string XactJobTable = "job";
         public const string XactJobArchiveTable = "job_archive";
+        public const string XactJobPeriodicTable = "job_periodic";
 
         public const string ColId = "id";
         public const string ColCreatedAt = "created_at";
@@ -24,5 +25,9 @@
         public const string ColErrorTime = "error_time";
         public const string ColErrorMessage = "error_message";
         public const string ColErrorStackTrace = "error_stack_trace";
+
+        public const string ColCronExpression = "cron_expression";
+        public const string ColLastJobId = "last_job_id";
+
     }
 }
