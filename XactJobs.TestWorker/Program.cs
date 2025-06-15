@@ -17,10 +17,9 @@ namespace XactJobs.TestWorker
 
             builder.Services.AddXactJobs<UserDbContext>(options =>
             {
+                /*
                 options
-                    .WithPollingInterval(10)
-                    .WithLeaseDuration(5)
-                    /*
+                    .WithPollingInterval(5)
                     .WithIsolatedQueue("long_running", queueOptions =>
                     {
                         queueOptions
@@ -29,8 +28,8 @@ namespace XactJobs.TestWorker
                         
                     })
                     .WithIsolatedQueue("test")
-                    */
                     ;
+                */
             });
 
             builder.Services.AddTransient<TestJob>();

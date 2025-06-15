@@ -10,7 +10,12 @@ namespace XactJobs
         public int BatchSize { get; set; } = 100;
 
         /// <summary>
-        /// Default -1 (means ProcessorCount)
+        /// Number of paraller workers running. Default 4.
+        /// </summary>
+        public int WorkerCount { get; set; } = 4;
+
+        /// <summary>
+        /// Max degree of paralell jobs running per worker. Default -1 (means ProcessorCount)
         /// </summary>
         public int MaxDegreeOfParallelism { get; set; } = -1;
 
@@ -20,9 +25,9 @@ namespace XactJobs
         public int LeaseDurationInSeconds { get; set; } = 120;
 
         /// <summary>
-        /// Database polling interval in seconds (Default 2 seconds)
+        /// Database polling interval in seconds, per worker (Default 10 seconds)
         /// </summary>
-        public int PollingIntervalInSeconds { get; set; } = 2;
+        public int PollingIntervalInSeconds { get; set; } = 10;
 
         /// <summary>
         /// Time the workers will wait for to clear pending leases, on worker stop. (Default 10 seconds)

@@ -20,8 +20,11 @@ namespace XactJobs
             _logger = logger;
         }
 
-        public async Task ExecuteAsync(CancellationToken stoppingToken)
+        public async Task ExecuteAsync(CancellationToken stoppingToken, int initialDelayMs)
         {
+            await Task.Delay(TimeSpan.FromMilliseconds(initialDelayMs), stoppingToken)
+                .ConfigureAwait(false);
+
             var parallelOptions = new ParallelOptions
             {
                 CancellationToken = stoppingToken,

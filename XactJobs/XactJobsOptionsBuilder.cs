@@ -15,6 +15,12 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
+        public TBuilder WithWorkerCount(int workerCount)
+        {
+            Options.WorkerCount = workerCount;
+            return (this as TBuilder)!;
+        }
+
         public TBuilder WithPollingInterval(int intervalInSeconds)
         {
             Options.PollingIntervalInSeconds = intervalInSeconds;

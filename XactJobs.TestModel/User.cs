@@ -24,7 +24,7 @@
 
         public static async Task MyJobAsync(int id, string name, Guid guid, CancellationToken cancellationToken)
         {
-            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
 
             throw new NotImplementedException();
 

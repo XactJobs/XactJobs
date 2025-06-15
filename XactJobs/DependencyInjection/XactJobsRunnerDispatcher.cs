@@ -25,11 +25,17 @@ namespace XactJobs.DependencyInjection
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            StartRunner(null, _options, stoppingToken);
+            for (var i = 0; i < _options.WorkerCount; i++)
+            {
+                StartRunner(null, i, _options, stoppingToken);
+            }
 
             foreach (var (queueName, queueOptions) in _options.IsolatedQueues)
             {
-                StartRunner(queueName, queueOptions, stoppingToken);
+                for (var i = 0; i < queueOptions.WorkerCount; i++)
+                {
+                    StartRunner(queueName, i, queueOptions, stoppingToken);
+                }
             }
 
             await Task.WhenAll(_runnerTasks);
@@ -37,7 +43,7 @@ namespace XactJobs.DependencyInjection
             _runnerTasks.Clear();
         }
 
-        private void StartRunner(string? queueName, XactJobsOptionsBase<TDbContext> options, CancellationToken stoppingToken)
+        private void StartRunner(string? queueName, int runnerIndex, XactJobsOptionsBase<TDbContext> options, CancellationToken stoppingToken)
         {
             try
             {
@@ -47,12 +53,19 @@ namespace XactJobs.DependencyInjection
 
                 var runner = new XactJobRunner<TDbContext>(queueName, options, _scopeFactory, runnerLogger);
 
-                _runnerTasks.Add(runner.ExecuteAsync(stoppingToken));
+                var initialDelayMs = GetDelayStepMs(options) * (runnerIndex + 1);
+
+                _runnerTasks.Add(runner.ExecuteAsync(stoppingToken, initialDelayMs));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to start the runner for the {Queue} queue", queueName ?? "default");
             }
+        }
+
+        private static int GetDelayStepMs(XactJobsOptionsBase<TDbContext> options)
+        {
+            return options.WorkerCount > 0 ? options.PollingIntervalInSeconds * 1000 / options.WorkerCount : 0;
         }
     }
 }
