@@ -38,7 +38,7 @@ namespace XactJobs
 
             queue ??= Names.DefaultQueue;
 
-            return new XactJob(id, scheduleAtUtc.Value, typeName, methodName, serializedArgs, queue);
+            return new XactJob(id, scheduleAtUtc.Value, XactJobStatus.Queued, typeName, methodName, serializedArgs, queue);
         }
 
         internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)

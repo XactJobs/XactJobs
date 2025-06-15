@@ -51,6 +51,7 @@
 
         public XactJobBase(Guid id,
                            DateTime scheduledAt,
+                           XactJobStatus status,
                            string typeName,
                            string methodName,
                            string methodArgs,
@@ -65,6 +66,7 @@
             MethodName = methodName;
             MethodArgs = methodArgs;
             Queue = queue;
+            Status = status;
             ScheduledAt = scheduledAt;
             ErrorCount = errorCount;
             ErrorTime = errorTime;
@@ -80,6 +82,7 @@
 
         public XactJob(Guid id,
                        DateTime scheduledAt,
+                       XactJobStatus status,
                        string typeName,
                        string methodName,
                        string methodArgs,
@@ -92,6 +95,7 @@
                        string? errorStackTrace = null)
             : base(id,
                    scheduledAt,
+                   status,
                    typeName,
                    methodName,
                    methodArgs,
@@ -137,6 +141,7 @@
 
         public XactJobArchive(Guid id,
                               DateTime scheduledAt,
+                              XactJobStatus status,
                               DateTime completedAt,
                               string typeName,
                               string methodName,
@@ -148,6 +153,7 @@
                               string? errorStackTrace = null)
             : base(id,
                    scheduledAt,
+                   status,
                    typeName,
                    methodName,
                    methodArgs,
@@ -164,6 +170,7 @@
         {
             return new XactJobArchive(job.Id,
                                       job.ScheduledAt,
+                                      job.Status,
                                       completedAt,
                                       job.TypeName,
                                       job.MethodName,
