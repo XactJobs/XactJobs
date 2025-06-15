@@ -182,14 +182,19 @@ namespace XactJobs
                         .ConfigureAwait(false);
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 if (dbContext.Database.CurrentTransaction != null)
                 {
-                    await dbContext.Database.CurrentTransaction.RollbackAsync(stoppingToken)
+                    // try to roll back always, even if stopping
+                    await dbContext.Database.CurrentTransaction.RollbackAsync(CancellationToken.None)
                         .ConfigureAwait(false);
                 }
-                throw;
+
+                if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
             }
             finally
             {
