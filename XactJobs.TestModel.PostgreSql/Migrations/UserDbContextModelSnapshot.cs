@@ -17,7 +17,7 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.5")
+                .HasAnnotation("ProductVersion", "9.0.6")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -59,10 +59,6 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("created_at");
-
                     b.Property<int>("ErrorCount")
                         .HasColumnType("integer")
                         .HasColumnName("error_count");
@@ -74,6 +70,10 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                     b.Property<string>("ErrorStackTrace")
                         .HasColumnType("text")
                         .HasColumnName("error_stack_trace");
+
+                    b.Property<DateTime?>("ErrorTime")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("error_time");
 
                     b.Property<DateTime?>("LeasedUntil")
                         .HasColumnType("timestamptz")
@@ -111,17 +111,77 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                         .HasColumnType("text")
                         .HasColumnName("type_name");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("updated_at");
-
                     b.HasKey("Id")
                         .HasName("pk_job");
 
-                    b.HasIndex("Queue", "Status", "ScheduledAt")
-                        .HasDatabaseName("ix_queue_status_scheduled_at");
+                    b.HasIndex("Queue", "ScheduledAt")
+                        .HasDatabaseName("ix_job_queue_scheduled_at");
 
                     b.ToTable("job", "xact_jobs");
+                });
+
+            modelBuilder.Entity("XactJobs.XactJobArchive", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CompletedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("completed_at");
+
+                    b.Property<int>("ErrorCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("error_count");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("ErrorStackTrace")
+                        .HasColumnType("text")
+                        .HasColumnName("error_stack_trace");
+
+                    b.Property<DateTime?>("ErrorTime")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("error_time");
+
+                    b.Property<string>("MethodArgs")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("method_args");
+
+                    b.Property<string>("MethodName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("method_name");
+
+                    b.Property<string>("Queue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("queue");
+
+                    b.Property<DateTime>("ScheduledAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("scheduled_at");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TypeName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_job_archive");
+
+                    b.HasIndex("CompletedAt")
+                        .HasDatabaseName("ix_job_archive_completed_at");
+
+                    b.ToTable("job_archive", "xact_jobs");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,92 +1,126 @@
 ﻿namespace XactJobs
 {
-    public class XactJob
+    public class XactJobBase
     {
-        public Guid Id { get; private set; }
+        public Guid Id { get; protected set; }
+
+        public DateTime CreatedAt
+        {
+            get
+            {
+                UUIDNext.Tools.UuidDecoder.TryDecodeTimestamp(Id, out var createdAt);
+                return createdAt;
+            }
+        }
+
 
         /// <summary>
         /// Job status
         /// </summary>
-        public XactJobStatus Status { get; private set; }
+        public XactJobStatus Status { get; protected set; }
 
-        public DateTime CreatedAt { get; private set; }
-
-        public DateTime ScheduledAt { get; private set; }
-
-        public DateTime? UpdatedAt { get; private set; }
-
-        public DateTime? LeasedUntil { get; private set; }
-
-        public Guid? Leaser { get; set; }
+        /// <summary>
+        /// When should the job be executed
+        /// </summary>
+        public DateTime ScheduledAt { get; protected set; }
 
         /// <summary>
         /// Assembly qualified name of the declaring type
         /// </summary>
-        public string TypeName { get; private set; }
+        public string TypeName { get; protected set; }
 
         /// <summary>
         /// Method name to be called
         /// </summary>
-        public string MethodName { get; private set; }
+        public string MethodName { get; protected set; }
 
         /// <summary>
         /// Arguments to be passed to the method
         /// </summary>
-        public string MethodArgs { get; private set; }
+        public string MethodArgs { get; protected set; }
 
-        public string Queue { get; private set; }
+        public string Queue { get; protected set; }
 
-        public int ErrorCount { get; private set; }
+        public int ErrorCount { get; protected set; }
 
-        public string? ErrorMessage { get; private set; }
+        public DateTime? ErrorTime { get; protected set; }
 
-        public string? ErrorStackTrace { get; private set; }
+        public string? ErrorMessage { get; protected set; }
 
-        public XactJob(Guid id,
-                       DateTime createdAt,
-                       DateTime scheduledAt,
-                       string typeName,
-                       string methodName,
-                       string methodArgs,
-                       string queue,
-                       DateTime? updatedAt = null,
-                       DateTime? leasedUntil = null,
-                       int errorCount = 0,
-                       string? errorMessage = null,
-                       string? errorStackTrace = null)
+        public string? ErrorStackTrace { get; protected set; }
+
+        public XactJobBase(Guid id,
+                           DateTime scheduledAt,
+                           string typeName,
+                           string methodName,
+                           string methodArgs,
+                           string queue,
+                           int errorCount = 0,
+                           DateTime? errorTime = null,
+                           string? errorMessage = null,
+                           string? errorStackTrace = null)
         {
             Id = id;
             TypeName = typeName;
             MethodName = methodName;
             MethodArgs = methodArgs;
             Queue = queue;
-            CreatedAt = createdAt;
             ScheduledAt = scheduledAt;
-            UpdatedAt = updatedAt;
-            LeasedUntil = leasedUntil;
             ErrorCount = errorCount;
+            ErrorTime = errorTime;
             ErrorMessage = errorMessage;
             ErrorStackTrace = errorStackTrace;
+        }
+    }
+
+    public class XactJob: XactJobBase
+    {
+        public DateTime? LeasedUntil { get; private set; }
+        public Guid? Leaser { get; set; }
+
+        public XactJob(Guid id,
+                       DateTime scheduledAt,
+                       string typeName,
+                       string methodName,
+                       string methodArgs,
+                       string queue,
+                       Guid? leaser = null,
+                       DateTime? leasedUntil = null,
+                       int errorCount = 0,
+                       DateTime? errorTime = null,
+                       string? errorMessage = null,
+                       string? errorStackTrace = null)
+            : base(id,
+                   scheduledAt,
+                   typeName,
+                   methodName,
+                   methodArgs,
+                   queue,
+                   errorCount,
+                   errorTime,
+                   errorMessage,
+                   errorStackTrace)
+        {
+            Leaser = leaser;
+            LeasedUntil = leasedUntil;
         }
 
         internal void MarkCompleted()
         {
-            UpdatedAt = DateTime.UtcNow;
             Status = XactJobStatus.Completed;
         }
 
         internal void MarkFailed(Exception ex)
         {
-            UpdatedAt = DateTime.UtcNow;
-
+            ErrorTime = DateTime.UtcNow;
             ErrorCount = ErrorCount + 1;
             ErrorMessage = ex.Message;
             ErrorStackTrace = ex.StackTrace;
 
             // TODO Add retry strategy
 
-            Status = ErrorCount <= 10 ? XactJobStatus.Failed : XactJobStatus.Cancelled;
-            
+            Status = ErrorCount < 10 ? XactJobStatus.Failed : XactJobStatus.Cancelled;
+
             if (Status == XactJobStatus.Failed)
             {
                 Leaser = null;
@@ -96,4 +130,50 @@
             }
         }
     }
-}
+
+    public class XactJobArchive: XactJobBase
+    {
+        public DateTime CompletedAt { get; private set; }
+
+        public XactJobArchive(Guid id,
+                              DateTime scheduledAt,
+                              DateTime completedAt,
+                              string typeName,
+                              string methodName,
+                              string methodArgs,
+                              string queue,
+                              int errorCount = 0,
+                              DateTime? errorTime = null,
+                              string? errorMessage = null,
+                              string? errorStackTrace = null)
+            : base(id,
+                   scheduledAt,
+                   typeName,
+                   methodName,
+                   methodArgs,
+                   queue,
+                   errorCount,
+                   errorTime,
+                   errorMessage,
+                   errorStackTrace)
+        {
+            CompletedAt = completedAt;
+        }
+
+        public static XactJobArchive CreateFromJob(XactJob job, DateTime completedAt)
+        {
+            return new XactJobArchive(job.Id,
+                                      job.ScheduledAt,
+                                      completedAt,
+                                      job.TypeName,
+                                      job.MethodName,
+                                      job.MethodArgs,
+                                      job.Queue,
+                                      job.ErrorCount,
+                                      job.ErrorTime,
+                                      job.ErrorMessage,
+                                      job.ErrorStackTrace);
+        }
+    }
+
+} 

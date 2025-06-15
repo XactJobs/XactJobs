@@ -103,6 +103,7 @@ namespace XactJobs
             }
 
             var jobs = await dbContext.Set<XactJob>().FromSqlRaw(fetchJobsSql)
+                .AsNoTracking()
                 .ToListAsync(stoppingToken)
                 .ConfigureAwait(false);
 
@@ -120,8 +121,16 @@ namespace XactJobs
                 }
                 catch (Exception ex)
                 {
-                    job.MarkFailed(ex);
                     _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+
+                    dbContext.Attach(job);
+
+                    job.MarkFailed(ex);
+
+                    if (job.Status == XactJobStatus.Cancelled)
+                    {
+                        ArchiveJob(dbContext, job);
+                    }
                 }
             })
                 .ConfigureAwait(false);
@@ -162,6 +171,8 @@ namespace XactJobs
 
                 job.MarkCompleted();
 
+                ArchiveJob(dbContext, job);
+
                 await dbContext.SaveChangesAsync(stoppingToken)
                     .ConfigureAwait(false);
 
@@ -188,6 +199,12 @@ namespace XactJobs
                         .ConfigureAwait(false);
                 }
             }
+        }
+
+        private static void ArchiveJob(TDbContext dbContext, XactJob job)
+        {
+            dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, DateTime.UtcNow));
+            dbContext.Set<XactJob>().Remove(job);
         }
 
         private string GetQueueDisplayName()
