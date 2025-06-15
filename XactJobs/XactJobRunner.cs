@@ -89,15 +89,10 @@ namespace XactJobs
 
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            var extendLeaseSql = dialect.GetExtendLeaseSql(_leaser, _options.LeaseDurationInSeconds);
             var acquireLeaseSql = dialect.GetAcquireLeaseSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
             var fetchJobsSql = dialect.GetFetchJobsSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
 
-            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), async token =>
-            {
-                await dbContext.Database.ExecuteSqlRawAsync(extendLeaseSql, token)
-                    .ConfigureAwait(false);
-            });
+            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLease);
 
             extendLeaseTimer.Start();
 
@@ -135,6 +130,20 @@ namespace XactJobs
                 .ConfigureAwait(false);
 
             await extendLeaseTimer.StopAsync()
+                .ConfigureAwait(false);
+        }
+
+        private async Task ExtendLease(CancellationToken token)
+        {
+            using var scope = _scopeFactory.CreateScope();
+
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+
+            var extendLeaseSql = dialect.GetExtendLeaseSql(_leaser, _options.LeaseDurationInSeconds);
+
+            await dbContext.Database.ExecuteSqlRawAsync(extendLeaseSql, token)
                 .ConfigureAwait(false);
         }
 
