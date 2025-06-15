@@ -1,31 +1,29 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Collections.Concurrent;
-using System.Linq.Expressions;
-using System.Reflection;
-using System.Text.Json;
 
 namespace XactJobs
 {
     public sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, Func<IServiceProvider, object?[], CancellationToken, Task?>> _compiledJobs = new();
-
-        private readonly XactJobsOptions _options;
+        private readonly string? _queueName;
+        private readonly Guid _leaser = Guid.NewGuid();
+        private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(XactJobsOptions options, IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(string? queueName, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
+            _queueName = queueName;
             _options = options;
             _scopeFactory = scopeFactory;
             _logger = logger;
         }
 
-        public async Task ExecuteAsync(CancellationToken stoppingToken)
+        public async Task ExecuteAsync(CancellationToken stoppingToken, int initialDelayMs)
         {
-            var sql = _options.Dialect.GetFetchJobsSql(_options.BatchSize);
+            await Task.Delay(TimeSpan.FromMilliseconds(initialDelayMs), stoppingToken)
+                .ConfigureAwait(false);
 
             var parallelOptions = new ParallelOptions
             {
@@ -33,31 +31,82 @@ namespace XactJobs
                 MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism
             };
 
+            var lastRunFailed = false;
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    await RunJobsAsync(sql, parallelOptions, stoppingToken).ConfigureAwait(false);
+                    var delaySec = lastRunFailed 
+                        ? _options.WorkerErrorRetryDelayInSeconds 
+                        : _options.PollingIntervalInSeconds;
+
+                    lastRunFailed = false;
+
+                    await Task.Delay(TimeSpan.FromSeconds(delaySec), stoppingToken)
+                        .ConfigureAwait(false);
+
+                    await RunJobsAsync(parallelOptions, stoppingToken)
+                        .ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Running Jobs failed. Retrying in 10 seconds");
+                    lastRunFailed = true;
 
-                    await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+                    if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                    {
+                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds", GetQueueDisplayName(), _options.WorkerErrorRetryDelayInSeconds);
+                    }
                 }
+            }
+
+            try
+            {
+                await ClearLeases();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Queue}: Failed clearing leases for leaser '{Leaser}' during shutdown", GetQueueDisplayName(), _leaser);
             }
         }
 
-        private async Task RunJobsAsync(string sql, ParallelOptions parallelOptions, CancellationToken stoppingToken)
+        private async Task ClearLeases()
         {
             using var scope = _scopeFactory.CreateScope();
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            using var xact = await dbContext.Database.BeginTransactionAsync(stoppingToken)
-                .ConfigureAwait(false);
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            var jobs = await dbContext.Set<XactJob>().FromSqlRaw(sql)
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+            await dbContext.Database.ExecuteSqlRawAsync(dialect.GetClearLeaseSql(_leaser), cts.Token)
+                .ConfigureAwait(false);
+        }
+
+        private async Task RunJobsAsync(ParallelOptions parallelOptions, CancellationToken stoppingToken)
+        {
+            using var scope = _scopeFactory.CreateScope();
+
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+
+            var acquireLeaseSql = dialect.GetAcquireLeaseSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
+            var fetchJobsSql = dialect.GetFetchJobsSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
+
+            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLease);
+
+            extendLeaseTimer.Start();
+
+            if (acquireLeaseSql != null)
+            {
+                await dbContext.Database.ExecuteSqlRawAsync(acquireLeaseSql, stoppingToken)
+                    .ConfigureAwait(false);
+            }
+
+            var jobs = await dbContext.Set<XactJob>().FromSqlRaw(fetchJobsSql)
+                .AsNoTracking()
                 .ToListAsync(stoppingToken)
                 .ConfigureAwait(false);
 
@@ -68,17 +117,23 @@ namespace XactJobs
                     await RunJobAsync(job, stoppingToken)
                         .ConfigureAwait(false);
 
-                    job.MarkCompleted();
-
                     if (_logger.IsEnabled(LogLevel.Debug))
                     {
-                        _logger.LogDebug("Job completed: {TypeName}.{MethodName} ({Id})", job.TypeName, job.MethodName, job.Id);
+                        _logger.LogDebug("{Queue}: Job completed - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
                     }
                 }
                 catch (Exception ex)
                 {
+                    _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+
+                    dbContext.Attach(job);
+
                     job.MarkFailed(ex);
-                    _logger.LogError(ex, "Job failed: {TypeName}.{MethodName} ({Id})", job.TypeName, job.MethodName, job.Id);
+
+                    if (job.Status == XactJobStatus.Cancelled)
+                    {
+                        ArchiveJob(dbContext, job);
+                    }
                 }
             })
                 .ConfigureAwait(false);
@@ -86,85 +141,83 @@ namespace XactJobs
             await dbContext.SaveChangesAsync(stoppingToken)
                 .ConfigureAwait(false);
 
-            await xact.CommitAsync(stoppingToken)
+            await extendLeaseTimer.StopAsync()
+                .ConfigureAwait(false);
+        }
+
+        private async Task ExtendLease(CancellationToken token)
+        {
+            using var scope = _scopeFactory.CreateScope();
+
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+
+            var extendLeaseSql = dialect.GetExtendLeaseSql(_leaser, _options.LeaseDurationInSeconds);
+
+            await dbContext.Database.ExecuteSqlRawAsync(extendLeaseSql, token)
                 .ConfigureAwait(false);
         }
 
         public async Task RunJobAsync(XactJob job, CancellationToken stoppingToken)
         {
-            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, job.MethodArgs.Length);
-
-            var compiled = _compiledJobs.GetOrAdd(key, k =>
-            {
-                var (type, method) = job.ToMethodInfo();
-                return BuildJobDelegate(type, method);
-            });
-
             using var scope = _scopeFactory.CreateScope();
 
-            var args = JsonSerializer.Deserialize<object?[]>(job.MethodArgs) ?? [];
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            var resultTask = compiled(scope.ServiceProvider, args, stoppingToken);
-
-            if (resultTask != null)
+            try
             {
-                await resultTask.ConfigureAwait(false);
+                dbContext.Attach(job);
+
+                await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
+                    .ConfigureAwait(false);
+
+                job.MarkCompleted();
+
+                ArchiveJob(dbContext, job);
+
+                await dbContext.SaveChangesAsync(stoppingToken)
+                    .ConfigureAwait(false);
+
+                if (dbContext.Database.CurrentTransaction != null)
+                {
+                    await dbContext.Database.CurrentTransaction.CommitAsync(stoppingToken)
+                        .ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (dbContext.Database.CurrentTransaction != null)
+                {
+                    // try to roll back always, even if stopping
+                    await dbContext.Database.CurrentTransaction.RollbackAsync(CancellationToken.None)
+                        .ConfigureAwait(false);
+                }
+
+                if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+            }
+            finally
+            {
+                if (dbContext.Database.CurrentTransaction != null)
+                {
+                    await dbContext.Database.CurrentTransaction.DisposeAsync()
+                        .ConfigureAwait(false);
+                }
             }
         }
 
-        private static Func<IServiceProvider, object?[], CancellationToken, Task?> BuildJobDelegate(Type type, MethodInfo method)
+        private static void ArchiveJob(TDbContext dbContext, XactJob job)
         {
-            var spParam = Expression.Parameter(typeof(IServiceProvider), "serviceProvider");
-            var argsParam = Expression.Parameter(typeof(object[]), "args");
-            var ctParam = Expression.Parameter(typeof(CancellationToken), "stoppingToken");
-
-            var parameters = method.GetParameters();
-            var callArgs = new Expression[parameters.Length];
-
-            for (int i = 0; i < parameters.Length; i++)
-            {
-                var argAccess = Expression.ArrayIndex(argsParam, Expression.Constant(i));
-                var paramType = parameters[i].ParameterType;
-
-                if (paramType == typeof(CancellationToken))
-                {
-                    callArgs[i] = ctParam;
-                }
-                else
-                {
-                    callArgs[i] = Expression.Convert(argAccess, paramType);
-                }
-            }
-
-            Expression? instanceExpr = method.IsStatic
-                ? null
-                : Expression.Convert(
-                    Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService), [type], spParam),
-                    type
-                );
-
-            var callExpr = Expression.Call(instanceExpr, method, callArgs);
-
-            Expression bodyExpr;
-
-            if (typeof(Task).IsAssignableFrom(method.ReturnType))
-            {
-                bodyExpr = Expression.Convert(callExpr, typeof(Task));
-            }
-            else
-            {
-                var completedTaskProp = typeof(Task).GetProperty(nameof(Task.CompletedTask))!;
-                var completedTaskExpr = Expression.Property(null, completedTaskProp);
-
-                // callExpr returns void, so use a Block to sequence call + completedTask
-                bodyExpr = Expression.Block(callExpr, completedTaskExpr);
-            }
-
-            var lambda = Expression.Lambda<Func<IServiceProvider, object?[], CancellationToken, Task?>>(
-                bodyExpr, spParam, argsParam, ctParam);
-
-            return lambda.Compile();
+            dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, DateTime.UtcNow));
+            dbContext.Set<XactJob>().Remove(job);
         }
 
+        private string GetQueueDisplayName()
+        {
+            return _queueName ?? "Default";
+        }
     }
 }

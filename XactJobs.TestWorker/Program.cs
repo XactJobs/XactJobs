@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using XactJobs.TestModel.PostgreSql;
+
 namespace XactJobs.TestWorker
 {
     public class Program
@@ -6,7 +9,28 @@ namespace XactJobs.TestWorker
         {
             var builder = Host.CreateApplicationBuilder(args);
 
-            builder.Services.AddHostedService<Worker>();
+            builder.Services.AddDbContext<UserDbContext>(options =>
+            {
+                options
+                    .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnectionString"));
+            });
+
+            builder.Services.AddXactJobs<UserDbContext>(options =>
+            {
+                /*
+                options
+                    .WithPollingInterval(5)
+                    .WithIsolatedQueue("long_running", queueOptions =>
+                    {
+                        queueOptions
+                            .WithLeaseDuration(10)
+                            .WithPollingInterval(10);
+                        
+                    })
+                    .WithIsolatedQueue("test")
+                    ;
+                */
+            });
 
             builder.Services.AddTransient<TestJob>();
 
