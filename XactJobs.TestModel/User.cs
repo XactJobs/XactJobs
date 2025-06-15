@@ -21,5 +21,14 @@
             Console.WriteLine(name);
             Console.WriteLine(guid);
         }
+
+        public static async Task MyJobAsync(int id, string name, Guid guid, CancellationToken cancellationToken)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+
+            Console.WriteLine(id);
+            Console.WriteLine(name);
+            Console.WriteLine(guid);
+        }
     }
 }

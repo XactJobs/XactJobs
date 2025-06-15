@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Text.Json;
@@ -7,8 +8,7 @@ namespace XactJobs
 {
     internal class XactJobCompiler
     {
-        // not using concurrent dictionary because GetOrAdd suffers from the "stampede" problem
-        private static readonly Dictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], CancellationToken, Task?>, ParameterInfo[])> _compiledJobs = new();
+        private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, ParameterInfo[])> _compiledJobs = new();
         
         public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, CancellationToken stoppingToken)
         {
@@ -18,32 +18,30 @@ namespace XactJobs
 
             var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
 
-            Func<IServiceProvider, object?[], CancellationToken, Task?> compiledFunc;
-
-            ParameterInfo[] parameters;
-
-            lock (_compiledJobs)
+            var (compiledFunc, parameters) = _compiledJobs.GetOrAdd(key, _ =>
             {
-                if (!_compiledJobs.TryGetValue(key, out var compiledJob))
-                {
-                    var (type, method) = job.ToMethodInfo(args.Length);
-
-                    compiledJob = (BuildJobDelegate(type, method), method.GetParameters());
-
-                    _compiledJobs.Add(key, compiledJob);   
-                }
-
-                compiledFunc = compiledJob.Item1;
-                parameters = compiledJob.Item2;
-            }
+                var (type, method) = job.ToMethodInfo(args.Length);
+                return (BuildJobDelegate(type, method), method.GetParameters());
+            });
 
             // set the args
             for (var i = 0; i < args.Length; i++)
             {
-                args[i] = JsonSerializer.Deserialize(jsonArgs.RootElement[i], parameters[i].ParameterType);
+                if (parameters[i].ParameterType == typeof(CancellationToken))
+                {
+                    args[i] = stoppingToken;
+                }
+                else if (jsonArgs.RootElement[i].ValueKind == JsonValueKind.Null)
+                {
+                    args[i] = null;
+                }
+                else
+                {
+                    args[i] = JsonSerializer.Deserialize(jsonArgs.RootElement[i], parameters[i].ParameterType);
+                }
             }
 
-            var resultTask = compiledFunc(scope.ServiceProvider, args, stoppingToken);
+            var resultTask = compiledFunc(scope.ServiceProvider, args);
 
             if (resultTask != null)
             {
@@ -51,11 +49,10 @@ namespace XactJobs
             }
         }
 
-        public static Func<IServiceProvider, object?[], CancellationToken, Task?> BuildJobDelegate(Type type, MethodInfo method)
+        public static Func<IServiceProvider, object?[], Task?> BuildJobDelegate(Type type, MethodInfo method)
         {
             var spParam = Expression.Parameter(typeof(IServiceProvider), "serviceProvider");
             var argsParam = Expression.Parameter(typeof(object[]), "args");
-            var ctParam = Expression.Parameter(typeof(CancellationToken), "stoppingToken");
 
             var parameters = method.GetParameters();
             var callArgs = new Expression[parameters.Length];
@@ -65,14 +62,7 @@ namespace XactJobs
                 var argAccess = Expression.ArrayIndex(argsParam, Expression.Constant(i));
                 var paramType = parameters[i].ParameterType;
 
-                if (paramType == typeof(CancellationToken))
-                {
-                    callArgs[i] = ctParam;
-                }
-                else
-                {
-                    callArgs[i] = Expression.Convert(argAccess, paramType);
-                }
+                callArgs[i] = Expression.Convert(argAccess, paramType);
             }
 
             Expression? instanceExpr = method.IsStatic
@@ -99,8 +89,8 @@ namespace XactJobs
                 bodyExpr = Expression.Block(callExpr, completedTaskExpr);
             }
 
-            var lambda = Expression.Lambda<Func<IServiceProvider, object?[], CancellationToken, Task?>>(
-                bodyExpr, spParam, argsParam, ctParam);
+            var lambda = Expression.Lambda<Func<IServiceProvider, object?[], Task?>>(
+                bodyExpr, spParam, argsParam);
 
             return lambda.Compile();
         }

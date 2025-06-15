@@ -14,10 +14,12 @@ namespace XactJobs.TestConsole
             var db = new DbContextFactory().CreateDbContext(args);
 
             db.JobEnqueue(() => User.MyJob(1, "Sina", Guid.NewGuid()));
-            db.JobEnqueue(() => User.MyJob(1, "Long", Guid.NewGuid()), "long_running");
+            db.JobEnqueue(() => User.MyJobAsync(1, "Long", Guid.NewGuid(), CancellationToken.None), "long_running");
             db.JobEnqueue(() => User.MyJob(1, "Test", Guid.NewGuid()), "test");
 
             db.SaveChanges();
+
+            Console.ReadLine();
         }
     }
 

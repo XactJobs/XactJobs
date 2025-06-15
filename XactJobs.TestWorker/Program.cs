@@ -19,7 +19,13 @@ namespace XactJobs.TestWorker
             {
                 options
                     .WithPollingInterval(2)
-                    .WithIsolatedQueue("long_running", x => x.WithPollingInterval(30))
+                    .WithIsolatedQueue("long_running", queueOptions =>
+                    {
+                        queueOptions
+                            .WithLeaseDuration(10)
+                            .WithPollingInterval(10);
+                        
+                    })
                     .WithIsolatedQueue("test");
             });
 

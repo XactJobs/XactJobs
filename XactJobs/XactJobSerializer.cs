@@ -153,9 +153,13 @@ namespace XactJobs
 
         private static object? GetExpressionValue(Expression expression)
         {
-            return expression is ConstantExpression constantExpression
+            var value = expression is ConstantExpression constantExpression
                 ? constantExpression.Value
                 : CachedExpressionCompiler.Evaluate(expression);
+
+            return value?.GetType() == typeof(CancellationToken) 
+                ? null 
+                : value;
         }
     }
 }
