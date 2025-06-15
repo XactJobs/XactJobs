@@ -29,6 +29,8 @@ namespace XactJobs
 
         public TBuilder WithLeaseDuration(int durationInSeconds)
         {
+            if (durationInSeconds < 1) throw new ArgumentOutOfRangeException(nameof(durationInSeconds));
+
             Options.LeaseDurationInSeconds = durationInSeconds;
             return (this as TBuilder)!;
         }

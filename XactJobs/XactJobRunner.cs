@@ -31,31 +31,44 @@ namespace XactJobs
                 MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism
             };
 
-            var lastRunFailed = false;
+            var lastRunFailed = 0;
+            var nextRunTime = DateTime.UtcNow;
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var delaySec = lastRunFailed 
-                        ? _options.WorkerErrorRetryDelayInSeconds 
+                    var delaySec = lastRunFailed > 0
+                        ? _options.PollingIntervalInSeconds * Math.Min(lastRunFailed, 5)
                         : _options.PollingIntervalInSeconds;
 
-                    lastRunFailed = false;
+                    // this following run time calculation is meant to keep
+                    // the run times consistent, in delaySec steps, so that multiple workers
+                    // do not start hitting the db at the same time
 
-                    await Task.Delay(TimeSpan.FromSeconds(delaySec), stoppingToken)
+                    var now = DateTime.UtcNow;
+                    do
+                    {
+                        nextRunTime = nextRunTime.AddSeconds(delaySec);
+                    }
+                    while (nextRunTime <= now);
+
+                    await Task.Delay(nextRunTime.Subtract(now), stoppingToken)
                         .ConfigureAwait(false);
 
                     await RunJobsAsync(parallelOptions, stoppingToken)
                         .ConfigureAwait(false);
+
+                    lastRunFailed = 0;
                 }
                 catch (Exception ex)
                 {
-                    lastRunFailed = true;
+                    lastRunFailed++;
 
                     if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                     {
-                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds", GetQueueDisplayName(), _options.WorkerErrorRetryDelayInSeconds);
+                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds",
+                            GetQueueDisplayName(), _options.PollingIntervalInSeconds * Math.Min(lastRunFailed, 5));
                     }
                 }
             }
