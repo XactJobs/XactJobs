@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 
 using XactJobs.Annotations;
+using XactJobs.Cron;
 
 namespace XactJobs
 {
@@ -67,24 +68,24 @@ namespace XactJobs
             return AddJob(dbContext, jobExpression, DateTime.UtcNow.Add(delay), queue);
         }
 
-        public static XactJobPeriodic JobSchedulePeriodic(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action> jobExpression)
+        public static XactJobPeriodic JobSchedulePeriodic(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action> jobExpression, string? queue = null)
         {
-            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression, queue);
         }
 
-        public static XactJobPeriodic JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression)
+        public static XactJobPeriodic JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression, string? queue = null)
         {
-            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression, queue);
         }
 
-        public static XactJobPeriodic JobSchedulePeriodic(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression)
+        public static XactJobPeriodic JobSchedulePeriodic(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression, string? queue = null)
         {
-            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression, queue);
         }
 
-        public static XactJobPeriodic JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression)
+        public static XactJobPeriodic JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression, string? queue = null)
         {
-            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression);
+            return AddJobPeriodic(dbContext, jobExpression, id, cronExpression, queue);
         }
 
         private static XactJob AddJob(DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
@@ -100,11 +101,39 @@ namespace XactJobs
             return job;
         }
 
-        internal static XactJobPeriodic AddJobPeriodic(this DbContext dbContext, LambdaExpression lambdaExp, string id, string cronExp)
+        internal static XactJobPeriodic AddJobPeriodic(this DbContext dbContext, LambdaExpression lambdaExp, string name, string cronExp, string? queue)
         {
-            var job = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, cronExp);
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+
+            var id = dialect.NewJobId();
+
+            var job = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, name, cronExp, queue);
 
             dbContext.Set<XactJobPeriodic>().Add(job);
+
+            ScheduleNextRun(dbContext, job);
+
+            return job;
+        }
+
+        internal static XactJob ScheduleNextRun(this DbContext dbContext, XactJobPeriodic periodicJob)
+        {
+            var cronGenerator = new CronSequenceGenerator(periodicJob.CronExpression, TimeZoneInfo.Utc);
+
+            var nextRunUtc = cronGenerator.NextUtc(DateTime.UtcNow);
+
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+
+            var job = new XactJob(dialect.NewJobId(),
+                                  nextRunUtc,
+                                  XactJobStatus.Queued,
+                                  periodicJob.TypeName,
+                                  periodicJob.MethodName,
+                                  periodicJob.MethodArgs,
+                                  periodicJob.Queue,
+                                  periodicJob.Id);
+
+            dbContext.Set<XactJob>().Add(job);
 
             return job;
         }

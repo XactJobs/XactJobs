@@ -123,11 +123,24 @@ namespace XactJobs
                 .ToListAsync(stoppingToken)
                 .ConfigureAwait(false);
 
+            var periodicJobIds = jobs.Select(job => job.PeriodicJobId).ToList();
+
+            var periodicJobs = await dbContext.Set<XactJobPeriodic>()
+                .Where(x => periodicJobIds.Contains(x.Id))
+                .ToDictionaryAsync(x => x.Id, stoppingToken)
+                .ConfigureAwait(false);
+
             await Parallel.ForEachAsync(jobs, parallelOptions, async (job, stoppingToken) =>
             {
+                XactJobPeriodic? periodicJob = null;
                 try
                 {
-                    await RunJobAsync(job, stoppingToken)
+                    if (job.PeriodicJobId.HasValue)
+                    {
+                        periodicJobs.TryGetValue(job.PeriodicJobId.Value, out periodicJob);
+                    }
+                    
+                    await RunJobAsync(job, periodicJob, stoppingToken)
                         .ConfigureAwait(false);
 
                     if (_logger.IsEnabled(LogLevel.Debug))
@@ -145,7 +158,7 @@ namespace XactJobs
 
                     if (job.Status == XactJobStatus.Cancelled)
                     {
-                        ArchiveJob(dbContext, job);
+                        ArchiveJob(dbContext, job, periodicJob);
                     }
                 }
             })
@@ -172,7 +185,7 @@ namespace XactJobs
                 .ConfigureAwait(false);
         }
 
-        public async Task RunJobAsync(XactJob job, CancellationToken stoppingToken)
+        public async Task RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, CancellationToken stoppingToken)
         {
             using var scope = _scopeFactory.CreateScope();
 
@@ -182,12 +195,19 @@ namespace XactJobs
             {
                 dbContext.Attach(job);
 
-                await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
-                    .ConfigureAwait(false);
+                if (periodicJob != null && !periodicJob.IsActive)
+                {
+                    job.MarkSkipped();
+                }
+                else
+                {
+                    await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
+                        .ConfigureAwait(false);
 
-                job.MarkCompleted();
+                    job.MarkCompleted();
+                }
 
-                ArchiveJob(dbContext, job);
+                ArchiveJob(dbContext, job, periodicJob);
 
                 await dbContext.SaveChangesAsync(stoppingToken)
                     .ConfigureAwait(false);
@@ -222,10 +242,15 @@ namespace XactJobs
             }
         }
 
-        private static void ArchiveJob(TDbContext dbContext, XactJob job)
+        private static void ArchiveJob(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {
-            dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, DateTime.UtcNow));
+            dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, periodicJob, DateTime.UtcNow));
             dbContext.Set<XactJob>().Remove(job);
+
+            if (periodicJob != null)
+            {
+                dbContext.ScheduleNextRun(periodicJob);
+            }
         }
 
         private string GetQueueDisplayName()

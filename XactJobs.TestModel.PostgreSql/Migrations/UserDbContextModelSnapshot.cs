@@ -93,6 +93,10 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                         .HasColumnType("text")
                         .HasColumnName("method_name");
 
+                    b.Property<Guid?>("PeriodicJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("periodic_job_id");
+
                     b.Property<string>("Queue")
                         .IsRequired()
                         .HasColumnType("text")
@@ -114,6 +118,9 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                     b.HasKey("Id")
                         .HasName("pk_job");
 
+                    b.HasIndex("PeriodicJobId")
+                        .HasDatabaseName("ix_job_periodic_job_id");
+
                     b.HasIndex("Queue", "ScheduledAt")
                         .HasDatabaseName("ix_job_queue_scheduled_at");
 
@@ -130,6 +137,10 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                     b.Property<DateTime>("CompletedAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("completed_at");
+
+                    b.Property<string>("CronExpression")
+                        .HasColumnType("text")
+                        .HasColumnName("cron_expression");
 
                     b.Property<int>("ErrorCount")
                         .HasColumnType("integer")
@@ -156,6 +167,14 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("method_name");
+
+                    b.Property<Guid?>("PeriodicJobId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("periodic_job_id");
+
+                    b.Property<string>("PeriodicJobName")
+                        .HasColumnType("text")
+                        .HasColumnName("periodic_job_name");
 
                     b.Property<string>("Queue")
                         .IsRequired()
@@ -186,8 +205,9 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
 
             modelBuilder.Entity("XactJobs.XactJobPeriodic", b =>
                 {
-                    b.Property<string>("Id")
-                        .HasColumnType("text")
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("CreatedAt")
@@ -199,9 +219,9 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                         .HasColumnType("text")
                         .HasColumnName("cron_expression");
 
-                    b.Property<Guid?>("LastJobId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("last_job_id");
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
 
                     b.Property<string>("MethodArgs")
                         .IsRequired()
@@ -213,6 +233,11 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                         .HasColumnType("text")
                         .HasColumnName("method_name");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
                     b.Property<string>("Queue")
                         .IsRequired()
                         .HasColumnType("text")
@@ -223,10 +248,29 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
                         .HasColumnType("text")
                         .HasColumnName("type_name");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamptz")
+                        .HasColumnName("updated_at");
+
                     b.HasKey("Id")
                         .HasName("pk_job_periodic");
 
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_job_periodic_name");
+
                     b.ToTable("job_periodic", "xact_jobs");
+                });
+
+            modelBuilder.Entity("XactJobs.XactJob", b =>
+                {
+                    b.HasOne("XactJobs.XactJobPeriodic", "PeriodicJob")
+                        .WithMany()
+                        .HasForeignKey("PeriodicJobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_job_periodic_job_id");
+
+                    b.Navigation("PeriodicJob");
                 });
 #pragma warning restore 612, 618
         }

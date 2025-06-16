@@ -24,7 +24,12 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.Id).HasColumnName(Names.ColId);
 
+            builder.Property(x => x.Name).HasColumnName(Names.ColName);
+
             builder.Property(x => x.CreatedAt).HasColumnName(Names.ColCreatedAt)
+                .HasColumnType(_sqlDialect.DateTimeColumnType);
+
+            builder.Property(x => x.UpdatedAt).HasColumnName(Names.ColUpdatedAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
             builder.Property(x => x.CronExpression).HasColumnName(Names.ColCronExpression);
@@ -34,7 +39,11 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.MethodArgs).HasColumnName(Names.ColMethodArgs);
             builder.Property(x => x.Queue).HasColumnName(Names.ColQueue);
 
-            builder.Property(x => x.LastJobId).HasColumnName(Names.ColLastJobId);
+            builder.Property(x => x.IsActive).HasColumnName(Names.ColIsActive);
+
+            builder.HasIndex(x => x.Name)
+                .HasDatabaseName($"ix_{Names.XactJobPeriodicTable}_{Names.ColName}")
+                .IsUnique();
         }
     }
 }

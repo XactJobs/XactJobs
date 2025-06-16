@@ -41,7 +41,7 @@ namespace XactJobs
             return new XactJob(id, scheduleAtUtc.Value, XactJobStatus.Queued, typeName, methodName, serializedArgs, queue);
         }
 
-        internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, string id, string cronExp)
+        internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, Guid id, string name, string cronExp, string? queue)
         {
             var callExpression = lambdaExp.Body as MethodCallExpression 
                 ?? throw new ArgumentException("Expression body should be a simple method call.", nameof(lambdaExp));
@@ -59,7 +59,9 @@ namespace XactJobs
 
             var serializedArgs = JsonSerializer.Serialize(args);
 
-            return new XactJobPeriodic(id, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, Names.QueueDefault);
+            queue ??= Names.QueueDefault;
+
+            return new XactJobPeriodic(id, name, DateTime.UtcNow, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, queue, isActive: true);
         }
 
         internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)

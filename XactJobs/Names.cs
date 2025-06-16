@@ -20,6 +20,7 @@
         public const string ColMethodArgs = "method_args";
         public const string ColStatus = "status";
         public const string ColQueue = "queue";
+        public const string ColPeriodicJobId = "periodic_job_id";
 
         public const string ColErrorCount = "error_count";
         public const string ColErrorTime = "error_time";
@@ -27,7 +28,9 @@
         public const string ColErrorStackTrace = "error_stack_trace";
 
         public const string ColCronExpression = "cron_expression";
-        public const string ColLastJobId = "last_job_id";
+        public const string ColName = "name";
+        public const string ColUpdatedAt = "updated_at";
+        public const string ColIsActive = "is_active";
 
     }
 }

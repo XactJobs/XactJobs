@@ -26,8 +26,6 @@
         {
             await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
 
-            throw new NotImplementedException();
-
             Console.WriteLine(id);
             Console.WriteLine(name);
             Console.WriteLine(guid);

@@ -47,7 +47,7 @@ namespace XactJobs
         /// </summary>
         /// <remarks>The cron schedule string must follow the standard cron format. Ensure that the  <see
         /// cref="LambdaExpression"/> provided for each job is valid and executable.</remarks>
-        public Dictionary<string, (LambdaExpression JobExpression, string CronExpression)> PeriodicJobs { get; set; } = [];
+        public Dictionary<string, (LambdaExpression JobExpression, string CronExpression, bool IsActive)> PeriodicJobs { get; set; } = [];
     }
 
     public class XactJobsOptions<TDbContext>: XactJobsOptionsBase<TDbContext> where TDbContext: DbContext

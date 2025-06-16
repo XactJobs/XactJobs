@@ -37,27 +37,27 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob(string id, string cronExpression, [InstantHandle] Expression<Action> jobExpression)
+        public TBuilder WithPeriodicJob(string name, string cronExpression, [InstantHandle] Expression<Action> jobExpression, bool isActive = true)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob<T>(string id, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression)
+        public TBuilder WithPeriodicJob<T>(string name, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression, bool isActive = true)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob(string id, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression)
+        public TBuilder WithPeriodicJob(string name, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression, bool isActive = true)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob<T>(string id, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression)
+        public TBuilder WithPeriodicJob<T>(string name, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression, bool isActive = true)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
             return (this as TBuilder)!;
         }
     }
