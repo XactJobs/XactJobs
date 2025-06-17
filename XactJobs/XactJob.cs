@@ -127,10 +127,16 @@
 
         internal void MarkFailed(Exception ex)
         {
+            var innerMostEx = ex;
+            while (innerMostEx.InnerException != null)
+            {
+                innerMostEx = innerMostEx.InnerException;
+            }
+
             ErrorTime = DateTime.UtcNow;
             ErrorCount = ErrorCount + 1;
-            ErrorMessage = ex.Message;
-            ErrorStackTrace = ex.StackTrace;
+            ErrorMessage = innerMostEx.Message;
+            ErrorStackTrace = ex.ToString();
 
             Leaser = null;
             LeasedUntil = null;

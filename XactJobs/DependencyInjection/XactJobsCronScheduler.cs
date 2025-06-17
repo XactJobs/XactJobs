@@ -2,130 +2,79 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using XactJobs.SqlDialects;
 
 namespace XactJobs.DependencyInjection
 {
-    internal class XactJobsCronScheduler<TDbContext> : BackgroundService where TDbContext : DbContext
+    public abstract class XactJobsCronScheduler<TDbContext> : BackgroundService where TDbContext : DbContext
     {
-        private readonly XactJobsOptions<TDbContext> _options;
-        private readonly IServiceScopeFactory _scopeFactory;
-        private readonly ILogger<XactJobsCronScheduler<TDbContext>> _logger;
+        protected ILogger<XactJobsCronScheduler<TDbContext>> Logger { get; }
+        protected IServiceScopeFactory ScopeFactory { get; }
 
-        public XactJobsCronScheduler(XactJobsOptions<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger<XactJobsCronScheduler<TDbContext>> logger)
+        protected abstract Task EnsurePeriodicJobs(TDbContext db, CancellationToken stoppingToken);
+
+        public XactJobsCronScheduler(IServiceScopeFactory scopeFactory, ILogger<XactJobsCronScheduler<TDbContext>> logger)
         {
-            _options = options;
-            _scopeFactory = scopeFactory;
-            _logger = logger;
+            ScopeFactory = scopeFactory;
+            Logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            const int MaxRetries = 10;
-
-            for (var i = 0; i < MaxRetries; i++)
-            {
-                try
-                {
-                    if (i > 0)
-                    {
-                        await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken)
-                            .ConfigureAwait(false);
-                    }
-
-                    await EnsurePeriodicJobs(stoppingToken)
-                        .ConfigureAwait(false);
-
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    if (ex is OperationCanceledException && stoppingToken.IsCancellationRequested)
-                    {
-                        break;
-                    }
-
-                    if (i == MaxRetries - 1)
-                    {
-                        _logger.LogError(ex, "Failed to create periodic jobs");
-                    }
-                }
-            }
-            
-        }
-
-        private async Task EnsurePeriodicJobs(CancellationToken stoppingToken)
-        {
-            using var scope = _scopeFactory.CreateScope();
+            using var scope = ScopeFactory.CreateScope();
 
             var db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            var periodicJobs = await db.Set<XactJobPeriodic>()
-                .ToListAsync(stoppingToken)
-                .ConfigureAwait(false);
+            var dialect = db.Database.ProviderName.ToSqlDialect();
 
             using var tx = db.Database.BeginTransaction();
+
             try
             {
-                await EnsurePeriodicJobsForQueue(db, null, _options, periodicJobs, stoppingToken)
-                    .ConfigureAwait(false);
-
-                foreach (var (queueName, queueOptions) in _options.IsolatedQueues)
+                if (dialect is MySqlDialect || dialect is SqlServerDialect)
                 {
-                    await EnsurePeriodicJobsForQueue(db, queueName, queueOptions, periodicJobs, stoppingToken)
+                    var result = await db.ExecuteScalarIntAsync(dialect.GetLockJobPeriodicSql(), stoppingToken)
                         .ConfigureAwait(false);
-                }
 
-                await tx.CommitAsync(stoppingToken)
-                    .ConfigureAwait(false);
-            }
-            catch
-            {
-                await tx.RollbackAsync(stoppingToken)
-                    .ConfigureAwait(false);
-
-                throw;
-            }
-        }
-
-        private static async Task EnsurePeriodicJobsForQueue(TDbContext db,
-                                                             string? queueName,
-                                                             XactJobsOptionsBase<TDbContext> options,
-                                                             List<XactJobPeriodic> periodicJobs,
-                                                             CancellationToken stoppingToken)
-        {
-            foreach (var (name, (lambdaExp, cronExp, isActive)) in options.PeriodicJobs)
-            {
-                var periodicJob = periodicJobs.FirstOrDefault(j => j.Name == name);
-
-                if (periodicJob == null)
-                {
-                    periodicJob = db.AddJobPeriodic(lambdaExp, name, cronExp, null);
+                    if (dialect is MySqlDialect && result != 1) throw new Exception($"Failed to acquire lock (Result={result})");
+                    else if (dialect is SqlServerDialect && result < 0) throw new Exception($"Failed to acquire lock (Result={result})");
                 }
                 else
                 {
-                    var templateJob = XactJobSerializer.FromExpressionPeriodic(lambdaExp, Guid.Empty, name, cronExp, queueName);
-
-                    if (!periodicJob.IsCompatibleWith(templateJob))
-                    {
-                        // delete existing queued jobs for this periodic definition
-                        await db.Set<XactJob>()
-                            .Where(x => x.PeriodicJobId == periodicJob.Id)
-                            .ExecuteDeleteAsync(stoppingToken)
-                            .ConfigureAwait(false);
-
-                        // update the definition
-                        periodicJob.UpdateDefinition(templateJob);
-
-                        // schedule the next run
-                        db.ScheduleNextRun(periodicJob);
-                    }
+                    await db.Database.ExecuteSqlRawAsync(dialect.GetLockJobPeriodicSql(), stoppingToken)
+                        .ConfigureAwait(false);
                 }
 
-                periodicJob.Activate(isActive);
-            }
+                await EnsurePeriodicJobs(db, stoppingToken)
+                    .ConfigureAwait(false);
 
-            await db.SaveChangesAsync(stoppingToken)
-                .ConfigureAwait(false);
+                await tx.CommitAsync(stoppingToken)
+                    .ConfigureAwait(false);
+
+                if (dialect is MySqlDialect)
+                {
+                    await db.ExecuteScalarIntAsync("RELEASE_ALL_LOCKS()", stoppingToken)
+                        .ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    Logger.LogError(ex, "Failed to create periodic jobs");
+                }
+
+                try
+                {
+                    await tx.RollbackAsync(stoppingToken)
+                        .ConfigureAwait(false);
+                }
+                catch (Exception exx)
+                {
+                    Logger.LogError(exx, "Failed to rollback");
+                }
+            }
         }
     }
 }
+

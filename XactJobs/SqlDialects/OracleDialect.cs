@@ -42,5 +42,9 @@ SET {Names.ColLeaser} = NULL, {Names.ColLeasedUntil} = NULL
 WHERE {Names.ColLeaser} = HEXTORAW('{leaser:N}')
   AND {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
+
+        public string GetLockJobPeriodicSql() => $@"
+LOCK TABLE {Names.XactJobSchema}.{Names.XactJobPeriodicTable} IN EXCLUSIVE MODE
+";
     }
 }

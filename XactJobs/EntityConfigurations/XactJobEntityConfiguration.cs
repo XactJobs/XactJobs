@@ -46,6 +46,9 @@ namespace XactJobs.EntityConfigurations
 
             builder.HasIndex(x => new { x.Queue, x.ScheduledAt })
                 .HasDatabaseName($"ix_{Names.XactJobTable}_{Names.ColQueue}_{Names.ColScheduledAt}");
+
+            builder.HasIndex(x => x.PeriodicJobId)
+                .HasDatabaseName($"ix_{Names.XactJobTable}_{Names.ColPeriodicJobId}");
         }
     }
 }

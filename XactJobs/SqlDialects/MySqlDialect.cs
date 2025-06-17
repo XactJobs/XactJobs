@@ -47,5 +47,10 @@ SET `{Names.ColLeaser}` = NULL, `{Names.ColLeasedUntil}` = NULL
 WHERE `{Names.ColLeaser}` = '{leaser}'
   AND `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
+
+        public string GetLockJobPeriodicSql() => $@"
+SELECT GET_LOCK('{Names.XactJobSchema}.{Names.XactJobPeriodicTable}', 30);
+";
+
     }
 }

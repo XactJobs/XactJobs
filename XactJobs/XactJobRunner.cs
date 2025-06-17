@@ -196,8 +196,9 @@ namespace XactJobs
             {
                 dbContext.Attach(job);
 
-                if (periodicJob != null && !periodicJob.IsActive)
+                if (job.PeriodicJobId.HasValue && (periodicJob == null || !periodicJob.IsActive))
                 {
+                    // periodic job is inactive or deleted
                     job.MarkSkipped();
                 }
                 else
