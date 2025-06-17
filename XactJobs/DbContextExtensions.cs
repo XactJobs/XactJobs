@@ -88,6 +88,20 @@ namespace XactJobs
             return AddJobPeriodic(dbContext, jobExpression, id, cronExpression, queue);
         }
 
+        public static async Task<bool> JobDeletePeriodicAsync(this DbContext dbContext, string name, CancellationToken cancellationToken)
+        {
+            var job = await dbContext.Set<XactJobPeriodic>()
+                .FirstOrDefaultAsync(x => x.Name == name, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (job == null) return false;
+
+            dbContext.Set<XactJobPeriodic>()
+                .Remove(job);
+
+            return true;
+        }
+
         private static XactJob AddJob(DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
         {
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();

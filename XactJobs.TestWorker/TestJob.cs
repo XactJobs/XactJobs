@@ -1,31 +1,27 @@
-﻿namespace XactJobs.TestWorker
+﻿using XactJobs.TestModel.PostgreSql;
+
+namespace XactJobs.TestWorker
 {
     public class TestJob
     {
+        private readonly UserDbContext _dbContext;
         private readonly ILogger<TestJob> _logger;
 
-        public TestJob(ILogger<TestJob> logger)
+        public TestJob(UserDbContext dbContext, ILogger<TestJob> logger)
         {
+            _dbContext = dbContext;
             _logger = logger;
-        }
-
-        public void Run(int id, string name, Guid guid)
-        {
-            _logger.LogInformation("Job executed: {id}, {name}, {guid}", id, name, guid);
         }
 
         public async Task RunAsync(int id, string name, Guid guid, CancellationToken cancellationToken)
         {
-            await Task.Delay(5000, cancellationToken);
+            await _dbContext.JobDeletePeriodicAsync(name, cancellationToken)
+                .ConfigureAwait(false);
+
+            //throw new NotImplementedException();
+
             _logger.LogInformation("Job executed: {id}, {name}, {guid}", id, name, guid);
         }
-
-        public static async Task RunStaticAsync(int id, string name, Guid guid)
-        {
-            await Task.Delay(5000);
-            Console.WriteLine($"Job executed: {id}, {name}, {guid}");
-        }
-
     }
 
 }

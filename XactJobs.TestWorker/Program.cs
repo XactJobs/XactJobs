@@ -19,15 +19,12 @@ namespace XactJobs.TestWorker
 
             builder.Services.AddXactJobs<UserDbContext>(options =>
             {
-                options
-                    .WithPeriodicJob("test_1", CronBuilder.EverySeconds(10), () => User.MyJobAsync(10, "test cron 1", Guid.NewGuid(), CancellationToken.None));
-
-                options.WithIsolatedQueue("priority", queueOptions =>
-                {
-                    queueOptions
-                        .WithPeriodicJob("test_2", CronBuilder.EveryWeekDayAt(new TimeSpan(8, 0, 0), DayOfWeek.Saturday),
-                            () => User.MyJobAsync(10, "test cron 2", Guid.NewGuid(), CancellationToken.None));
-                });
+                options.WithPeriodicJob<TestJob>
+                (
+                    "test_1", 
+                    CronBuilder.EverySeconds(10), 
+                    x => x.RunAsync(10, "test_1", Guid.NewGuid(), CancellationToken.None)
+                );
             });
 
             builder.Services.AddTransient<TestJob>();

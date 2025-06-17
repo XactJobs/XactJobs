@@ -44,12 +44,6 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.ErrorMessage).HasColumnName(Names.ColErrorMessage);
             builder.Property(x => x.ErrorStackTrace).HasColumnName(Names.ColErrorStackTrace);
 
-            builder.HasOne(x => x.PeriodicJob)
-                .WithMany()
-                .HasForeignKey(x => x.PeriodicJobId)
-                .HasConstraintName($"fk_{Names.XactJobTable}_{Names.ColPeriodicJobId}")
-                .OnDelete(DeleteBehavior.Cascade);
-
             builder.HasIndex(x => new { x.Queue, x.ScheduledAt })
                 .HasDatabaseName($"ix_{Names.XactJobTable}_{Names.ColQueue}_{Names.ColScheduledAt}");
         }

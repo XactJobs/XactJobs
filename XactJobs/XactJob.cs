@@ -84,9 +84,6 @@
         public DateTime? LeasedUntil { get; private set; }
         public Guid? Leaser { get; set; }
 
-        // here, to avoid creating FK in XactJobArchive
-        public XactJobPeriodic? PeriodicJob { get; protected set; }
-
         public XactJob(Guid id,
                        DateTime scheduledAt,
                        XactJobStatus status,

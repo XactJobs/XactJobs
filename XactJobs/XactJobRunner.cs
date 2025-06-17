@@ -127,6 +127,7 @@ namespace XactJobs
 
             var periodicJobs = await dbContext.Set<XactJobPeriodic>()
                 .Where(x => periodicJobIds.Contains(x.Id))
+                .AsNoTracking()
                 .ToDictionaryAsync(x => x.Id, stoppingToken)
                 .ConfigureAwait(false);
 
@@ -201,6 +202,12 @@ namespace XactJobs
                 }
                 else
                 {
+                    if (periodicJob != null)
+                    {
+                        // this is so we can detect if the job is deleted inside the job
+                        dbContext.Attach(periodicJob);
+                    }
+
                     await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
                         .ConfigureAwait(false);
 
@@ -247,7 +254,7 @@ namespace XactJobs
             dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, periodicJob, DateTime.UtcNow));
             dbContext.Set<XactJob>().Remove(job);
 
-            if (periodicJob != null)
+            if (periodicJob != null && dbContext.Entry(periodicJob).State != EntityState.Deleted)
             {
                 dbContext.ScheduleNextRun(periodicJob);
             }
