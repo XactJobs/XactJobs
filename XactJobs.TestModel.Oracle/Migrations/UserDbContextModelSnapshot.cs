@@ -119,6 +119,9 @@ namespace XactJobs.TestModel.Oracle.Migrations
                     b.HasIndex("Queue", "ScheduledAt")
                         .HasDatabaseName("ix_job_queue_scheduled_at");
 
+                    b.HasIndex("Queue", "Leaser", "LeasedUntil")
+                        .HasDatabaseName("ix_job_queue_leaser");
+
                     b.ToTable("job", "XACT_JOBS");
                 });
 

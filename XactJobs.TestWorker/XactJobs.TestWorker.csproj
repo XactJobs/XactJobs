@@ -12,7 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\XactJobs.TestModel.MySql\XactJobs.TestModel.MySql.csproj" />
     <ProjectReference Include="..\XactJobs.TestModel.Oracle\XactJobs.TestModel.Oracle.csproj" />
+    <ProjectReference Include="..\XactJobs.TestModel.PostgreSql\XactJobs.TestModel.PostgreSql.csproj" />
+    <ProjectReference Include="..\XactJobs.TestModel.SqlServer\XactJobs.TestModel.SqlServer.csproj" />
     <ProjectReference Include="..\XactJobs\XactJobs.csproj" />
   </ItemGroup>
 </Project>

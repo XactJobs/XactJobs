@@ -1,7 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
+
 using XactJobs.TestModel;
+using XactJobs.TestModel.MySql;
 
 namespace XactJobs.TestConsole
 {
@@ -30,7 +32,7 @@ namespace XactJobs.TestConsole
                 .Build();
 
             var dbContextOptions = new DbContextOptionsBuilder<UserDbContext>()
-                .UseOracle(configuration.GetConnectionString("DefaultConnectionString"))
+                .UseMySql(configuration.GetConnectionString("MySqlConnectionString"), ServerVersion.Parse("8.4.5"))
                 .Options;
 
             return new UserDbContext(dbContextOptions);

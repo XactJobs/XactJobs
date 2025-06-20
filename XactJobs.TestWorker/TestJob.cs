@@ -1,15 +1,11 @@
-﻿using XactJobs.TestModel;
-
-namespace XactJobs.TestWorker
+﻿namespace XactJobs.TestWorker
 {
     public class TestJob
     {
-        private readonly UserDbContext _dbContext;
         private readonly ILogger<TestJob> _logger;
 
-        public TestJob(UserDbContext dbContext, ILogger<TestJob> logger)
+        public TestJob(ILogger<TestJob> logger)
         {
-            _dbContext = dbContext;
             _logger = logger;
         }
 

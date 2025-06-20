@@ -2,45 +2,48 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using XactJobs.TestModel.MySql;
+using Oracle.EntityFrameworkCore.Metadata;
+using XactJobs.TestModel;
 
 #nullable disable
 
-namespace XactJobs.TestModel.MySql.Migrations
+namespace XactJobs.TestModel.Oracle.Migrations
 {
     [DbContext(typeof(UserDbContext))]
-    partial class UserDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250620092154_AddLeaserIndex")]
+    partial class AddLeaserIndex
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "9.0.6")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
-            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
+            OracleModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
             modelBuilder.Entity("XactJobs.TestModel.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
+                        .HasColumnType("NUMBER(10)");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+                    OraclePropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("NVARCHAR2(2000)");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("NVARCHAR2(2000)");
 
                     b.Property<string>("LastName")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("NVARCHAR2(2000)");
 
                     b.HasKey("Id");
 
@@ -51,63 +54,63 @@ namespace XactJobs.TestModel.MySql.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)")
+                        .HasColumnType("RAW(16)")
                         .HasColumnName("id");
 
                     b.Property<int>("ErrorCount")
-                        .HasColumnType("int")
+                        .HasColumnType("NUMBER(10)")
                         .HasColumnName("error_count");
 
                     b.Property<string>("ErrorMessage")
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("error_message");
 
                     b.Property<string>("ErrorStackTrace")
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("error_stack_trace");
 
                     b.Property<DateTime?>("ErrorTime")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("error_time");
 
                     b.Property<DateTime?>("LeasedUntil")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("leased_until");
 
                     b.Property<Guid?>("Leaser")
-                        .HasColumnType("char(36)")
+                        .HasColumnType("RAW(16)")
                         .HasColumnName("leaser");
 
                     b.Property<string>("MethodArgs")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("method_args");
 
                     b.Property<string>("MethodName")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("method_name");
 
                     b.Property<Guid?>("PeriodicJobId")
-                        .HasColumnType("char(36)")
+                        .HasColumnType("RAW(16)")
                         .HasColumnName("periodic_job_id");
 
                     b.Property<string>("Queue")
                         .IsRequired()
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("NVARCHAR2(450)")
                         .HasColumnName("queue");
 
                     b.Property<DateTime>("ScheduledAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("scheduled_at");
 
                     b.Property<int>("Status")
-                        .HasColumnType("int")
+                        .HasColumnType("NUMBER(10)")
                         .HasColumnName("status");
 
                     b.Property<string>("TypeName")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("type_name");
 
                     b.HasKey("Id")
@@ -122,74 +125,74 @@ namespace XactJobs.TestModel.MySql.Migrations
                     b.HasIndex("Queue", "Leaser", "LeasedUntil")
                         .HasDatabaseName("ix_job_queue_leaser");
 
-                    b.ToTable("xact_jobs__job", (string)null);
+                    b.ToTable("job", "XACT_JOBS");
                 });
 
             modelBuilder.Entity("XactJobs.XactJobArchive", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)")
+                        .HasColumnType("RAW(16)")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("CompletedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("completed_at");
 
                     b.Property<string>("CronExpression")
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("cron_expression");
 
                     b.Property<int>("ErrorCount")
-                        .HasColumnType("int")
+                        .HasColumnType("NUMBER(10)")
                         .HasColumnName("error_count");
 
                     b.Property<string>("ErrorMessage")
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("error_message");
 
                     b.Property<string>("ErrorStackTrace")
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("error_stack_trace");
 
                     b.Property<DateTime?>("ErrorTime")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("error_time");
 
                     b.Property<string>("MethodArgs")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("method_args");
 
                     b.Property<string>("MethodName")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("method_name");
 
                     b.Property<Guid?>("PeriodicJobId")
-                        .HasColumnType("char(36)")
+                        .HasColumnType("RAW(16)")
                         .HasColumnName("periodic_job_id");
 
                     b.Property<string>("PeriodicJobName")
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("periodic_job_name");
 
                     b.Property<string>("Queue")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("queue");
 
                     b.Property<DateTime>("ScheduledAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("scheduled_at");
 
                     b.Property<int>("Status")
-                        .HasColumnType("int")
+                        .HasColumnType("NUMBER(10)")
                         .HasColumnName("status");
 
                     b.Property<string>("TypeName")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("type_name");
 
                     b.HasKey("Id")
@@ -198,56 +201,56 @@ namespace XactJobs.TestModel.MySql.Migrations
                     b.HasIndex("CompletedAt")
                         .HasDatabaseName("ix_job_archive_completed_at");
 
-                    b.ToTable("xact_jobs__job_archive", (string)null);
+                    b.ToTable("job_archive", "XACT_JOBS");
                 });
 
             modelBuilder.Entity("XactJobs.XactJobPeriodic", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)")
+                        .HasColumnType("RAW(16)")
                         .HasColumnName("id");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("created_at");
 
                     b.Property<string>("CronExpression")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("cron_expression");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("tinyint(1)")
+                    b.Property<int>("IsActive")
+                        .HasColumnType("NUMBER(1)")
                         .HasColumnName("is_active");
 
                     b.Property<string>("MethodArgs")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("method_args");
 
                     b.Property<string>("MethodName")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("method_name");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("varchar(255)")
+                        .HasColumnType("NVARCHAR2(450)")
                         .HasColumnName("name");
 
                     b.Property<string>("Queue")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("queue");
 
                     b.Property<string>("TypeName")
                         .IsRequired()
-                        .HasColumnType("longtext")
+                        .HasColumnType("NVARCHAR2(2000)")
                         .HasColumnName("type_name");
 
                     b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("datetime(6)")
+                        .HasColumnType("TIMESTAMP")
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id")
@@ -257,7 +260,7 @@ namespace XactJobs.TestModel.MySql.Migrations
                         .IsUnique()
                         .HasDatabaseName("ix_job_periodic_name");
 
-                    b.ToTable("xact_jobs__job_periodic", (string)null);
+                    b.ToTable("job_periodic", "XACT_JOBS");
                 });
 #pragma warning restore 612, 618
         }

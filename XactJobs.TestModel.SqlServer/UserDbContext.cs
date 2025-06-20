@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace XactJobs.TestModel
+namespace XactJobs.TestModel.SqlServer
 {
     public class UserDbContext: DbContext
     {

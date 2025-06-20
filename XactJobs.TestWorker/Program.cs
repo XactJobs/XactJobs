@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using XactJobs.Cron;
-using XactJobs.TestModel;
+
+using XactJobs.TestModel.MySql;
 
 namespace XactJobs.TestWorker
 {
@@ -13,7 +14,7 @@ namespace XactJobs.TestWorker
             builder.Services.AddDbContext<UserDbContext>(options =>
             {
                 options
-                    .UseOracle(builder.Configuration.GetConnectionString("DefaultConnectionString"));
+                    .UseMySql(builder.Configuration.GetConnectionString("MySqlConnectionString"), ServerVersion.Parse("8.4.5"));
             });
 
             builder.Services.AddXactJobs<UserDbContext>(options =>

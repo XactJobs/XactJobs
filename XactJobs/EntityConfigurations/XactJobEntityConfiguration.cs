@@ -58,6 +58,12 @@ namespace XactJobs.EntityConfigurations
 
             builder.HasIndex(x => x.PeriodicJobId)
                 .HasDatabaseName($"ix_{Names.XactJobTable}_{Names.ColPeriodicJobId}");
+
+            if (_sqlDialect.GetAcquireLeaseSql != null)
+            {
+                builder.HasIndex(x => new { x.Queue, x.Leaser, x.LeasedUntil })
+                    .HasDatabaseName($"ix_{Names.XactJobTable}_{Names.ColQueue}_{Names.ColLeaser}");
+            }
         }
     }
 }
