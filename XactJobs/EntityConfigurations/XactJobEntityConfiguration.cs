@@ -36,6 +36,8 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.MethodArgs).HasColumnName(Names.ColMethodArgs);
             builder.Property(x => x.Queue).HasColumnName(Names.ColQueue);
 
+            builder.Property(x => x.PeriodicJobId).HasColumnName(Names.ColPeriodicJobId);
+
             builder.Property(x => x.ErrorTime).HasColumnName(Names.ColErrorTime)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
             builder.Property(x => x.ErrorCount).HasColumnName(Names.ColErrorCount);
@@ -44,6 +46,9 @@ namespace XactJobs.EntityConfigurations
 
             builder.HasIndex(x => new { x.Queue, x.ScheduledAt })
                 .HasDatabaseName($"ix_{Names.XactJobTable}_{Names.ColQueue}_{Names.ColScheduledAt}");
+
+            builder.HasIndex(x => x.PeriodicJobId)
+                .HasDatabaseName($"ix_{Names.XactJobTable}_{Names.ColPeriodicJobId}");
         }
     }
 }

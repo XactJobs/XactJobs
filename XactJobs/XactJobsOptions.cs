@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
 
 namespace XactJobs
 {
@@ -10,9 +11,12 @@ namespace XactJobs
         public int BatchSize { get; set; } = 100;
 
         /// <summary>
-        /// Number of paraller workers running. Default 4.
+        /// Number of paraller workers running. Default 2.
+        /// The workers will be started with initial delay, to distribute workers execution in time.
+        /// By default, 2 workers will be started with 4 second polling interval. 
+        /// The initial delay between workers is (4 seconds / 2 workers) = 2 seconds.
         /// </summary>
-        public int WorkerCount { get; set; } = 4;
+        public int WorkerCount { get; set; } = 2;
 
         /// <summary>
         /// Max degree of paralell jobs running per worker. Default -1 (means ProcessorCount)
@@ -25,9 +29,12 @@ namespace XactJobs
         public int LeaseDurationInSeconds { get; set; } = 120;
 
         /// <summary>
-        /// Database polling interval in seconds, per worker (Default 10 seconds)
+        /// Database polling interval in seconds, per worker (Default 4 seconds).
+        /// The workers will be started with initial delay, to distribute workers execution in time.
+        /// By default, 2 workers will be started with 4 second polling interval. 
+        /// The initial delay between workers is (4 seconds / 2 workers) = 2 seconds.
         /// </summary>
-        public int PollingIntervalInSeconds { get; set; } = 10;
+        public int PollingIntervalInSeconds { get; set; } = 4;
 
         /// <summary>
         /// Time the workers will wait for to clear pending leases, on worker stop. (Default 10 seconds)
@@ -35,10 +42,12 @@ namespace XactJobs
         public int ClearLeaseTimeoutInSeconds { get; set; } = 10;
 
         /// <summary>
-        /// Time the workers will wait for before retrying when a DB error occurs. (Default 10 seconds).
-        /// These are internal worker errors (usually when the worker cannot reach the database) - not job errors.
+        /// Gets or sets the collection of periodic jobs, each defined by a unique identifier,  a job expression, and a
+        /// cron schedule.
         /// </summary>
-        public int WorkerErrorRetryDelayInSeconds { get; set; } = 10;
+        /// <remarks>The cron schedule string must follow the standard cron format. Ensure that the  <see
+        /// cref="LambdaExpression"/> provided for each job is valid and executable.</remarks>
+        public Dictionary<string, (LambdaExpression JobExpression, string CronExpression, bool IsActive)> PeriodicJobs { get; set; } = [];
     }
 
     public class XactJobsOptions<TDbContext>: XactJobsOptionsBase<TDbContext> where TDbContext: DbContext

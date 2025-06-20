@@ -14,8 +14,8 @@ public static class ServiceCollectionExtensions
         configureOptions?.Invoke(optionsBuilder);
 
         services.AddSingleton(optionsBuilder.Options);
-
         services.AddHostedService<XactJobsRunnerDispatcher<TDbContext>>();
+        services.AddHostedService<XactJobsCronOptionsScheduler<TDbContext>>();
 
         return services;
     }

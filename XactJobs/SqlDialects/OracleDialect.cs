@@ -16,7 +16,7 @@ WITH cte AS (
     FROM {Names.XactJobSchema}.{Names.XactJobTable}
     WHERE {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND {Names.ColScheduledAt} <= SYSTIMESTAMP AT TIME ZONE 'UTC'
-      AND {Names.ColQueue} = '{queueName ?? Names.DefaultQueue}'
+      AND {Names.ColQueue} = '{queueName ?? Names.QueueDefault}'
       AND ({Names.ColLeasedUntil} IS NULL OR {Names.ColLeasedUntil} < SYSTIMESTAMP AT TIME ZONE 'UTC')
     ORDER BY {Names.ColScheduledAt}
     FOR UPDATE SKIP LOCKED
@@ -41,6 +41,10 @@ UPDATE {Names.XactJobSchema}.{Names.XactJobTable}
 SET {Names.ColLeaser} = NULL, {Names.ColLeasedUntil} = NULL
 WHERE {Names.ColLeaser} = HEXTORAW('{leaser:N}')
   AND {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+";
+
+        public string GetLockJobPeriodicSql() => $@"
+LOCK TABLE {Names.XactJobSchema}.{Names.XactJobPeriodicTable} IN EXCLUSIVE MODE
 ";
     }
 }

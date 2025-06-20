@@ -16,7 +16,7 @@ WITH cte AS (
     FROM [{Names.XactJobSchema}].[{Names.XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
     WHERE [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
       AND [{Names.ColScheduledAt}] <= SYSUTCDATETIME()
-      AND [{Names.ColQueue}] = '{queueName ?? Names.DefaultQueue}'
+      AND [{Names.ColQueue}] = '{queueName ?? Names.QueueDefault}'
       AND ([{Names.ColLeasedUntil}] IS NULL OR [{Names.ColLeasedUntil}] < SYSUTCDATETIME())
     ORDER BY [{Names.ColScheduledAt}]
 )
@@ -40,6 +40,10 @@ UPDATE [{Names.XactJobSchema}].[{Names.XactJobTable}]
 SET [{Names.ColLeaser}] = NULL, [{Names.ColLeasedUntil}] = NULL
 WHERE [{Names.ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
   AND [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+";
+
+        public string GetLockJobPeriodicSql() => $@"
+EXEC sp_getapplock @Resource = '[{Names.XactJobSchema}].[{Names.XactJobPeriodicTable}]', @LockMode = 'Exclusive', @LockTimeout = 30000
 ";
     }
 }

@@ -53,7 +53,7 @@ namespace XactJobs.DependencyInjection
 
                 var runner = new XactJobRunner<TDbContext>(queueName, options, _scopeFactory, runnerLogger);
 
-                var initialDelayMs = GetDelayStepMs(options) * (runnerIndex + 1);
+                var initialDelayMs = GetDelayStepMs(options) * runnerIndex;
 
                 _runnerTasks.Add(runner.ExecuteAsync(stoppingToken, initialDelayMs));
             }

@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using XactJobs.Cron;
+using XactJobs.TestModel;
 using XactJobs.TestModel.PostgreSql;
 
 namespace XactJobs.TestWorker
@@ -17,19 +19,12 @@ namespace XactJobs.TestWorker
 
             builder.Services.AddXactJobs<UserDbContext>(options =>
             {
-                /*
-                options
-                    .WithPollingInterval(5)
-                    .WithIsolatedQueue("long_running", queueOptions =>
-                    {
-                        queueOptions
-                            .WithLeaseDuration(10)
-                            .WithPollingInterval(10);
-                        
-                    })
-                    .WithIsolatedQueue("test")
-                    ;
-                */
+                options.WithPeriodicJob<TestJob>
+                (
+                    "test_1", 
+                    CronBuilder.EverySeconds(10), 
+                    x => x.RunAsync(10, "test_1", Guid.NewGuid(), CancellationToken.None)
+                );
             });
 
             builder.Services.AddTransient<TestJob>();

@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using XactJobs.TestModel.PostgreSql;
@@ -11,9 +12,11 @@ using XactJobs.TestModel.PostgreSql;
 namespace XactJobs.TestModel.PostgreSql.Migrations
 {
     [DbContext(typeof(UserDbContext))]
-    partial class UserDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250617210627_RemovePeriodicFk")]
+    partial class RemovePeriodicFk
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -117,9 +120,6 @@ namespace XactJobs.TestModel.PostgreSql.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_job");
-
-                    b.HasIndex("PeriodicJobId")
-                        .HasDatabaseName("ix_job_periodic_job_id");
 
                     b.HasIndex("Queue", "ScheduledAt")
                         .HasDatabaseName("ix_job_queue_scheduled_at");

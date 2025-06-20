@@ -49,6 +49,8 @@
 
         public string? ErrorStackTrace { get; protected set; }
 
+        public Guid? PeriodicJobId { get; protected set; }
+
         public XactJobBase(Guid id,
                            DateTime scheduledAt,
                            XactJobStatus status,
@@ -56,6 +58,7 @@
                            string methodName,
                            string methodArgs,
                            string queue,
+                           Guid? periodicJobId = null,
                            int errorCount = 0,
                            DateTime? errorTime = null,
                            string? errorMessage = null,
@@ -66,6 +69,7 @@
             MethodName = methodName;
             MethodArgs = methodArgs;
             Queue = queue;
+            PeriodicJobId = periodicJobId;
             Status = status;
             ScheduledAt = scheduledAt;
             ErrorCount = errorCount;
@@ -87,6 +91,7 @@
                        string methodName,
                        string methodArgs,
                        string queue,
+                       Guid? periodicJobId = null,
                        Guid? leaser = null,
                        DateTime? leasedUntil = null,
                        int errorCount = 0,
@@ -100,6 +105,7 @@
                    methodName,
                    methodArgs,
                    queue,
+                   periodicJobId,
                    errorCount,
                    errorTime,
                    errorMessage,
@@ -114,12 +120,23 @@
             Status = XactJobStatus.Completed;
         }
 
+        internal void MarkSkipped()
+        {
+            Status = XactJobStatus.Skipped;
+        }
+
         internal void MarkFailed(Exception ex)
         {
+            var innerMostEx = ex;
+            while (innerMostEx.InnerException != null)
+            {
+                innerMostEx = innerMostEx.InnerException;
+            }
+
             ErrorTime = DateTime.UtcNow;
             ErrorCount = ErrorCount + 1;
-            ErrorMessage = ex.Message;
-            ErrorStackTrace = ex.StackTrace;
+            ErrorMessage = innerMostEx.Message;
+            ErrorStackTrace = ex.ToString();
 
             Leaser = null;
             LeasedUntil = null;
@@ -139,6 +156,9 @@
     {
         public DateTime CompletedAt { get; private set; }
 
+        public string? PeriodicJobName { get; private set; }
+        public string? CronExpression { get; private set; }
+
         public XactJobArchive(Guid id,
                               DateTime scheduledAt,
                               XactJobStatus status,
@@ -147,6 +167,9 @@
                               string methodName,
                               string methodArgs,
                               string queue,
+                              Guid? periodicJobId = null,
+                              string? periodicJobName = null,
+                              string? cronExpression = null,
                               int errorCount = 0,
                               DateTime? errorTime = null,
                               string? errorMessage = null,
@@ -158,15 +181,18 @@
                    methodName,
                    methodArgs,
                    queue,
+                   periodicJobId,
                    errorCount,
                    errorTime,
                    errorMessage,
                    errorStackTrace)
         {
             CompletedAt = completedAt;
+            PeriodicJobName = periodicJobName;
+            CronExpression = cronExpression;
         }
 
-        public static XactJobArchive CreateFromJob(XactJob job, DateTime completedAt)
+        public static XactJobArchive CreateFromJob(XactJob job, XactJobPeriodic? periodicJob, DateTime completedAt)
         {
             return new XactJobArchive(job.Id,
                                       job.ScheduledAt,
@@ -176,6 +202,9 @@
                                       job.MethodName,
                                       job.MethodArgs,
                                       job.Queue,
+                                      job.PeriodicJobId,
+                                      periodicJob?.Name,
+                                      periodicJob?.CronExpression,
                                       job.ErrorCount,
                                       job.ErrorTime,
                                       job.ErrorMessage,

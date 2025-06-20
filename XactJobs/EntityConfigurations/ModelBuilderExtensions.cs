@@ -8,6 +8,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             modelBuilder.ApplyConfiguration(new XactJobEntityConfiguration(providerName, excludeFromMigrations));
             modelBuilder.ApplyConfiguration(new XactJobArchiveEntityConfiguration(providerName, excludeFromMigrations));
+            modelBuilder.ApplyConfiguration(new XactJobPeriodicEntityConfiguration(providerName, excludeFromMigrations));
         }
     }
 }

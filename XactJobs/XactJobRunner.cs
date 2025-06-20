@@ -31,31 +31,44 @@ namespace XactJobs
                 MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism
             };
 
-            var lastRunFailed = false;
+            var lastRunFailed = 0;
+            var nextRunTime = DateTime.UtcNow;
 
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var delaySec = lastRunFailed 
-                        ? _options.WorkerErrorRetryDelayInSeconds 
+                    var delaySec = lastRunFailed > 0
+                        ? _options.PollingIntervalInSeconds * Math.Min(lastRunFailed, 5)
                         : _options.PollingIntervalInSeconds;
 
-                    lastRunFailed = false;
+                    // this following run time calculation is meant to keep
+                    // the run times consistent, in delaySec steps, so that multiple workers
+                    // do not start hitting the db at the same time
 
-                    await Task.Delay(TimeSpan.FromSeconds(delaySec), stoppingToken)
+                    var now = DateTime.UtcNow;
+                    do
+                    {
+                        nextRunTime = nextRunTime.AddSeconds(delaySec);
+                    }
+                    while (nextRunTime <= now);
+
+                    await Task.Delay(nextRunTime.Subtract(now), stoppingToken)
                         .ConfigureAwait(false);
 
                     await RunJobsAsync(parallelOptions, stoppingToken)
                         .ConfigureAwait(false);
+
+                    lastRunFailed = 0;
                 }
                 catch (Exception ex)
                 {
-                    lastRunFailed = true;
+                    lastRunFailed++;
 
                     if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
                     {
-                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds", GetQueueDisplayName(), _options.WorkerErrorRetryDelayInSeconds);
+                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds",
+                            GetQueueDisplayName(), _options.PollingIntervalInSeconds * Math.Min(lastRunFailed, 5));
                     }
                 }
             }
@@ -110,11 +123,25 @@ namespace XactJobs
                 .ToListAsync(stoppingToken)
                 .ConfigureAwait(false);
 
+            var periodicJobIds = jobs.Select(job => job.PeriodicJobId).ToList();
+
+            var periodicJobs = await dbContext.Set<XactJobPeriodic>()
+                .Where(x => periodicJobIds.Contains(x.Id))
+                .AsNoTracking()
+                .ToDictionaryAsync(x => x.Id, stoppingToken)
+                .ConfigureAwait(false);
+
             await Parallel.ForEachAsync(jobs, parallelOptions, async (job, stoppingToken) =>
             {
+                XactJobPeriodic? periodicJob = null;
                 try
                 {
-                    await RunJobAsync(job, stoppingToken)
+                    if (job.PeriodicJobId.HasValue)
+                    {
+                        periodicJobs.TryGetValue(job.PeriodicJobId.Value, out periodicJob);
+                    }
+                    
+                    await RunJobAsync(job, periodicJob, stoppingToken)
                         .ConfigureAwait(false);
 
                     if (_logger.IsEnabled(LogLevel.Debug))
@@ -132,7 +159,7 @@ namespace XactJobs
 
                     if (job.Status == XactJobStatus.Cancelled)
                     {
-                        ArchiveJob(dbContext, job);
+                        ArchiveJob(dbContext, job, periodicJob);
                     }
                 }
             })
@@ -159,7 +186,7 @@ namespace XactJobs
                 .ConfigureAwait(false);
         }
 
-        public async Task RunJobAsync(XactJob job, CancellationToken stoppingToken)
+        public async Task RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, CancellationToken stoppingToken)
         {
             using var scope = _scopeFactory.CreateScope();
 
@@ -169,12 +196,26 @@ namespace XactJobs
             {
                 dbContext.Attach(job);
 
-                await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
-                    .ConfigureAwait(false);
+                if (job.PeriodicJobId.HasValue && (periodicJob == null || !periodicJob.IsActive))
+                {
+                    // periodic job is inactive or deleted
+                    job.MarkSkipped();
+                }
+                else
+                {
+                    if (periodicJob != null)
+                    {
+                        // this is so we can detect if the job is deleted inside the job
+                        dbContext.Attach(periodicJob);
+                    }
 
-                job.MarkCompleted();
+                    await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
+                        .ConfigureAwait(false);
 
-                ArchiveJob(dbContext, job);
+                    job.MarkCompleted();
+                }
+
+                ArchiveJob(dbContext, job, periodicJob);
 
                 await dbContext.SaveChangesAsync(stoppingToken)
                     .ConfigureAwait(false);
@@ -209,10 +250,15 @@ namespace XactJobs
             }
         }
 
-        private static void ArchiveJob(TDbContext dbContext, XactJob job)
+        private static void ArchiveJob(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {
-            dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, DateTime.UtcNow));
+            dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, periodicJob, DateTime.UtcNow));
             dbContext.Set<XactJob>().Remove(job);
+
+            if (periodicJob != null && dbContext.Entry(periodicJob).State != EntityState.Deleted)
+            {
+                dbContext.ScheduleNextRun(periodicJob);
+            }
         }
 
         private string GetQueueDisplayName()

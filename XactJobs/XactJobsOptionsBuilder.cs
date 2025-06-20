@@ -1,4 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+using XactJobs.Annotations;
 
 namespace XactJobs
 {
@@ -29,7 +31,33 @@ namespace XactJobs
 
         public TBuilder WithLeaseDuration(int durationInSeconds)
         {
+            if (durationInSeconds < 1) throw new ArgumentOutOfRangeException(nameof(durationInSeconds));
+
             Options.LeaseDurationInSeconds = durationInSeconds;
+            return (this as TBuilder)!;
+        }
+
+        public TBuilder WithPeriodicJob(string name, string cronExpression, [InstantHandle] Expression<Action> jobExpression, bool isActive = true)
+        {
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
+            return (this as TBuilder)!;
+        }
+
+        public TBuilder WithPeriodicJob<T>(string name, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression, bool isActive = true)
+        {
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
+            return (this as TBuilder)!;
+        }
+
+        public TBuilder WithPeriodicJob(string name, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression, bool isActive = true)
+        {
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
+            return (this as TBuilder)!;
+        }
+
+        public TBuilder WithPeriodicJob<T>(string name, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression, bool isActive = true)
+        {
+            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
             return (this as TBuilder)!;
         }
     }
