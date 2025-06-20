@@ -32,7 +32,7 @@ namespace XactJobs.DependencyInjection
             {
                 tx = db.Database.BeginTransaction();
 
-                await dialect.AcquireTableLockAsync(db, Names.XactJobSchema, Names.XactJobPeriodicTable, stoppingToken)
+                await dialect.AcquireTableLockAsync(db, dialect.XactJobSchema, dialect.XactJobPeriodicTable, stoppingToken)
                     .ConfigureAwait(false);
 
                 await EnsurePeriodicJobsAsync(db, stoppingToken)
@@ -41,7 +41,7 @@ namespace XactJobs.DependencyInjection
                 await tx.CommitAsync(stoppingToken)
                     .ConfigureAwait(false);
 
-                await dialect.ReleaseTableLockAsync(db, Names.XactJobSchema, Names.XactJobPeriodicTable, stoppingToken)
+                await dialect.ReleaseTableLockAsync(db, dialect.XactJobSchema, dialect.XactJobPeriodicTable, stoppingToken)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)

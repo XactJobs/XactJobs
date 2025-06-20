@@ -5,8 +5,34 @@ namespace XactJobs.SqlDialects
 {
     public class PostgreSqlDialect : ISqlDialect
     {
+        public string XactJobSchema { get; } = "xact_jobs";
+        public string XactJobTable { get; } = "job";
+        public string XactJobArchiveTable { get; } = "job_archive";
+        public string XactJobPeriodicTable { get; } = "job_periodic";
+
+        public string ColId { get; } = "id";
+        public string ColCreatedAt { get; } = "created_at";
+        public string ColScheduledAt { get; } = "scheduled_at";
+        public string ColCompletedAt { get; } = "completed_at";
+        public string ColLeasedUntil { get; } = "leased_until";
+        public string ColLeaser { get; } = "leaser";
+        public string ColTypeName { get; } = "type_name";
+        public string ColMethodName { get; } = "method_name";
+        public string ColMethodArgs { get; } = "method_args";
+        public string ColStatus { get; } = "status";
+        public string ColQueue { get; } = "queue";
+        public string ColPeriodicJobId { get; } = "periodic_job_id";
+        public string ColPeriodicJobName { get; } = "periodic_job_name";
+        public string ColErrorCount { get; } = "error_count";
+        public string ColErrorTime { get; } = "error_time";
+        public string ColErrorMessage { get; } = "error_message";
+        public string ColErrorStackTrace { get; } = "error_stack_trace";
+        public string ColCronExpression { get; } = "cron_expression";
+        public string ColName { get; } = "name";
+        public string ColUpdatedAt { get; } = "updated_at";
+        public string ColIsActive { get; } = "is_active";
+
         public bool HasSchemaSupport { get; } = true;
-        public string SchemaName { get; } = Names.XactJobSchema;
 
         public string DateTimeColumnType { get; } = "timestamptz";
 
@@ -16,40 +42,42 @@ namespace XactJobs.SqlDialects
 
         public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 WITH cte AS (
-  SELECT ""{Names.ColId}""
-  FROM ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
-  WHERE ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-    AND ""{Names.ColScheduledAt}"" <= current_timestamp
-    AND ""{Names.ColQueue}"" = '{queueName ?? Names.QueueDefault}'
-    AND (""{Names.ColLeasedUntil}"" IS NULL OR ""{Names.ColLeasedUntil}"" < current_timestamp)
-  ORDER BY ""{Names.ColScheduledAt}""
+  SELECT {ColId}
+  FROM {XactJobSchema}.{XactJobTable}
+  WHERE {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+    AND {ColScheduledAt} <= current_timestamp
+    AND {ColQueue} = '{queueName ?? QueueNames.Default}'
+    AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < current_timestamp)
+  ORDER BY {ColScheduledAt}
   FOR UPDATE SKIP LOCKED
   LIMIT {maxJobs}
 )
-UPDATE ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
-SET ""{Names.ColLeaser}"" = '{leaser}'::uuid, ""{Names.ColLeasedUntil}"" = current_timestamp + interval '{leaseDurationInSeconds} seconds'
+UPDATE {XactJobSchema}.{XactJobTable}
+SET {ColLeaser} = '{leaser}'::uuid, {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
 FROM cte
-WHERE ""{Names.XactJobSchema}"".""{Names.XactJobTable}"".""{Names.ColId}"" = cte.""{Names.ColId}""
-RETURNING ""{Names.XactJobSchema}"".""{Names.XactJobTable}"".*
+WHERE {XactJobSchema}.{XactJobTable}.{ColId} = cte.{ColId}
+RETURNING {XactJobSchema}.{XactJobTable}.*
 ";
 
         public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
-SET ""{Names.ColLeasedUntil}"" = current_timestamp + interval '{leaseDurationInSeconds} seconds'
-WHERE ""{Names.ColLeaser}"" = '{leaser}'::uuid
-  AND ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+UPDATE {XactJobSchema}.{XactJobTable}
+SET {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
+WHERE {ColLeaser} = '{leaser}'::uuid
+  AND {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public string GetClearLeaseSql(Guid leaser) => $@"
-UPDATE ""{Names.XactJobSchema}"".""{Names.XactJobTable}""
-SET ""{Names.ColLeaser}"" = NULL, ""{Names.ColLeasedUntil}"" = NULL
-WHERE ""{Names.ColLeaser}"" = '{leaser}'::uuid
-  AND ""{Names.ColStatus}"" IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
+UPDATE {XactJobSchema}.{XactJobTable}
+SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
+WHERE {ColLeaser} = '{leaser}'::uuid
+  AND {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
-            await db.Database.ExecuteSqlRawAsync(@$"LOCK TABLE ""{Names.XactJobSchema}"".""{Names.XactJobPeriodicTable}"" IN EXCLUSIVE MODE", cancellationToken)
+            var sql = @$"LOCK TABLE {XactJobSchema}.{XactJobPeriodicTable} IN EXCLUSIVE MODE";
+
+            await db.Database.ExecuteSqlRawAsync(sql, cancellationToken)
                 .ConfigureAwait(false);
         }
 

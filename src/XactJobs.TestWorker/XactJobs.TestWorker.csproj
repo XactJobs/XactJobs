@@ -12,14 +12,14 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.6" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.6" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <PackageReference Include="Oracle.EntityFrameworkCore" Version="9.23.80" />
+    <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0-preview.3.efcore.9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XactJobs.TestModel.MySql\XactJobs.TestModel.MySql.csproj" />
-    <ProjectReference Include="..\XactJobs.TestModel.Oracle\XactJobs.TestModel.Oracle.csproj" />
-    <ProjectReference Include="..\XactJobs.TestModel.PostgreSql\XactJobs.TestModel.PostgreSql.csproj" />
-    <ProjectReference Include="..\XactJobs.TestModel.SqlServer\XactJobs.TestModel.SqlServer.csproj" />
     <ProjectReference Include="..\XactJobs\XactJobs.csproj" />
   </ItemGroup>
 </Project>

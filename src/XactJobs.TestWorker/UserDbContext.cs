@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace XactJobs.TestModel.SqlServer
+namespace XactJobs.TestWorker
 {
     public class UserDbContext: DbContext
     {
@@ -10,6 +10,11 @@ namespace XactJobs.TestModel.SqlServer
 
         public UserDbContext(DbContextOptions<UserDbContext> options): base(options)
         {
+        }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            base.OnConfiguring(optionsBuilder);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

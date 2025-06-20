@@ -20,42 +20,42 @@ namespace XactJobs.EntityConfigurations
 
             if (_sqlDialect.HasSchemaSupport)
             {
-                builder.ToTable(Names.XactJobArchiveTable, _sqlDialect.SchemaName);
+                builder.ToTable(_sqlDialect.XactJobArchiveTable, _sqlDialect.XactJobSchema);
             }
             else
             {
-                builder.ToTable($"{_sqlDialect.SchemaName}__{Names.XactJobArchiveTable}");
+                builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobArchiveTable}");
             }
 
-            builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobArchiveTable}");
+            builder.HasKey(x => x.Id).HasName($"pk_{_sqlDialect.XactJobArchiveTable}");
 
-            builder.Property(x => x.Id).HasColumnName(Names.ColId);
+            builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
 
-            builder.Property(x => x.Status).HasColumnName(Names.ColStatus);
+            builder.Property(x => x.Status).HasColumnName(_sqlDialect.ColStatus);
 
-            builder.Property(x => x.ScheduledAt).HasColumnName(Names.ColScheduledAt)
+            builder.Property(x => x.ScheduledAt).HasColumnName(_sqlDialect.ColScheduledAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
-            builder.Property(x => x.CompletedAt).HasColumnName(Names.ColCompletedAt)
+            builder.Property(x => x.CompletedAt).HasColumnName(_sqlDialect.ColCompletedAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
-            builder.Property(x => x.TypeName).HasColumnName(Names.ColTypeName);
-            builder.Property(x => x.MethodName).HasColumnName(Names.ColMethodName);
-            builder.Property(x => x.MethodArgs).HasColumnName(Names.ColMethodArgs);
-            builder.Property(x => x.Queue).HasColumnName(Names.ColQueue);
+            builder.Property(x => x.TypeName).HasColumnName(_sqlDialect.ColTypeName);
+            builder.Property(x => x.MethodName).HasColumnName(_sqlDialect.ColMethodName);
+            builder.Property(x => x.MethodArgs).HasColumnName(_sqlDialect.ColMethodArgs);
+            builder.Property(x => x.Queue).HasColumnName(_sqlDialect.ColQueue);
 
-            builder.Property(x => x.ErrorTime).HasColumnName(Names.ColErrorTime)
+            builder.Property(x => x.ErrorTime).HasColumnName(_sqlDialect.ColErrorTime)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
-            builder.Property(x => x.ErrorCount).HasColumnName(Names.ColErrorCount);
-            builder.Property(x => x.ErrorMessage).HasColumnName(Names.ColErrorMessage);
-            builder.Property(x => x.ErrorStackTrace).HasColumnName(Names.ColErrorStackTrace);
+            builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
+            builder.Property(x => x.ErrorMessage).HasColumnName(_sqlDialect.ColErrorMessage);
+            builder.Property(x => x.ErrorStackTrace).HasColumnName(_sqlDialect.ColErrorStackTrace);
 
-            builder.Property(x => x.PeriodicJobId).HasColumnName(Names.ColPeriodicJobId);
-            builder.Property(x => x.CronExpression).HasColumnName(Names.ColCronExpression);
-            builder.Property(x => x.PeriodicJobName).HasColumnName(Names.ColPeriodicJobName);
+            builder.Property(x => x.PeriodicJobId).HasColumnName(_sqlDialect.ColPeriodicJobId);
+            builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
+            builder.Property(x => x.PeriodicJobName).HasColumnName(_sqlDialect.ColPeriodicJobName);
 
             builder.HasIndex(x => x.CompletedAt)
-                .HasDatabaseName($"ix_{Names.XactJobArchiveTable}_{Names.ColCompletedAt}");
+                .HasDatabaseName($"ix_{_sqlDialect.XactJobArchiveTable}_{_sqlDialect.ColCompletedAt}");
         }
     }
 }

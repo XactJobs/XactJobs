@@ -1,8 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using XactJobs.Cron;
 
-using XactJobs.TestModel.MySql;
-
 namespace XactJobs.TestWorker
 {
     public class Program
@@ -13,8 +11,10 @@ namespace XactJobs.TestWorker
 
             builder.Services.AddDbContext<UserDbContext>(options =>
             {
-                options
-                    .UseMySql(builder.Configuration.GetConnectionString("MySqlConnectionString"), ServerVersion.Parse("8.4.5"));
+                options.UseNpgsql(builder.Configuration.GetConnectionString("PostgresConnectionString"));
+                //options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServerConnectionString"));
+                //options.UseMySql(builder.Configuration.GetConnectionString("MySqlConnectionString"), ServerVersion.Parse("8.5.4"));
+                //options.UseOracle(builder.Configuration.GetConnectionString("OracleConnectionString"));
             });
 
             builder.Services.AddXactJobs<UserDbContext>(options =>
@@ -30,6 +30,16 @@ namespace XactJobs.TestWorker
             builder.Services.AddTransient<TestJob>();
 
             var host = builder.Build();
+
+            // re-create the DB (this is for TESTING ONLY)
+            using (var scope = host.Services.CreateScope())
+            {
+                var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
+
+                db.Database.EnsureDeleted();
+                db.Database.EnsureCreated();
+            }
+
             host.Run();
         }
     }

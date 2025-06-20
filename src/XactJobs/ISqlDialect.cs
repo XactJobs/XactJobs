@@ -9,7 +9,33 @@ namespace XactJobs
         Guid NewJobId();
 
         bool HasSchemaSupport { get; }
-        string SchemaName { get; }
+
+        string XactJobSchema { get; }
+        string XactJobTable { get; }
+        string XactJobArchiveTable { get; }
+        string XactJobPeriodicTable { get; }
+
+        string ColId { get; }
+        string ColCreatedAt { get; }
+        string ColScheduledAt { get; }
+        string ColCompletedAt { get; }
+        string ColLeasedUntil { get; }
+        string ColLeaser { get; }
+        string ColTypeName { get; }
+        string ColMethodName { get; }
+        string ColMethodArgs { get; }
+        string ColStatus { get; }
+        string ColQueue { get; }
+        string ColPeriodicJobId { get; }
+        string ColPeriodicJobName { get; }
+        string ColErrorCount { get; }
+        string ColErrorTime { get; }
+        string ColErrorMessage { get; }
+        string ColErrorStackTrace { get; }
+        string ColCronExpression { get; }
+        string ColName { get; }
+        string ColUpdatedAt { get; }
+        string ColIsActive { get; }
 
         string DateTimeColumnType { get; }
 

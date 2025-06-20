@@ -22,33 +22,33 @@ namespace XactJobs.EntityConfigurations
 
             if (_sqlDialect.HasSchemaSupport)
             {
-                builder.ToTable(Names.XactJobPeriodicTable, _sqlDialect.SchemaName);
+                builder.ToTable(_sqlDialect.XactJobPeriodicTable, _sqlDialect.XactJobSchema);
             }
             else
             {
-                builder.ToTable($"{_sqlDialect.SchemaName}__{Names.XactJobPeriodicTable}");
+                builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobPeriodicTable}");
             }
 
-            builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobPeriodicTable}");
+            builder.HasKey(x => x.Id).HasName($"pk_{_sqlDialect.XactJobPeriodicTable}");
 
-            builder.Property(x => x.Id).HasColumnName(Names.ColId);
+            builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
 
-            builder.Property(x => x.Name).HasColumnName(Names.ColName);
+            builder.Property(x => x.Name).HasColumnName(_sqlDialect.ColName);
 
-            builder.Property(x => x.CreatedAt).HasColumnName(Names.ColCreatedAt)
+            builder.Property(x => x.CreatedAt).HasColumnName(_sqlDialect.ColCreatedAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
-            builder.Property(x => x.UpdatedAt).HasColumnName(Names.ColUpdatedAt)
+            builder.Property(x => x.UpdatedAt).HasColumnName(_sqlDialect.ColUpdatedAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
-            builder.Property(x => x.CronExpression).HasColumnName(Names.ColCronExpression);
+            builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
 
-            builder.Property(x => x.TypeName).HasColumnName(Names.ColTypeName);
-            builder.Property(x => x.MethodName).HasColumnName(Names.ColMethodName);
-            builder.Property(x => x.MethodArgs).HasColumnName(Names.ColMethodArgs);
-            builder.Property(x => x.Queue).HasColumnName(Names.ColQueue);
+            builder.Property(x => x.TypeName).HasColumnName(_sqlDialect.ColTypeName);
+            builder.Property(x => x.MethodName).HasColumnName(_sqlDialect.ColMethodName);
+            builder.Property(x => x.MethodArgs).HasColumnName(_sqlDialect.ColMethodArgs);
+            builder.Property(x => x.Queue).HasColumnName(_sqlDialect.ColQueue);
 
-            builder.Property(x => x.IsActive).HasColumnName(Names.ColIsActive);
+            builder.Property(x => x.IsActive).HasColumnName(_sqlDialect.ColIsActive);
 
             if (_sqlDialect is OracleDialect)
             {
@@ -63,7 +63,7 @@ namespace XactJobs.EntityConfigurations
             }
 
             builder.HasIndex(x => x.Name)
-                .HasDatabaseName($"ix_{Names.XactJobPeriodicTable}_{Names.ColName}")
+                .HasDatabaseName($"ix_{_sqlDialect.XactJobPeriodicTable}_{_sqlDialect.ColName}")
                 .IsUnique();
         }
     }

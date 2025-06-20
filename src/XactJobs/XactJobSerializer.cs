@@ -36,7 +36,7 @@ namespace XactJobs
 
             scheduleAtUtc ??= DateTime.UtcNow;
 
-            queue ??= Names.QueueDefault;
+            queue ??= QueueNames.Default;
 
             return new XactJob(id, scheduleAtUtc.Value, XactJobStatus.Queued, typeName, methodName, serializedArgs, queue);
         }
@@ -59,7 +59,7 @@ namespace XactJobs
 
             var serializedArgs = JsonSerializer.Serialize(args);
 
-            queue ??= Names.QueueDefault;
+            queue ??= QueueNames.Default;
 
             return new XactJobPeriodic(id, name, DateTime.UtcNow, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, queue, isActive: true);
         }
