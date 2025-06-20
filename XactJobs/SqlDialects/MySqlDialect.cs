@@ -1,4 +1,5 @@
-﻿using UUIDNext;
+﻿using Microsoft.EntityFrameworkCore;
+using UUIDNext;
 
 namespace XactJobs.SqlDialects
 {
@@ -49,13 +50,24 @@ WHERE `{Names.ColLeaser}` = '{leaser}'
   AND `{Names.ColStatus}` IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
-        public string GetLockJobPeriodicSql() => $@"
-SELECT GET_LOCK('{Names.XactJobSchema}__{Names.XactJobPeriodicTable}', 30)
-";
+        public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
+        {
+            var tableLockName = $"{tableSchema}__{tableName}";
 
-        public string GetReleaseAllLocksSql() => $@"
-SELECT RELEASE_ALL_LOCKS()
-";
+            var result = await db.Database.ExecuteScalarIntAsync($"SELECT GET_LOCK('{tableLockName}', 30)", cancellationToken)
+                .ConfigureAwait(false);
 
+            if (result != 1) throw new Exception($"Failed to ackquire lock (LockName='{tableLockName}', Result={result})");
+        }
+
+        public async Task ReleaseTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
+        {
+            var tableLockName = $"{tableSchema}__{tableName}";
+
+            var result = await db.Database.ExecuteScalarIntAsync($"SELECT RELEASE_LOCK('{tableLockName}')", cancellationToken)
+                .ConfigureAwait(false);
+
+            if (result != 1) throw new Exception($"Failed to release lock (LockName='{tableLockName}', Result={result})");
+        }
     }
 }

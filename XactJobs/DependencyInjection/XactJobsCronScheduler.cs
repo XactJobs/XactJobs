@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using XactJobs.SqlDialects;
 
 namespace XactJobs.DependencyInjection
 {
@@ -12,7 +11,7 @@ namespace XactJobs.DependencyInjection
         protected ILogger<XactJobsCronScheduler<TDbContext>> Logger { get; }
         protected IServiceScopeFactory ScopeFactory { get; }
 
-        protected abstract Task EnsurePeriodicJobs(TDbContext db, CancellationToken stoppingToken);
+        protected abstract Task EnsurePeriodicJobsAsync(TDbContext db, CancellationToken stoppingToken);
 
         public XactJobsCronScheduler(IServiceScopeFactory scopeFactory, ILogger<XactJobsCronScheduler<TDbContext>> logger)
         {
@@ -33,37 +32,17 @@ namespace XactJobs.DependencyInjection
             {
                 tx = db.Database.BeginTransaction();
 
-                if (dialect is MySqlDialect)
-                {
-                    var result = await db.ExecuteScalarIntAsync(dialect.GetLockJobPeriodicSql(), stoppingToken)
-                        .ConfigureAwait(false);
+                await dialect.AcquireTableLockAsync(db, Names.XactJobSchema, Names.XactJobPeriodicTable, stoppingToken)
+                    .ConfigureAwait(false);
 
-                    if (result != 1) throw new Exception($"Failed to acquire lock (Result={result})");
-                }
-                else if (dialect is SqlServerDialect)
-                {
-                    var result = await db.ExecuteOutputIntAsync(dialect.GetLockJobPeriodicSql(), stoppingToken)
-                        .ConfigureAwait(false);
-
-                    if (result < 0) throw new Exception($"Failed to acquire lock (Result={result})");
-                }
-                else
-                {
-                    await db.Database.ExecuteSqlRawAsync(dialect.GetLockJobPeriodicSql(), stoppingToken)
-                        .ConfigureAwait(false);
-                }
-
-                await EnsurePeriodicJobs(db, stoppingToken)
+                await EnsurePeriodicJobsAsync(db, stoppingToken)
                     .ConfigureAwait(false);
 
                 await tx.CommitAsync(stoppingToken)
                     .ConfigureAwait(false);
 
-                if (dialect is MySqlDialect mySqlDialect)
-                {
-                    await db.ExecuteScalarIntAsync(mySqlDialect.GetReleaseAllLocksSql(), stoppingToken)
-                        .ConfigureAwait(false);
-                }
+                await dialect.ReleaseTableLockAsync(db, Names.XactJobSchema, Names.XactJobPeriodicTable, stoppingToken)
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {

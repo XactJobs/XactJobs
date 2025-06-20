@@ -1,4 +1,5 @@
-﻿using UUIDNext;
+﻿using Microsoft.EntityFrameworkCore;
+using UUIDNext;
 
 namespace XactJobs.SqlDialects
 {
@@ -44,8 +45,15 @@ WHERE {Names.ColLeaser} = HEXTORAW('{leaser:N}')
   AND {Names.ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
-        public string GetLockJobPeriodicSql() => $@"
-LOCK TABLE {Names.XactJobSchema}.{Names.XactJobPeriodicTable} IN EXCLUSIVE MODE
-";
+        public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
+        {
+            await db.Database.ExecuteSqlRawAsync($"LOCK TABLE {Names.XactJobSchema}.{Names.XactJobPeriodicTable} IN EXCLUSIVE MODE", cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        public Task ReleaseTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 }

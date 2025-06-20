@@ -14,7 +14,7 @@ namespace XactJobs.DependencyInjection
             _options = options;
         }
 
-        protected override async Task EnsurePeriodicJobs(TDbContext db, CancellationToken stoppingToken)
+        protected override async Task EnsurePeriodicJobsAsync(TDbContext db, CancellationToken stoppingToken)
         {
             await EnsurePeriodicJobsForQueue(db, null, _options, stoppingToken)
                                 .ConfigureAwait(false);

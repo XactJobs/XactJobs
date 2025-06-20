@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using Microsoft.EntityFrameworkCore;
+using System.Collections.Concurrent;
 using XactJobs.SqlDialects;
 
 namespace XactJobs
@@ -25,7 +26,9 @@ namespace XactJobs
 
         string GetClearLeaseSql(Guid leaser);
 
-        string GetLockJobPeriodicSql();
+        Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken);
+
+        Task ReleaseTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken);
     }
 
     internal static class SqlDialectExtensions

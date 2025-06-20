@@ -1,4 +1,5 @@
-﻿using UUIDNext;
+﻿using Microsoft.EntityFrameworkCore;
+using UUIDNext;
 
 namespace XactJobs.SqlDialects
 {
@@ -43,8 +44,21 @@ WHERE [{Names.ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
   AND [{Names.ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
-        public string GetLockJobPeriodicSql() => $@"
-EXEC @result = sp_getapplock @Resource = '[{Names.XactJobSchema}].[{Names.XactJobPeriodicTable}]', @LockMode = 'Exclusive', @LockTimeout = 30000
-";
+        public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
+        {
+            var tableLockName = $"[{Names.XactJobSchema}].[{Names.XactJobPeriodicTable}]";
+
+            var result = await db.Database.ExecuteOutputIntAsync(@$"
+EXEC @result = sp_getapplock @Resource = '{tableLockName}', @LockMode = 'Exclusive', @LockTimeout = 30000
+", cancellationToken)
+                .ConfigureAwait(false);
+
+            if (result < 0) throw new Exception($"Failed to ackquire lock (LockName='{tableLockName}', Result={result})");
+        }
+
+        public Task ReleaseTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
+        {
+            return Task.CompletedTask;
+        }
     }
 }
