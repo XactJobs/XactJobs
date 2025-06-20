@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -27,17 +28,24 @@ namespace XactJobs.DependencyInjection
 
             var dialect = db.Database.ProviderName.ToSqlDialect();
 
-            using var tx = db.Database.BeginTransaction();
-
+            IDbContextTransaction? tx = null; 
             try
             {
-                if (dialect is MySqlDialect || dialect is SqlServerDialect)
+                tx = db.Database.BeginTransaction();
+
+                if (dialect is MySqlDialect)
                 {
                     var result = await db.ExecuteScalarIntAsync(dialect.GetLockJobPeriodicSql(), stoppingToken)
                         .ConfigureAwait(false);
 
-                    if (dialect is MySqlDialect && result != 1) throw new Exception($"Failed to acquire lock (Result={result})");
-                    else if (dialect is SqlServerDialect && result < 0) throw new Exception($"Failed to acquire lock (Result={result})");
+                    if (result != 1) throw new Exception($"Failed to acquire lock (Result={result})");
+                }
+                else if (dialect is SqlServerDialect)
+                {
+                    var result = await db.ExecuteOutputIntAsync(dialect.GetLockJobPeriodicSql(), stoppingToken)
+                        .ConfigureAwait(false);
+
+                    if (result < 0) throw new Exception($"Failed to acquire lock (Result={result})");
                 }
                 else
                 {
@@ -66,13 +74,20 @@ namespace XactJobs.DependencyInjection
 
                 try
                 {
-                    await tx.RollbackAsync(stoppingToken)
-                        .ConfigureAwait(false);
+                    if (tx != null)
+                    {
+                        await tx.RollbackAsync(stoppingToken)
+                            .ConfigureAwait(false);
+                    }
                 }
                 catch (Exception exx)
                 {
                     Logger.LogError(exx, "Failed to rollback");
                 }
+            }
+            finally
+            {
+                tx?.Dispose();
             }
         }
     }

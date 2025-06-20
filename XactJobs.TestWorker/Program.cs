@@ -14,7 +14,7 @@ namespace XactJobs.TestWorker
             builder.Services.AddDbContext<UserDbContext>(options =>
             {
                 options
-                    .UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnectionString"));
+                    .UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnectionString"));
             });
 
             builder.Services.AddXactJobs<UserDbContext>(options =>

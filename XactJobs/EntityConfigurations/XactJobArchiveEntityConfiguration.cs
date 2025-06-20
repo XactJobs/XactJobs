@@ -24,6 +24,8 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.Id).HasColumnName(Names.ColId);
 
+            builder.Property(x => x.Status).HasColumnName(Names.ColStatus);
+
             builder.Property(x => x.ScheduledAt).HasColumnName(Names.ColScheduledAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
@@ -40,6 +42,10 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.ErrorCount).HasColumnName(Names.ColErrorCount);
             builder.Property(x => x.ErrorMessage).HasColumnName(Names.ColErrorMessage);
             builder.Property(x => x.ErrorStackTrace).HasColumnName(Names.ColErrorStackTrace);
+
+            builder.Property(x => x.PeriodicJobId).HasColumnName(Names.ColPeriodicJobId);
+            builder.Property(x => x.CronExpression).HasColumnName(Names.ColCronExpression);
+            builder.Property(x => x.PeriodicJobName).HasColumnName(Names.ColPeriodicJobName);
 
             builder.HasIndex(x => x.CompletedAt)
                 .HasDatabaseName($"ix_{Names.XactJobArchiveTable}_{Names.ColCompletedAt}");

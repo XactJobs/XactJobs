@@ -24,6 +24,8 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.Id).HasColumnName(Names.ColId);
 
+            builder.Property(x => x.Status).HasColumnName(Names.ColStatus);
+
             builder.Property(x => x.LeasedUntil).HasColumnName(Names.ColLeasedUntil)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 

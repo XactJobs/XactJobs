@@ -43,7 +43,7 @@ WHERE [{Names.ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
 ";
 
         public string GetLockJobPeriodicSql() => $@"
-EXEC sp_getapplock @Resource = '[{Names.XactJobSchema}].[{Names.XactJobPeriodicTable}]', @LockMode = 'Exclusive', @LockTimeout = 30000
+EXEC @result = sp_getapplock @Resource = '[{Names.XactJobSchema}].[{Names.XactJobPeriodicTable}]', @LockMode = 'Exclusive', @LockTimeout = 30000
 ";
     }
 }

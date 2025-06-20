@@ -32,7 +32,7 @@ namespace XactJobs.TestConsole
                 .Build();
 
             var dbContextOptions = new DbContextOptionsBuilder<UserDbContext>()
-                .UseNpgsql(configuration.GetConnectionString("DefaultConnectionString"))
+                .UseSqlServer(configuration.GetConnectionString("DefaultConnectionString"))
                 .Options;
 
             return new UserDbContext(dbContextOptions);

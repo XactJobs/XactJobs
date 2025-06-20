@@ -1,6 +1,7 @@
-﻿using System.Linq.Expressions;
+﻿using System.Data.Common;
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.EntityFrameworkCore.Storage;
 using XactJobs.Annotations;
 using XactJobs.Cron;
 
@@ -220,6 +221,7 @@ namespace XactJobs
             using var command = dbContext.Database.GetDbConnection().CreateCommand();
 
             command.CommandText = sql;
+            command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
 
             await dbContext.Database.OpenConnectionAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -228,6 +230,28 @@ namespace XactJobs
                 .ConfigureAwait(false);
 
             return result != null ? Convert.ToInt32(result) : null;
+        }
+
+        internal static async Task<int?> ExecuteOutputIntAsync(this DbContext dbContext, string sql, CancellationToken cancellationToken)
+        {
+            using var command = dbContext.Database.GetDbConnection().CreateCommand();
+
+            command.CommandText = sql;
+            command.Transaction = dbContext.Database.CurrentTransaction?.GetDbTransaction();
+
+            var pResult = command.CreateParameter();
+            pResult.ParameterName = "@result";
+            pResult.Direction = System.Data.ParameterDirection.Output;
+            pResult.DbType = System.Data.DbType.Int32;
+            command.Parameters.Add(pResult);
+
+            await dbContext.Database.OpenConnectionAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            await command.ExecuteNonQueryAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            return pResult.Value != null ? Convert.ToInt32(pResult.Value) : null;
         }
     }
 }

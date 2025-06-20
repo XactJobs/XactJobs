@@ -21,6 +21,7 @@
         public const string ColStatus = "status";
         public const string ColQueue = "queue";
         public const string ColPeriodicJobId = "periodic_job_id";
+        public const string ColPeriodicJobName = "periodic_job_name";
 
         public const string ColErrorCount = "error_count";
         public const string ColErrorTime = "error_time";

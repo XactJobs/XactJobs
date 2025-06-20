@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Hosting;
 using XactJobs;
 using XactJobs.DependencyInjection;
 
@@ -15,7 +16,9 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(optionsBuilder.Options);
         services.AddHostedService<XactJobsRunnerDispatcher<TDbContext>>();
-        services.AddHostedService<XactJobsCronOptionsScheduler<TDbContext>>();
+
+        services.AddSingleton<IHostedService, XactJobsCronOptionsScheduler<TDbContext>>();
+        //services.AddSingleton<IHostedService, XactJobsCronOptionsScheduler<TDbContext>>();
 
         return services;
     }
