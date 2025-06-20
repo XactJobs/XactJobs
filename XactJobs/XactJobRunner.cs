@@ -32,6 +32,8 @@ namespace XactJobs
             };
 
             var lastRunFailed = 0;
+            var lastRunJobCount = 0;
+
             var nextRunTime = DateTime.UtcNow;
 
             while (!stoppingToken.IsCancellationRequested)
@@ -40,23 +42,26 @@ namespace XactJobs
                 {
                     var delaySec = lastRunFailed > 0
                         ? _options.PollingIntervalInSeconds * Math.Min(lastRunFailed, 5)
-                        : _options.PollingIntervalInSeconds;
+                        : lastRunJobCount == _options.BatchSize ? 0 : _options.PollingIntervalInSeconds;
 
-                    // this following run time calculation is meant to keep
-                    // the run times consistent, in delaySec steps, so that multiple workers
-                    // do not start hitting the db at the same time
-
-                    var now = DateTime.UtcNow;
-                    do
+                    if (delaySec > 0)
                     {
-                        nextRunTime = nextRunTime.AddSeconds(delaySec);
+                        // this following run time calculation is meant to keep
+                        // the run times consistent, in delaySec steps, so that multiple workers
+                        // do not start hitting the db at the same time
+
+                        var now = DateTime.UtcNow;
+                        do
+                        {
+                            nextRunTime = nextRunTime.AddSeconds(delaySec);
+                        }
+                        while (nextRunTime <= now);
+
+                        await Task.Delay(nextRunTime.Subtract(now), stoppingToken)
+                            .ConfigureAwait(false);
                     }
-                    while (nextRunTime <= now);
 
-                    await Task.Delay(nextRunTime.Subtract(now), stoppingToken)
-                        .ConfigureAwait(false);
-
-                    await RunJobsAsync(parallelOptions, stoppingToken)
+                    lastRunJobCount = await RunJobsAsync(parallelOptions, stoppingToken)
                         .ConfigureAwait(false);
 
                     lastRunFailed = 0;
@@ -97,7 +102,7 @@ namespace XactJobs
                 .ConfigureAwait(false);
         }
 
-        private async Task RunJobsAsync(ParallelOptions parallelOptions, CancellationToken stoppingToken)
+        private async Task<int> RunJobsAsync(ParallelOptions parallelOptions, CancellationToken stoppingToken)
         {
             using var scope = _scopeFactory.CreateScope();
 
@@ -170,6 +175,8 @@ namespace XactJobs
 
             await extendLeaseTimer.StopAsync()
                 .ConfigureAwait(false);
+
+            return jobs.Count;
         }
 
         private async Task ExtendLease(CancellationToken token)
