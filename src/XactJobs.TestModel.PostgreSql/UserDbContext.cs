@@ -1,12 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System.Globalization;
 
 namespace XactJobs.TestModel.PostgreSql
 {
     public class UserDbContext: DbContext
     {
-        public DbSet<User> User { get; set; }
-
         public UserDbContext()
         {
         }
@@ -18,13 +15,6 @@ namespace XactJobs.TestModel.PostgreSql
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             base.OnConfiguring(optionsBuilder);
-
-            if (!optionsBuilder.IsConfigured)
-            {
-                optionsBuilder.UseNpgsql();
-            }
-
-            optionsBuilder.UseSnakeCaseNamingConvention(CultureInfo.InvariantCulture);
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

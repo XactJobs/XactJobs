@@ -11,7 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XactJobs.TestModel\XactJobs.TestModel.csproj" />
     <ProjectReference Include="..\XactJobs\XactJobs.csproj" />
   </ItemGroup>
 

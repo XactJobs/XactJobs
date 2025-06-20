@@ -1,11 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace XactJobs.TestModel.SqlServer
+namespace XactJobs.TestModel.Oracle
 {
     public class UserDbContext: DbContext
     {
-        public DbSet<User> User { get; set; }
-
         public UserDbContext()
         {
         }
@@ -20,6 +18,5 @@ namespace XactJobs.TestModel.SqlServer
 
             modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, false);
         }
-
     }
 }

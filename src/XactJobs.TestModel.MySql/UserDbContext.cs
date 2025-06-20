@@ -1,11 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace XactJobs.TestModel.Oracle
+namespace XactJobs.TestModel.MySql
 {
     public class UserDbContext: DbContext
     {
-        public DbSet<User> User { get; set; }
-
         public UserDbContext()
         {
         }
@@ -14,11 +12,17 @@ namespace XactJobs.TestModel.Oracle
         {
         }
 
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            base.OnConfiguring(optionsBuilder);
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, false);
         }
+
     }
 }
