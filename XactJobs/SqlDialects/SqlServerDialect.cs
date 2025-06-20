@@ -4,6 +4,7 @@ namespace XactJobs.SqlDialects
 {
     public class SqlServerDialect : ISqlDialect
     {
+        public bool HasSchemaSupport { get; } = true;
         public string DateTimeColumnType { get; } = "datetime2";
 
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.SqlServer);

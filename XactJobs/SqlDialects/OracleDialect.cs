@@ -4,6 +4,7 @@ namespace XactJobs.SqlDialects
 {
     public class OracleDialect : ISqlDialect
     {
+        public bool HasSchemaSupport { get; } = true;
         public string DateTimeColumnType { get; } = "timestamp with time zone";
 
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.Other);

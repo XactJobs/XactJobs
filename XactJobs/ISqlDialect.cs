@@ -7,6 +7,7 @@ namespace XactJobs
     {
         Guid NewJobId();
 
+        bool HasSchemaSupport { get; }
         string DateTimeColumnType { get; }
 
         /// <summary>

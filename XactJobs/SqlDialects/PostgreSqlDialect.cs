@@ -4,6 +4,7 @@ namespace XactJobs.SqlDialects
 {
     public class PostgreSqlDialect : ISqlDialect
     {
+        public bool HasSchemaSupport { get; } = true;
         public string DateTimeColumnType { get; } = "timestamptz";
 
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.PostgreSql);

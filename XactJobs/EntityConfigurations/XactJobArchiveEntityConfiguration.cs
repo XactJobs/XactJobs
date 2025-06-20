@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using XactJobs.SqlDialects;
 
 namespace XactJobs.EntityConfigurations
 {
@@ -18,7 +19,14 @@ namespace XactJobs.EntityConfigurations
         {
             builder.Metadata.SetIsTableExcludedFromMigrations(_excludeFromMigrations);
 
-            builder.ToTable(Names.XactJobArchiveTable, Names.XactJobSchema);
+            if (_sqlDialect.HasSchemaSupport)
+            {
+                builder.ToTable(Names.XactJobArchiveTable, Names.XactJobSchema);
+            }
+            else
+            {
+                builder.ToTable($"{Names.XactJobSchema}__{Names.XactJobArchiveTable}");
+            }
 
             builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobArchiveTable}");
 

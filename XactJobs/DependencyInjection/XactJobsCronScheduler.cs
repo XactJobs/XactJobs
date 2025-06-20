@@ -59,9 +59,9 @@ namespace XactJobs.DependencyInjection
                 await tx.CommitAsync(stoppingToken)
                     .ConfigureAwait(false);
 
-                if (dialect is MySqlDialect)
+                if (dialect is MySqlDialect mySqlDialect)
                 {
-                    await db.ExecuteScalarIntAsync("RELEASE_ALL_LOCKS()", stoppingToken)
+                    await db.ExecuteScalarIntAsync(mySqlDialect.GetReleaseAllLocksSql(), stoppingToken)
                         .ConfigureAwait(false);
                 }
             }

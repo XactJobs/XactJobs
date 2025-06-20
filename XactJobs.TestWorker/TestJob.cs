@@ -1,4 +1,4 @@
-﻿using XactJobs.TestModel.PostgreSql;
+﻿using XactJobs.TestModel.MySql;
 
 namespace XactJobs.TestWorker
 {

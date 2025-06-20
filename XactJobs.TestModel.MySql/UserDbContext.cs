@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 
-namespace XactJobs.TestModel.SqlServer
+namespace XactJobs.TestModel.MySql
 {
     public class UserDbContext: DbContext
     {
@@ -17,11 +17,6 @@ namespace XactJobs.TestModel.SqlServer
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             base.OnConfiguring(optionsBuilder);
-
-            if (!optionsBuilder.IsConfigured)
-            {
-                optionsBuilder.UseSqlServer();
-            }
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)

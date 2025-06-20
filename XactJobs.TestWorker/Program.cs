@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using XactJobs.Cron;
 using XactJobs.TestModel;
-using XactJobs.TestModel.PostgreSql;
+using XactJobs.TestModel.MySql;
 
 namespace XactJobs.TestWorker
 {
@@ -14,7 +14,7 @@ namespace XactJobs.TestWorker
             builder.Services.AddDbContext<UserDbContext>(options =>
             {
                 options
-                    .UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnectionString"));
+                    .UseMySql(builder.Configuration.GetConnectionString("DefaultConnectionString"), ServerVersion.Parse("8.4.5-mysql"));
             });
 
             builder.Services.AddXactJobs<UserDbContext>(options =>

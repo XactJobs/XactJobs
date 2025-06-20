@@ -18,7 +18,14 @@ namespace XactJobs.EntityConfigurations
         {
             builder.Metadata.SetIsTableExcludedFromMigrations(_excludeFromMigrations);
 
-            builder.ToTable(Names.XactJobPeriodicTable, Names.XactJobSchema);
+            if (_sqlDialect.HasSchemaSupport)
+            {
+                builder.ToTable(Names.XactJobPeriodicTable, Names.XactJobSchema);
+            }
+            else
+            {
+                builder.ToTable($"{Names.XactJobSchema}__{Names.XactJobPeriodicTable}");
+            }
 
             builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobPeriodicTable}");
 

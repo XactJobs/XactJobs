@@ -1,9 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
-
+using Pomelo.EntityFrameworkCore.MySql.Infrastructure;
 using XactJobs.TestModel;
-using XactJobs.TestModel.PostgreSql;
+using XactJobs.TestModel.MySql;
 
 namespace XactJobs.TestConsole
 {
@@ -32,7 +32,7 @@ namespace XactJobs.TestConsole
                 .Build();
 
             var dbContextOptions = new DbContextOptionsBuilder<UserDbContext>()
-                .UseSqlServer(configuration.GetConnectionString("DefaultConnectionString"))
+                .UseMySql(configuration.GetConnectionString("DefaultConnectionString"), ServerVersion.Parse("8.4.5-mysql"))
                 .Options;
 
             return new UserDbContext(dbContextOptions);
