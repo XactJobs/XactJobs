@@ -20,6 +20,5 @@ namespace XactJobs.TestModel
 
             modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, false);
         }
-
     }
 }

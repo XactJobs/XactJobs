@@ -6,6 +6,8 @@ namespace XactJobs.SqlDialects
     public class MySqlDialect : ISqlDialect
     {
         public bool HasSchemaSupport { get; } = false;
+        public string SchemaName { get; } = Names.XactJobSchema;
+
         public string DateTimeColumnType { get; } = "datetime(6)";
 
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.Other);
@@ -31,7 +33,7 @@ SET t.`{Names.ColLeaser}` = '{leaser}',
 SELECT *
 FROM `{Names.XactJobSchema}__{Names.XactJobTable}`
 WHERE `{Names.ColLeaser}` = '{leaser}'
-  AND `{Names.ColLeasedUntil}` > UTC_TIMESTAMP
+  AND `{Names.ColLeasedUntil}` >= UTC_TIMESTAMP
   AND `{Names.ColQueue}` = '{queueName ?? Names.QueueDefault}'
 LIMIT {maxJobs}
 ";

@@ -1,4 +1,4 @@
-﻿using XactJobs.TestModel.MySql;
+﻿using XactJobs.TestModel;
 
 namespace XactJobs.TestWorker
 {

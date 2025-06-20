@@ -20,11 +20,11 @@ namespace XactJobs.EntityConfigurations
 
             if (_sqlDialect.HasSchemaSupport)
             {
-                builder.ToTable(Names.XactJobTable, Names.XactJobSchema);
+                builder.ToTable(Names.XactJobTable, _sqlDialect.SchemaName);
             }
             else
             {
-                builder.ToTable($"{Names.XactJobSchema}__{Names.XactJobTable}");
+                builder.ToTable($"{_sqlDialect.SchemaName}__{Names.XactJobTable}");
             }
 
             builder.HasKey(x => new { x.Id }).HasName($"pk_{Names.XactJobTable}");

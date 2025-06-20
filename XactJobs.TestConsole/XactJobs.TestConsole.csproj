@@ -26,7 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\XactJobs.TestModel.MySql\XactJobs.TestModel.MySql.csproj" />
+    <ProjectReference Include="..\XactJobs.TestModel.Oracle\XactJobs.TestModel.Oracle.csproj" />
     <ProjectReference Include="..\XactJobs\XactJobs.csproj" />
   </ItemGroup>
 

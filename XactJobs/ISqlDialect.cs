@@ -9,6 +9,8 @@ namespace XactJobs
         Guid NewJobId();
 
         bool HasSchemaSupport { get; }
+        string SchemaName { get; }
+
         string DateTimeColumnType { get; }
 
         /// <summary>
@@ -44,7 +46,7 @@ namespace XactJobs
                 if (key.EndsWith(".sqlserver")) return new SqlServerDialect();
                 if (key.EndsWith(".postgresql")) return new PostgreSqlDialect();
                 if (key.EndsWith(".mysql")) return new MySqlDialect();
-                if (key.EndsWith(".oracle")) return new OracleDialect();
+                if (key.StartsWith("oracle.")) return new OracleDialect();
 
                 throw new NotSupportedException($"XactJobs does not support provider '{key}'.");
             });

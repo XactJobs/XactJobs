@@ -1,5 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using XactJobs.SqlDialects;
 
 namespace XactJobs.EntityConfigurations
 {
@@ -20,11 +22,11 @@ namespace XactJobs.EntityConfigurations
 
             if (_sqlDialect.HasSchemaSupport)
             {
-                builder.ToTable(Names.XactJobPeriodicTable, Names.XactJobSchema);
+                builder.ToTable(Names.XactJobPeriodicTable, _sqlDialect.SchemaName);
             }
             else
             {
-                builder.ToTable($"{Names.XactJobSchema}__{Names.XactJobPeriodicTable}");
+                builder.ToTable($"{_sqlDialect.SchemaName}__{Names.XactJobPeriodicTable}");
             }
 
             builder.HasKey(x => x.Id).HasName($"pk_{Names.XactJobPeriodicTable}");
@@ -47,6 +49,18 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.Queue).HasColumnName(Names.ColQueue);
 
             builder.Property(x => x.IsActive).HasColumnName(Names.ColIsActive);
+
+            if (_sqlDialect is OracleDialect)
+            {
+
+                builder.Property(x => x.IsActive)
+                    .HasColumnType("NUMBER(1)")
+                    .HasConversion(
+                    new ValueConverter<bool, int>(
+                        v => v ? 1 : 0,
+                        v => v == 1
+                    ));
+            }
 
             builder.HasIndex(x => x.Name)
                 .HasDatabaseName($"ix_{Names.XactJobPeriodicTable}_{Names.ColName}")
