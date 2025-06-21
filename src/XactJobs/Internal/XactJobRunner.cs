@@ -57,6 +57,12 @@ namespace XactJobs.Internal
 
                         if (!shouldPoll) continue;
                     }
+                    else
+                    {
+                        // consume batch of notifications, since we're about to poll
+                        await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
+                            .ConfigureAwait(false);
+                    }
 
                     lastRunJobCount = await RunJobsAsync(parallelOptions, stoppingToken)
                         .ConfigureAwait(false);
@@ -95,8 +101,8 @@ namespace XactJobs.Internal
         /// <returns></returns>
         private static DateTime AlignNextRun(DateTime nextRunTime, int delaySec, DateTime now)
         {
-            // if next run time is more than 200ms in the future, no need to do anything, just wait for the next poll
-            if (nextRunTime >= now.AddMilliseconds(200))
+            // if next run time is more than 1s in the future, no need to do anything, just wait for the next poll
+            if (nextRunTime >= now.AddMilliseconds(1000))
             {
                 return nextRunTime;
             }
@@ -120,15 +126,12 @@ namespace XactJobs.Internal
 
             try
             {
-                var hasNotifications = await _quickPollChannel.WaitToReadAsync(cts.Token)
+                await _quickPollChannel.WaitToReadAsync(cts.Token)
                     .ConfigureAwait(false);
 
-                if (hasNotifications)
-                {
-                    // drain the channel, up to the batch size (we're about to poll)
-                    consumedCount = await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
-                        .ConfigureAwait(false);
-                }
+                // drain the channel, up to the batch size (we're about to poll)
+                consumedCount = await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
+                    .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
