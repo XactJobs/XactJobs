@@ -52,11 +52,18 @@ namespace XactJobs
         /// </summary>
         /// <remarks>The cron schedule string must follow the standard cron format. Ensure that the  <see
         /// cref="LambdaExpression"/> provided for each job is valid and executable.</remarks>
-        public Dictionary<string, (LambdaExpression JobExpression, string CronExpression, bool IsActive)> PeriodicJobs { get; set; } = [];
+        public Dictionary<string, (LambdaExpression JobExpression, string CronExpression)> PeriodicJobs { get; set; } = [];
     }
 
     public class XactJobsOptions<TDbContext>: XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
     {
+        /// <summary>
+        /// Gets or sets the number of days for which historical data is retained.
+        /// </summary>
+        /// <remarks>Adjust this value to control how long historical data is kept. Setting a lower value
+        /// may reduce storage usage,  while a higher value retains data for longer periods.</remarks>
+        public int HistoryRetentionPeriodInDays { get; set; } = 30;
+        
         /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>

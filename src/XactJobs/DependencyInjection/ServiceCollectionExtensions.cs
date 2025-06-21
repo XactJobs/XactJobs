@@ -2,6 +2,7 @@
 
 using XactJobs;
 using XactJobs.DependencyInjection;
+using XactJobs.Internal;
 
 namespace Microsoft.Extensions.DependencyInjection;
 
@@ -18,6 +19,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(CreateQuickPollChannels(optionsBuilder.Options));
 
         services.AddScoped<XactJobsQuickPoll<TDbContext>>();
+        services.AddScoped<XactJobMaintenance<TDbContext>>();
 
         services.AddHostedService<XactJobsRunnerDispatcher<TDbContext>>();
         services.AddHostedService<XactJobsCronOptionsScheduler<TDbContext>>();

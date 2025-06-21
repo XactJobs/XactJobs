@@ -31,7 +31,7 @@ namespace XactJobs
 
         public TBuilder WithLeaseDuration(int durationInSeconds)
         {
-            if (durationInSeconds < 1) throw new ArgumentOutOfRangeException(nameof(durationInSeconds));
+            ArgumentOutOfRangeException.ThrowIfLessThan(durationInSeconds, 1);
 
             Options.LeaseDurationInSeconds = durationInSeconds;
             return (this as TBuilder)!;
@@ -43,27 +43,27 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob(string name, string cronExpression, [InstantHandle] Expression<Action> jobExpression, bool isActive = true)
+        public TBuilder WithPeriodicJob([InstantHandle] Expression<Action> jobExpression, string id, string cronExpression)
         {
-            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
+            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob<T>(string name, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression, bool isActive = true)
+        public TBuilder WithPeriodicJob<T>( [InstantHandle] Expression<Action<T>> jobExpression, string id, string cronExpression)
         {
-            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
+            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob(string name, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression, bool isActive = true)
+        public TBuilder WithPeriodicJob([InstantHandle] Expression<Func<Task>> jobExpression, string id, string cronExpression)
         {
-            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
+            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob<T>(string name, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression, bool isActive = true)
+        public TBuilder WithPeriodicJob<T>([InstantHandle] Expression<Func<T, Task>> jobExpression, string id, string cronExpression)
         {
-            Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);
+            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
             return (this as TBuilder)!;
         }
     }
@@ -76,6 +76,14 @@ namespace XactJobs
     public class XactJobsOptionsBuilder<TDbContext>: XactJobsOptionsBuilderBase<TDbContext, XactJobsOptions<TDbContext>, XactJobsOptionsBuilder<TDbContext>>
         where TDbContext : DbContext
     {
+        public XactJobsOptionsBuilder<TDbContext> WithHistoryRetentionPeriodInDays(int days)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);
+
+            Options.HistoryRetentionPeriodInDays = days;
+            return this;
+        }
+
         public XactJobsOptionsBuilder<TDbContext> WithIsolatedQueue(string queueName, Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
         {
             var builder = new XactJobsQueueOptionsBuilder<TDbContext>();

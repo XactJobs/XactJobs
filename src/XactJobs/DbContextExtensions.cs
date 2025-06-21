@@ -28,84 +28,84 @@ namespace XactJobs
             return JobAdd(dbContext, jobExpression, null, queue);
         }
 
-        public static XactJob JobScheduleAt(this DbContext dbContext, DateTime scheduleAt, [InstantHandle] Expression<Action> jobExpression, string? queue = null)
+        public static XactJob JobScheduleAt(this DbContext dbContext, [InstantHandle] Expression<Action> jobExpression, DateTime scheduleAt, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, scheduleAt, queue);
         }
 
-        public static XactJob JobScheduleAt<T>(this DbContext dbContext, DateTime scheduleAt, [InstantHandle] Expression<Action<T>> jobExpression, string? queue = null)
+        public static XactJob JobScheduleAt<T>(this DbContext dbContext, [InstantHandle] Expression<Action<T>> jobExpression, DateTime scheduleAt, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, scheduleAt, queue);
         }
 
-        public static XactJob JobScheduleAt(this DbContext dbContext, DateTime scheduleAt, [InstantHandle] Expression<Func<Task>> jobExpression, string? queue = null)
+        public static XactJob JobScheduleAt(this DbContext dbContext, [InstantHandle] Expression<Func<Task>> jobExpression, DateTime scheduleAt, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, scheduleAt, queue);
         }
 
-        public static XactJob JobScheduleAt<T>(this DbContext dbContext, DateTime scheduleAt, [InstantHandle] Expression<Func<T, Task>> jobExpression, string? queue = null)
+        public static XactJob JobScheduleAt<T>(this DbContext dbContext, [InstantHandle] Expression<Func<T, Task>> jobExpression, DateTime scheduleAt, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, scheduleAt, queue);
         }
 
-        public static XactJob JobScheduleIn(this DbContext dbContext, TimeSpan delay, [InstantHandle] Expression<Action> jobExpression, string? queue = null)
+        public static XactJob JobScheduleIn(this DbContext dbContext, [InstantHandle] Expression<Action> jobExpression, TimeSpan delay, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, DateTime.UtcNow.Add(delay), queue);
         }
 
-        public static XactJob JobScheduleIn<T>(this DbContext dbContext, TimeSpan delay, [InstantHandle] Expression<Action<T>> jobExpression, string? queue = null)
+        public static XactJob JobScheduleIn<T>(this DbContext dbContext, [InstantHandle] Expression<Action<T>> jobExpression, TimeSpan delay, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, DateTime.UtcNow.Add(delay), queue);
         }
 
-        public static XactJob JobScheduleIn(this DbContext dbContext, TimeSpan delay, [InstantHandle] Expression<Func<Task>> jobExpression, string? queue = null)
+        public static XactJob JobScheduleIn(this DbContext dbContext, [InstantHandle] Expression<Func<Task>> jobExpression, TimeSpan delay, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, DateTime.UtcNow.Add(delay), queue);
         }
 
-        public static XactJob JobScheduleIn<T>(this DbContext dbContext, TimeSpan delay, [InstantHandle] Expression<Func<T, Task>> jobExpression, string? queue = null)
+        public static XactJob JobScheduleIn<T>(this DbContext dbContext, [InstantHandle] Expression<Func<T, Task>> jobExpression, TimeSpan delay, string? queue = null)
         {
             return JobAdd(dbContext, jobExpression, DateTime.UtcNow.Add(delay), queue);
         }
 
-        public static Task JobEnsurePeriodicAsync(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action> jobExpression, string? queue, bool isActive, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync(this DbContext dbContext, [InstantHandle] Expression<Action> jobExpression, string id, string queue, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, isActive, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, cancellationToken);
         }
 
-        public static Task JobEnsurePeriodicAsync<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression, string? queue, bool isActive, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync<T>(this DbContext dbContext, [InstantHandle] Expression<Action<T>> jobExpression, string id, string queue, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, isActive, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, cancellationToken);
         }
 
-        public static Task JobEnsurePeriodicAsync(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression, string? queue, bool isActive, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync(this DbContext dbContext, [InstantHandle] Expression<Func<Task>> jobExpression, string id, string queue, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, isActive, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, cancellationToken);
         }
 
-        public static Task JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression, string? queue, bool isActive, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync<T>(this DbContext dbContext, [InstantHandle] Expression<Func<T, Task>> jobExpression, string id, string queue, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, isActive, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, queue, cancellationToken);
         }
 
-        public static Task JobEnsurePeriodicAsync(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action> jobExpression, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync(this DbContext dbContext, [InstantHandle] Expression<Action> jobExpression, string id, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, true, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, cancellationToken);
         }
 
-        public static Task JobEnsurePeriodicAsync<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Action<T>> jobExpression, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync<T>(this DbContext dbContext, [InstantHandle] Expression<Action<T>> jobExpression, string id, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, true, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, cancellationToken);
         }
 
-        public static Task JobEnsurePeriodicAsync(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<Task>> jobExpression, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync(this DbContext dbContext, [InstantHandle] Expression<Func<Task>> jobExpression, string id, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, true, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, cancellationToken);
         }
 
-        public static Task JobSchedulePeriodic<T>(this DbContext dbContext, string id, string cronExpression, [InstantHandle] Expression<Func<T, Task>> jobExpression, CancellationToken cancellationToken)
+        public static Task<XactJobPeriodic> JobEnsurePeriodicAsync<T>(this DbContext dbContext, [InstantHandle] Expression<Func<T, Task>> jobExpression, string id, string cronExpression, CancellationToken cancellationToken)
         {
-            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, true, cancellationToken);
+            return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, cancellationToken);
         }
 
         public static async Task<bool> JobDeletePeriodicAsync(this DbContext dbContext, string id, CancellationToken cancellationToken)
@@ -116,31 +116,11 @@ namespace XactJobs
 
             if (periodicJob == null) return false;
 
-            // no need to delete jobs, they will be skipped by the runner, if periodic job definition does not exist
-            //
-            // await RemoveQueuedJobs(dbContext, periodicJob, cancellationToken)
-            //    .ConfigureAwait(false);
-
             dbContext.Set<XactJobPeriodic>()
                 .Remove(periodicJob);
 
             return true;
         }
-
-        /*
-        private static async Task RemoveQueuedJobs(DbContext dbContext, XactJobPeriodic periodicJob, CancellationToken cancellationToken)
-        {
-            var queuedJobRuns = await dbContext.Set<XactJob>()
-                                    .Where(x => x.PeriodicJobId == periodicJob.Id)
-                                    .ToListAsync(cancellationToken)
-                                    .ConfigureAwait(false);
-
-            foreach (var queuedJobRun in queuedJobRuns)
-            {
-                dbContext.Set<XactJob>().Remove(queuedJobRun);
-            }
-        }
-        */
 
         private static XactJob JobAdd(DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
         {
@@ -151,13 +131,12 @@ namespace XactJobs
             return job;
         }
 
-        internal static async Task JobAddOrUpdatePeriodicAsync(this DbContext db,
-                                                               LambdaExpression lambdaExp,
-                                                               string id,
-                                                               string cronExp,
-                                                               string? queue,
-                                                               bool isActive,
-                                                               CancellationToken cancellationToken)
+        internal static async Task<XactJobPeriodic> JobAddOrUpdatePeriodicAsync(this DbContext db,
+                                                                                LambdaExpression lambdaExp,
+                                                                                string id,
+                                                                                string cronExp,
+                                                                                string? queue,
+                                                                                CancellationToken cancellationToken)
         {
             var periodicJob = await db.Set<XactJobPeriodic>()
                 .FirstOrDefaultAsync(j => j.Id == id, cancellationToken)
@@ -177,19 +156,15 @@ namespace XactJobs
 
                 if (!periodicJob.IsCompatibleWith(templateJob))
                 {
-                    // existing job will be skipped by the runner (it will be detected as incompatible)
-                    // so no need to modify it here
-                    //
-                    // await RemoveQueuedJobs(db, periodicJob, cancellationToken)
-                    //    .ConfigureAwait(false);
-
                     periodicJob.UpdateDefinition(templateJob);
 
                     ScheduleNextRun(db, periodicJob);
                 }
             }
 
-            periodicJob.Activate(isActive);
+            periodicJob.Activate(true);
+
+            return periodicJob;
         }
 
         internal static XactJob Reschedule(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount)

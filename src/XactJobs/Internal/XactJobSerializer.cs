@@ -83,7 +83,20 @@ namespace XactJobs.Internal
 
         private static string GetSimpleTypeName(Type type)
         {
-            return string.Join(", ", type.FullName, type.Assembly.GetName().Name);
+            if (type.IsGenericType)
+            {
+                var typeDefName = type.GetGenericTypeDefinition().FullName;
+                var assemblyName = type.Assembly.GetName().Name;
+
+                var genericArgs = type.GetGenericArguments()
+                    .Select(GetSimpleTypeName); // recursive
+
+                return $"{typeDefName}[{string.Join(",", genericArgs.Select(arg => $"[{arg}]"))}], {assemblyName}";
+            }
+            else
+            {
+                return string.Join(", ", type.FullName, type.Assembly.GetName().Name);
+            }
         }
 
         private static XactJobDispatchKey GetMethodCacheKey(Type type, MethodInfo method)

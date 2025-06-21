@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using XactJobs.Cron;
+using XactJobs.Internal;
 
 namespace XactJobs.DependencyInjection
 {
@@ -25,20 +27,32 @@ namespace XactJobs.DependencyInjection
                     .ConfigureAwait(false);
             }
 
+            await EnsureMaintenanceJobsAsync(db, stoppingToken)
+                .ConfigureAwait(false);
+
             await db.SaveChangesAsync(stoppingToken)
                 .ConfigureAwait(false);
         }
 
-        private async Task EnsurePeriodicJobsForQueue(TDbContext db,
-                                                      string? queueName,
-                                                      XactJobsOptionsBase<TDbContext> options,
-                                                      CancellationToken stoppingToken)
+        private static async Task EnsurePeriodicJobsForQueue(TDbContext db,
+                                                             string? queueName,
+                                                             XactJobsOptionsBase<TDbContext> options,
+                                                             CancellationToken stoppingToken)
         {
-            foreach (var (name, (lambdaExp, cronExp, isActive)) in options.PeriodicJobs)
+            foreach (var (name, (lambdaExp, cronExp)) in options.PeriodicJobs)
             {
-                await db.JobAddOrUpdatePeriodicAsync(lambdaExp, name, cronExp, queueName, isActive, stoppingToken)
+                await db.JobAddOrUpdatePeriodicAsync(lambdaExp, name, cronExp, queueName, stoppingToken)
                     .ConfigureAwait(false);
             }
+        }
+
+        private static async Task EnsureMaintenanceJobsAsync(TDbContext db, CancellationToken stoppingToken)
+        {
+            await db.JobEnsurePeriodicAsync<XactJobMaintenance<TDbContext>>(
+                x => x.CleanupJobHistoryAsync(CancellationToken.None), 
+                "xj_history_cleanup", 
+                CronBuilder.HourInterval(1), 
+                stoppingToken);
         }
     }
 }
