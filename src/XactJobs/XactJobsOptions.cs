@@ -42,6 +42,11 @@ namespace XactJobs
         public int ClearLeaseTimeoutInSeconds { get; set; } = 10;
 
         /// <summary>
+        /// Retry strategy - if not set, the default retry strategy is used. <see cref="XactJobsDefaultRetryStrategy"/>
+        /// </summary>
+        public IXactJobsRetryStrategy RetryStrategy { get; set; } = new XactJobsDefaultRetryStrategy();
+
+        /// <summary>
         /// Gets or sets the collection of periodic jobs, each defined by a unique identifier,  a job expression, and a
         /// cron schedule.
         /// </summary>

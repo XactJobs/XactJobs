@@ -37,6 +37,12 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
+        public TBuilder WithRetryStrategy(IXactJobsRetryStrategy retryStrategy)
+        {
+            Options.RetryStrategy = retryStrategy;
+            return (this as TBuilder)!;
+        }
+
         public TBuilder WithPeriodicJob(string name, string cronExpression, [InstantHandle] Expression<Action> jobExpression, bool isActive = true)
         {
             Options.PeriodicJobs[name] = (jobExpression, cronExpression, isActive);

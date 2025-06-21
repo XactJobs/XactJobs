@@ -253,24 +253,22 @@ namespace XactJobs.Internal
         }
 
 
-        private static void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
+        private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {
             RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Completed, null);
         }
 
-        private static void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
+        private void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {
             RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Skipped, null);
         }
 
-        private static void RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, Exception ex)
+        private void RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, Exception ex)
         {
             RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Failed, ex);
         }
 
-        private static int[] _retrySeconds = [2, 2, 5, 10, 30, 60, 5 * 60, 15 * 60, 30 * 60, 60 * 60];
-
-        private static void RecordProcessingAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, ProcessingResult processingResult, Exception? ex)
+        private void RecordProcessingAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, ProcessingResult processingResult, Exception? ex)
         {
             var status = processingResult switch
             {
@@ -280,22 +278,16 @@ namespace XactJobs.Internal
                 _ => throw new ArgumentOutOfRangeException(nameof(processingResult)),
             };
 
-
             var errorCount = job.ErrorCount;
 
             if (status == XactJobStatus.Failed)
             {
-                // incompatible periodic jobs will never get here (they will be skipped)
                 errorCount++;
+                var nextRunTimeUtc = _options.RetryStrategy.GetRetryTimeUtc(job, errorCount);
 
-                // TODO: implement configurable retry strategy
-                if (errorCount < 10)
+                if (nextRunTimeUtc.HasValue)
                 {
-                    var seconds = errorCount <= _retrySeconds.Length 
-                        ? _retrySeconds[errorCount - 1] 
-                        : _retrySeconds[^1];
-
-                    dbContext.Reschedule(job, DateTime.UtcNow.AddSeconds(seconds), errorCount);
+                    dbContext.Reschedule(job, nextRunTimeUtc.Value, errorCount);
                 }
                 else
                 {
@@ -306,7 +298,7 @@ namespace XactJobs.Internal
             dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, periodicJob, DateTime.UtcNow, status, errorCount, ex));
 
             if (periodicJob != null 
-                && (status == XactJobStatus.Completed || status == XactJobStatus.Skipped)
+                && status != XactJobStatus.Failed // only failed jobs are not re-scheduled to prevent overlap (they are re-scheduled above)
                 && periodicJob.IsCompatibleWith(job) 
                 && dbContext.Entry(periodicJob).State != EntityState.Deleted)
             {
