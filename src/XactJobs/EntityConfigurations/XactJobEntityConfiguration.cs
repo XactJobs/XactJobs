@@ -27,11 +27,9 @@ namespace XactJobs.EntityConfigurations
                 builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobTable}");
             }
 
-            builder.HasKey(x => new { x.Id }).HasName($"pk_{_sqlDialect.XactJobTable}");
+            builder.HasKey(x => new { x.Queue, x.ScheduledAt, x.Id }).HasName($"pk_{_sqlDialect.XactJobTable}");
 
             builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
-
-            builder.Property(x => x.Status).HasColumnName(_sqlDialect.ColStatus);
 
             builder.Property(x => x.LeasedUntil).HasColumnName(_sqlDialect.ColLeasedUntil)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
@@ -46,24 +44,12 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.Queue).HasColumnName(_sqlDialect.ColQueue);
 
             builder.Property(x => x.PeriodicJobId).HasColumnName(_sqlDialect.ColPeriodicJobId);
+            builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
 
-            builder.Property(x => x.ErrorTime).HasColumnName(_sqlDialect.ColErrorTime)
-                .HasColumnType(_sqlDialect.DateTimeColumnType);
             builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
-            builder.Property(x => x.ErrorMessage).HasColumnName(_sqlDialect.ColErrorMessage);
-            builder.Property(x => x.ErrorStackTrace).HasColumnName(_sqlDialect.ColErrorStackTrace);
 
-            builder.HasIndex(x => new { x.Queue, x.ScheduledAt })
-                .HasDatabaseName($"ix_{_sqlDialect.XactJobTable}_{_sqlDialect.ColQueue}_{_sqlDialect.ColScheduledAt}");
-
-            builder.HasIndex(x => x.PeriodicJobId)
-                .HasDatabaseName($"ix_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}");
-
-            if (_sqlDialect.GetAcquireLeaseSql != null)
-            {
-                builder.HasIndex(x => new { x.Queue, x.Leaser, x.LeasedUntil })
-                    .HasDatabaseName($"ix_{_sqlDialect.XactJobTable}_{_sqlDialect.ColQueue}_{_sqlDialect.ColLeaser}");
-            }
+            builder.HasIndex(x => x.Leaser)
+                .HasDatabaseName($"ix_{_sqlDialect.XactJobTable}_{_sqlDialect.ColLeaser}");
         }
     }
 }

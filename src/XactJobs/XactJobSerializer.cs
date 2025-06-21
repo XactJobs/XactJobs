@@ -38,7 +38,7 @@ namespace XactJobs
 
             queue ??= QueueNames.Default;
 
-            return new XactJob(id, scheduleAtUtc.Value, XactJobStatus.Queued, typeName, methodName, serializedArgs, queue);
+            return new XactJob(id, scheduleAtUtc.Value, typeName, methodName, serializedArgs, queue);
         }
 
         internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, Guid id, string name, string cronExp, string? queue)

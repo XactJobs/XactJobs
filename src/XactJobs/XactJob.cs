@@ -2,7 +2,7 @@
 {
     public class XactJobBase
     {
-        public Guid Id { get; protected set; }
+        public Guid Id { get; private set; }
 
         public DateTime CreatedAt
         {
@@ -13,12 +13,6 @@
             }
         }
 
-
-        /// <summary>
-        /// Job status
-        /// </summary>
-        public XactJobStatus Status { get; protected set; }
-
         /// <summary>
         /// When should the job be executed
         /// </summary>
@@ -27,55 +21,44 @@
         /// <summary>
         /// Assembly qualified name of the declaring type
         /// </summary>
-        public string TypeName { get; protected set; }
+        public string TypeName { get; private set; }
 
         /// <summary>
         /// Method name to be called
         /// </summary>
-        public string MethodName { get; protected set; }
+        public string MethodName { get; private set; }
 
         /// <summary>
         /// Arguments to be passed to the method
         /// </summary>
-        public string MethodArgs { get; protected set; }
+        public string MethodArgs { get; private set; }
 
-        public string Queue { get; protected set; }
+        public string Queue { get; private set; }
+
+        public Guid? PeriodicJobId { get; private set; }
+        public string? CronExpression { get; private set; }
 
         public int ErrorCount { get; protected set; }
 
-        public DateTime? ErrorTime { get; protected set; }
-
-        public string? ErrorMessage { get; protected set; }
-
-        public string? ErrorStackTrace { get; protected set; }
-
-        public Guid? PeriodicJobId { get; protected set; }
-
         public XactJobBase(Guid id,
                            DateTime scheduledAt,
-                           XactJobStatus status,
                            string typeName,
                            string methodName,
                            string methodArgs,
                            string queue,
                            Guid? periodicJobId = null,
-                           int errorCount = 0,
-                           DateTime? errorTime = null,
-                           string? errorMessage = null,
-                           string? errorStackTrace = null)
+                           string? cronExpression = null,
+                           int errorCount = 0)
         {
             Id = id;
+            ScheduledAt = scheduledAt;
             TypeName = typeName;
             MethodName = methodName;
             MethodArgs = methodArgs;
             Queue = queue;
             PeriodicJobId = periodicJobId;
-            Status = status;
-            ScheduledAt = scheduledAt;
+            CronExpression = cronExpression;
             ErrorCount = errorCount;
-            ErrorTime = errorTime;
-            ErrorMessage = errorMessage;
-            ErrorStackTrace = errorStackTrace;
         }
     }
 
@@ -86,129 +69,102 @@
 
         public XactJob(Guid id,
                        DateTime scheduledAt,
-                       XactJobStatus status,
                        string typeName,
                        string methodName,
                        string methodArgs,
                        string queue,
                        Guid? periodicJobId = null,
-                       Guid? leaser = null,
-                       DateTime? leasedUntil = null,
+                       string? cronExpression = null,
                        int errorCount = 0,
-                       DateTime? errorTime = null,
-                       string? errorMessage = null,
-                       string? errorStackTrace = null)
+                       Guid? leaser = null,
+                       DateTime? leasedUntil = null)
             : base(id,
                    scheduledAt,
-                   status,
                    typeName,
                    methodName,
                    methodArgs,
                    queue,
                    periodicJobId,
-                   errorCount,
-                   errorTime,
-                   errorMessage,
-                   errorStackTrace)
+                   cronExpression,
+                   errorCount)
         {
             Leaser = leaser;
             LeasedUntil = leasedUntil;
         }
 
-        internal void MarkCompleted()
+        internal void MarkFailed()
         {
-            Status = XactJobStatus.Completed;
-        }
-
-        internal void MarkSkipped()
-        {
-            Status = XactJobStatus.Skipped;
-        }
-
-        internal void MarkFailed(Exception ex)
-        {
-            var innerMostEx = ex;
-            while (innerMostEx.InnerException != null)
-            {
-                innerMostEx = innerMostEx.InnerException;
-            }
-
-            ErrorTime = DateTime.UtcNow;
-            ErrorCount = ErrorCount + 1;
-            ErrorMessage = innerMostEx.Message;
-            ErrorStackTrace = ex.ToString();
-
-            Leaser = null;
-            LeasedUntil = null;
-
-            // TODO Implement retry strategy
-
-            Status = ErrorCount < 10 ? XactJobStatus.Failed : XactJobStatus.Cancelled;
-
-            if (Status == XactJobStatus.Failed)
-            {
-                ScheduledAt = DateTime.UtcNow.AddSeconds(10);
-            }
+            ErrorCount++;
         }
     }
 
     public class XactJobHistory: XactJobBase
     {
-        public DateTime CompletedAt { get; private set; }
+        public DateTime ProcessedAt { get; private set; }
+        public XactJobStatus Status { get; private set; }
+
+        public string? ErrorMessage { get; protected set; }
+        public string? ErrorStackTrace { get; protected set; }
 
         public string? PeriodicJobName { get; private set; }
-        public string? CronExpression { get; private set; }
 
         public XactJobHistory(Guid id,
-                              DateTime scheduledAt,
+                              DateTime processedAt,
                               XactJobStatus status,
-                              DateTime completedAt,
+                              DateTime scheduledAt,
                               string typeName,
                               string methodName,
                               string methodArgs,
                               string queue,
                               Guid? periodicJobId = null,
+                              int errorCount = 0,
                               string? periodicJobName = null,
                               string? cronExpression = null,
-                              int errorCount = 0,
-                              DateTime? errorTime = null,
                               string? errorMessage = null,
                               string? errorStackTrace = null)
             : base(id,
                    scheduledAt,
-                   status,
                    typeName,
                    methodName,
                    methodArgs,
                    queue,
                    periodicJobId,
-                   errorCount,
-                   errorTime,
-                   errorMessage,
-                   errorStackTrace)
+                   cronExpression,
+                   errorCount)
         {
-            CompletedAt = completedAt;
+            ProcessedAt = processedAt;
+            Status = status;
             PeriodicJobName = periodicJobName;
-            CronExpression = cronExpression;
+            ErrorMessage = errorMessage;
+            ErrorStackTrace = errorStackTrace;
         }
 
-        public static XactJobHistory CreateFromJob(XactJob job, XactJobPeriodic? periodicJob, DateTime completedAt)
+        public static XactJobHistory CreateFromJob(XactJob job,
+                                                   XactJobPeriodic? periodicJob,
+                                                   DateTime processedAt,
+                                                   XactJobStatus status,
+                                                   Exception? ex)
         {
+            var innerMostEx = ex;
+            while (innerMostEx?.InnerException != null)
+            {
+                innerMostEx = innerMostEx.InnerException;
+            }
+
             return new XactJobHistory(job.Id,
+                                      processedAt,
+                                      status,
                                       job.ScheduledAt,
-                                      job.Status,
-                                      completedAt,
                                       job.TypeName,
                                       job.MethodName,
                                       job.MethodArgs,
                                       job.Queue,
                                       job.PeriodicJobId,
+                                      job.ErrorCount,
                                       periodicJob?.Name,
                                       periodicJob?.CronExpression,
-                                      job.ErrorCount,
-                                      job.ErrorTime,
-                                      job.ErrorMessage,
-                                      job.ErrorStackTrace);
+                                      innerMostEx?.Message,
+                                      ex?.StackTrace);
         }
     }
 

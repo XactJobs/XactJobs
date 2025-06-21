@@ -13,7 +13,7 @@ namespace XactJobs.SqlDialects
         public string ColId { get; } = "id";
         public string ColCreatedAt { get; } = "created_at";
         public string ColScheduledAt { get; } = "scheduled_at";
-        public string ColCompletedAt { get; } = "completed_at";
+        public string ColProcessedAt { get; } = "processed_at";
         public string ColLeasedUntil { get; } = "leased_until";
         public string ColLeaser { get; } = "leaser";
         public string ColTypeName { get; } = "type_name";
@@ -42,10 +42,9 @@ namespace XactJobs.SqlDialects
 
         public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 WITH cte AS (
-  SELECT {ColId}
+  SELECT {ColId}, {ColQueue}, {ColScheduledAt}
   FROM {XactJobSchema}.{XactJobTable}
-  WHERE {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-    AND {ColScheduledAt} <= current_timestamp
+  WHERE {ColScheduledAt} <= current_timestamp
     AND {ColQueue} = '{queueName ?? QueueNames.Default}'
     AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < current_timestamp)
   ORDER BY {ColScheduledAt}
@@ -55,7 +54,10 @@ WITH cte AS (
 UPDATE {XactJobSchema}.{XactJobTable}
 SET {ColLeaser} = '{leaser}'::uuid, {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
 FROM cte
-WHERE {XactJobSchema}.{XactJobTable}.{ColId} = cte.{ColId}
+WHERE -- we need to join on all these, since these are the PK
+    {XactJobSchema}.{XactJobTable}.{ColId} = cte.{ColId}
+    AND {XactJobSchema}.{XactJobTable}.{ColQueue} = cte.{ColQueue}
+    AND {XactJobSchema}.{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
 RETURNING {XactJobSchema}.{XactJobTable}.*
 ";
 
@@ -63,14 +65,12 @@ RETURNING {XactJobSchema}.{XactJobTable}.*
 UPDATE {XactJobSchema}.{XactJobTable}
 SET {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
 WHERE {ColLeaser} = '{leaser}'::uuid
-  AND {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public string GetClearLeaseSql(Guid leaser) => $@"
 UPDATE {XactJobSchema}.{XactJobTable}
 SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
 WHERE {ColLeaser} = '{leaser}'::uuid
-  AND {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)

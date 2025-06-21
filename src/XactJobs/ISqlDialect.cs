@@ -18,7 +18,7 @@ namespace XactJobs
         string ColId { get; }
         string ColCreatedAt { get; }
         string ColScheduledAt { get; }
-        string ColCompletedAt { get; }
+        string ColProcessedAt { get; }
         string ColLeasedUntil { get; }
         string ColLeaser { get; }
         string ColTypeName { get; }

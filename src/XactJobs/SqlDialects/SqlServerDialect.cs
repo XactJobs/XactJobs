@@ -15,7 +15,7 @@ namespace XactJobs.SqlDialects
         public string ColId { get; } = "Id";
         public string ColCreatedAt { get; } = "CreatedAt";
         public string ColScheduledAt { get; } = "ScheduledAt";
-        public string ColCompletedAt { get; } = "CompletedAt";
+        public string ColProcessedAt { get; } = "ProcessedAt";
         public string ColLeasedUntil { get; } = "LeasedUntil";
         public string ColLeaser { get; } = "Leaser";
         public string ColTypeName { get; } = "TypeName";
@@ -42,10 +42,9 @@ namespace XactJobs.SqlDialects
 
         public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 WITH cte AS (
-    SELECT TOP ({maxJobs}) [{ColId}]
+    SELECT TOP ({maxJobs}) [{ColId}], [{ColQueue}], [{ColScheduledAt}]
     FROM [{XactJobSchema}].[{XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
-    WHERE [{ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-      AND [{ColScheduledAt}] <= SYSUTCDATETIME()
+    WHERE [{ColScheduledAt}] <= SYSUTCDATETIME()
       AND [{ColQueue}] = '{queueName ?? QueueNames.Default}'
       AND ([{ColLeasedUntil}] IS NULL OR [{ColLeasedUntil}] < SYSUTCDATETIME())
     ORDER BY [{ColScheduledAt}]
@@ -55,21 +54,22 @@ SET [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER),
     [{ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
 OUTPUT inserted.*
 FROM [{XactJobSchema}].[{XactJobTable}] AS target
-INNER JOIN cte ON target.[{ColId}] = cte.[{ColId}]
+INNER JOIN cte ON -- we need to join on the entire PK
+    target.[{ColId}] = cte.[{ColId}]
+    AND target.[{ColQueue}] = cte.[{ColQueue}]
+    AND target.[{ColScheduledAt}] = cte.[{ColScheduledAt}]
 ";
 
         public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
 UPDATE [{XactJobSchema}].[{XactJobTable}]
 SET [{ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
 WHERE [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
-  AND [{ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public string GetClearLeaseSql(Guid leaser) => $@"
 UPDATE [{XactJobSchema}].[{XactJobTable}]
 SET [{ColLeaser}] = NULL, [{ColLeasedUntil}] = NULL
 WHERE [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
-  AND [{ColStatus}] IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)

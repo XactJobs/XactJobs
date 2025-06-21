@@ -15,7 +15,7 @@ namespace XactJobs.SqlDialects
         public string ColId { get; } = "ID";
         public string ColCreatedAt { get; } = "CREATED_AT";
         public string ColScheduledAt { get; } = "SCHEDULED_AT";
-        public string ColCompletedAt { get; } = "COMPLETED_AT";
+        public string ColProcessedAt { get; } = "PROCESSED_AT";
         public string ColLeasedUntil { get; } = "LEASED_UNTIL";
         public string ColLeaser { get; } = "LEASER";
         public string ColTypeName { get; } = "TYPE_NAME";
@@ -39,18 +39,13 @@ namespace XactJobs.SqlDialects
         public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.Other);
 
         public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}_{XactJobTable} tgt
+UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = HEXTORAW('{leaser:N}'),
     {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + INTERVAL '{leaseDurationInSeconds}' SECOND
-WHERE tgt.{ColId} IN (
-    SELECT {ColId}
-    FROM {XactJobSchema}_{XactJobTable}
-    WHERE {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
-      AND {ColScheduledAt} <= SYS_EXTRACT_UTC(systimestamp)
-      AND {ColQueue} = '{queueName ?? QueueNames.Default}'
-      AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
-      AND ROWNUM <= {maxJobs}
-)
+WHERE {ColScheduledAt} <= SYS_EXTRACT_UTC(systimestamp)
+  AND {ColQueue} = '{queueName ?? QueueNames.Default}'
+  AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
+  AND ROWNUM <= {maxJobs}
 ";
 
         public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
@@ -58,7 +53,6 @@ SELECT *
 FROM {XactJobSchema}_{XactJobTable}
 WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
   AND {ColLeasedUntil} >= SYS_EXTRACT_UTC(systimestamp)
-  AND {ColQueue} = '{queueName ?? QueueNames.Default}'
   AND ROWNUM <= {maxJobs}
 ";
 
@@ -66,14 +60,12 @@ WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + INTERVAL '{leaseDurationInSeconds}' SECOND
 WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-  AND {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public string GetClearLeaseSql(Guid leaser) => $@"
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
 WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-  AND {ColStatus} IN ({(int)XactJobStatus.Queued}, {(int)XactJobStatus.Failed})
 ";
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)

@@ -27,7 +27,7 @@ namespace XactJobs.EntityConfigurations
                 builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobHistoryTable}");
             }
 
-            builder.HasKey(x => x.Id).HasName($"pk_{_sqlDialect.XactJobHistoryTable}");
+            builder.HasKey(x => new { x.Id, x.ProcessedAt }).HasName($"pk_{_sqlDialect.XactJobHistoryTable}");
 
             builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
 
@@ -36,7 +36,7 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.ScheduledAt).HasColumnName(_sqlDialect.ColScheduledAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
-            builder.Property(x => x.CompletedAt).HasColumnName(_sqlDialect.ColCompletedAt)
+            builder.Property(x => x.ProcessedAt).HasColumnName(_sqlDialect.ColProcessedAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
             builder.Property(x => x.TypeName).HasColumnName(_sqlDialect.ColTypeName);
@@ -44,8 +44,6 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.MethodArgs).HasColumnName(_sqlDialect.ColMethodArgs);
             builder.Property(x => x.Queue).HasColumnName(_sqlDialect.ColQueue);
 
-            builder.Property(x => x.ErrorTime).HasColumnName(_sqlDialect.ColErrorTime)
-                .HasColumnType(_sqlDialect.DateTimeColumnType);
             builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
             builder.Property(x => x.ErrorMessage).HasColumnName(_sqlDialect.ColErrorMessage);
             builder.Property(x => x.ErrorStackTrace).HasColumnName(_sqlDialect.ColErrorStackTrace);
@@ -54,8 +52,8 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
             builder.Property(x => x.PeriodicJobName).HasColumnName(_sqlDialect.ColPeriodicJobName);
 
-            builder.HasIndex(x => x.CompletedAt)
-                .HasDatabaseName($"ix_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColCompletedAt}");
+            builder.HasIndex(x => x.ProcessedAt)
+                .HasDatabaseName($"ix_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
         }
     }
 }

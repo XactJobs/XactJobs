@@ -16,6 +16,8 @@
 
             //throw new NotImplementedException();
 
+            if (Random.Shared.Next(100) < 50) throw new Exception("Some transient error");
+
             _logger.LogInformation("Job executed: {id}, {name}, {guid}", id, name, guid);
 
             return Task.CompletedTask;

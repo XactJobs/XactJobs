@@ -94,6 +94,15 @@ namespace XactJobs
                 && Queue == job.Queue;
         }
 
+        internal bool IsCompatibleWith(XactJob job)
+        {
+            return TypeName == job.TypeName 
+                && MethodName == job.MethodName 
+                && MethodArgs == job.MethodArgs 
+                && CronExpression == job.CronExpression 
+                && Queue == job.Queue;
+        }
+
         internal void Activate(bool isActive = true)
         {
             IsActive = isActive;

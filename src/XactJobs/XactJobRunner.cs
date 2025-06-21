@@ -130,11 +130,13 @@ namespace XactJobs
 
             var periodicJobIds = jobs.Select(job => job.PeriodicJobId).ToList();
 
-            var periodicJobs = await dbContext.Set<XactJobPeriodic>()
-                .Where(x => periodicJobIds.Contains(x.Id))
-                .AsNoTracking()
-                .ToDictionaryAsync(x => x.Id, stoppingToken)
-                .ConfigureAwait(false);
+            var periodicJobs = periodicJobIds.Count > 0
+                ? await dbContext.Set<XactJobPeriodic>()
+                    .Where(x => periodicJobIds.Contains(x.Id))
+                    .AsNoTracking()
+                    .ToDictionaryAsync(x => x.Id, stoppingToken)
+                    .ConfigureAwait(false)
+                : [];
 
             await Parallel.ForEachAsync(jobs, parallelOptions, async (job, stoppingToken) =>
             {
@@ -160,12 +162,7 @@ namespace XactJobs
 
                     dbContext.Attach(job);
 
-                    job.MarkFailed(ex);
-
-                    if (job.Status == XactJobStatus.Cancelled)
-                    {
-                        ArchiveJob(dbContext, job, periodicJob);
-                    }
+                    RecordFailedAttempt(dbContext, job, periodicJob, ex);
                 }
             })
                 .ConfigureAwait(false);
@@ -203,10 +200,10 @@ namespace XactJobs
             {
                 dbContext.Attach(job);
 
-                if (job.PeriodicJobId.HasValue && (periodicJob == null || !periodicJob.IsActive))
+                if (job.PeriodicJobId.HasValue && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job)))
                 {
                     // periodic job is inactive or deleted
-                    job.MarkSkipped();
+                    RecordSkipped(dbContext, job, periodicJob);
                 }
                 else
                 {
@@ -219,10 +216,8 @@ namespace XactJobs
                     await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
                         .ConfigureAwait(false);
 
-                    job.MarkCompleted();
+                    RecordSuccess(dbContext, job, periodicJob);
                 }
-
-                ArchiveJob(dbContext, job, periodicJob);
 
                 await dbContext.SaveChangesAsync(stoppingToken)
                     .ConfigureAwait(false);
@@ -257,20 +252,77 @@ namespace XactJobs
             }
         }
 
-        private static void ArchiveJob(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
-        {
-            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, periodicJob, DateTime.UtcNow));
-            dbContext.Set<XactJob>().Remove(job);
 
-            if (periodicJob != null && dbContext.Entry(periodicJob).State != EntityState.Deleted)
+        private static void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
+        {
+            RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Completed, null);
+        }
+
+        private static void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
+        {
+            RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Skipped, null);
+        }
+
+        private static void RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, Exception ex)
+        {
+            RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Failed, ex);
+        }
+
+        private static int[] _retrySeconds = [2, 2, 5, 10, 30, 60, 5 * 60, 15 * 60, 30 * 60, 60 * 60];
+
+        private static void RecordProcessingAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, ProcessingResult processingResult, Exception? ex)
+        {
+            var status = processingResult switch
+            {
+                ProcessingResult.Completed => XactJobStatus.Completed,
+                ProcessingResult.Failed => XactJobStatus.Failed,
+                ProcessingResult.Skipped => XactJobStatus.Skipped,
+                _ => throw new ArgumentOutOfRangeException(nameof(processingResult)),
+            };
+
+            if (status == XactJobStatus.Failed)
+            {
+                // incompatible periodic jobs will never get here (they will be skipped)
+                job.MarkFailed();
+
+                // TODO: implement configurable retry strategy
+                if (job.ErrorCount < 10)
+                {
+                    var seconds = job.ErrorCount <= _retrySeconds.Length 
+                        ? _retrySeconds[job.ErrorCount - 1] 
+                        : _retrySeconds[^1];
+
+                    dbContext.Reschedule(job, DateTime.UtcNow.AddSeconds(seconds));
+                }
+                else
+                {
+                    status = XactJobStatus.Cancelled;
+                }
+            }
+
+            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, periodicJob, DateTime.UtcNow, status, ex));
+
+            if (periodicJob != null 
+                && (status == XactJobStatus.Completed || status == XactJobStatus.Skipped)
+                && periodicJob.IsCompatibleWith(job) 
+                && dbContext.Entry(periodicJob).State != EntityState.Deleted)
             {
                 dbContext.ScheduleNextRun(periodicJob);
             }
+
+            dbContext.Set<XactJob>().Remove(job);
         }
 
         private string GetQueueDisplayName()
         {
             return _queueName ?? "Default";
+        }
+
+        private enum ProcessingResult
+        {
+            Completed,
+            Failed,
+            Skipped
         }
     }
 }

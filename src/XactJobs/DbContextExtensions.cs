@@ -116,8 +116,10 @@ namespace XactJobs
 
             if (periodicJob == null) return false;
 
-            await RemoveQueuedJobs(dbContext, periodicJob, cancellationToken)
-                .ConfigureAwait(false);
+            // no need to delete jobs, they will be skipped by the runner, if periodic job definition does not exist
+            //
+            // await RemoveQueuedJobs(dbContext, periodicJob, cancellationToken)
+            //    .ConfigureAwait(false);
 
             dbContext.Set<XactJobPeriodic>()
                 .Remove(periodicJob);
@@ -125,6 +127,7 @@ namespace XactJobs
             return true;
         }
 
+        /*
         private static async Task RemoveQueuedJobs(DbContext dbContext, XactJobPeriodic periodicJob, CancellationToken cancellationToken)
         {
             var queuedJobRuns = await dbContext.Set<XactJob>()
@@ -137,6 +140,7 @@ namespace XactJobs
                 dbContext.Set<XactJob>().Remove(queuedJobRun);
             }
         }
+        */
 
         private static XactJob JobAdd(DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
         {
@@ -181,8 +185,11 @@ namespace XactJobs
 
                 if (!periodicJob.IsCompatibleWith(templateJob))
                 {
-                    await RemoveQueuedJobs(db, periodicJob, cancellationToken)
-                        .ConfigureAwait(false);
+                    // existing job will be skipped by the runner (it will be detected as incompatible)
+                    // so no need to modify it here
+                    //
+                    // await RemoveQueuedJobs(db, periodicJob, cancellationToken)
+                    //    .ConfigureAwait(false);
 
                     periodicJob.UpdateDefinition(templateJob);
 
@@ -191,6 +198,25 @@ namespace XactJobs
             }
 
             periodicJob.Activate(isActive);
+        }
+
+        internal static XactJob Reschedule(this DbContext dbContext, XactJob job, DateTime scheduledAt)
+        {
+            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+
+            var newJob = new XactJob(dialect.NewJobId(),
+                                     scheduledAt,
+                                     job.TypeName,
+                                     job.MethodName,
+                                     job.MethodArgs,
+                                     job.Queue,
+                                     job.PeriodicJobId,
+                                     job.CronExpression,
+                                     job.ErrorCount);
+
+            dbContext.Set<XactJob>().Add(newJob);
+
+            return newJob;
         }
 
         internal static XactJob ScheduleNextRun(this DbContext dbContext, XactJobPeriodic periodicJob)
@@ -203,12 +229,12 @@ namespace XactJobs
 
             var job = new XactJob(dialect.NewJobId(),
                                   nextRunUtc,
-                                  XactJobStatus.Queued,
                                   periodicJob.TypeName,
                                   periodicJob.MethodName,
                                   periodicJob.MethodArgs,
                                   periodicJob.Queue,
-                                  periodicJob.Id);
+                                  periodicJob.Id,
+                                  periodicJob.CronExpression);
 
             dbContext.Set<XactJob>().Add(job);
 
