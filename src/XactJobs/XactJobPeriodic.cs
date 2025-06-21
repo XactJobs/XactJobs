@@ -5,12 +5,12 @@
         /// <summary>
         /// Unique periodic job name
         /// </summary>
-        public string Id { get; private set; }
+        public string Id { get; init; }
 
         /// <summary>
         /// When was the job first created
         /// </summary>
-        public DateTime CreatedAt { get; private set; }
+        public DateTime CreatedAt { get; init; }
 
         /// <summary>
         /// When was the job last updated
@@ -72,6 +72,7 @@
 
         internal void UpdateDefinition(XactJobPeriodic job)
         {
+            UpdatedAt = DateTime.UtcNow;
             TypeName = job.TypeName;
             MethodName = job.MethodName;
             MethodArgs = job.MethodArgs;
