@@ -6,8 +6,6 @@ namespace XactJobs
 {
     public interface ISqlDialect
     {
-        Guid NewJobId();
-
         bool HasSchemaSupport { get; }
 
         string XactJobSchema { get; }
@@ -27,13 +25,11 @@ namespace XactJobs
         string ColStatus { get; }
         string ColQueue { get; }
         string ColPeriodicJobId { get; }
-        string ColPeriodicJobName { get; }
         string ColErrorCount { get; }
         string ColErrorTime { get; }
         string ColErrorMessage { get; }
         string ColErrorStackTrace { get; }
         string ColCronExpression { get; }
-        string ColName { get; }
         string ColUpdatedAt { get; }
         string ColIsActive { get; }
 

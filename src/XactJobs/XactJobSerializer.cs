@@ -11,7 +11,7 @@ namespace XactJobs
         private static readonly ConcurrentDictionary<MethodInfo, AsyncStateMachineAttribute?> _asyncStateMachineAttributeCache = new();
         private static readonly ConcurrentDictionary<XactJobDispatchKey, MethodInfo[]> _overloadsCache = new();
 
-        internal static XactJob FromExpression(LambdaExpression lambdaExp, Guid id, DateTime? scheduleAtUtc, string? queue)
+        internal static XactJob FromExpression(LambdaExpression lambdaExp, DateTime? scheduleAtUtc, string? queue)
         {
             if (scheduleAtUtc.HasValue && scheduleAtUtc.Value.Kind != DateTimeKind.Utc)
             {
@@ -38,10 +38,10 @@ namespace XactJobs
 
             queue ??= QueueNames.Default;
 
-            return new XactJob(id, scheduleAtUtc.Value, typeName, methodName, serializedArgs, queue);
+            return new XactJob(0, scheduleAtUtc.Value, typeName, methodName, serializedArgs, queue);
         }
 
-        internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, Guid id, string name, string cronExp, string? queue)
+        internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, string id, string cronExp, string? queue)
         {
             var callExpression = lambdaExp.Body as MethodCallExpression 
                 ?? throw new ArgumentException("Expression body should be a simple method call.", nameof(lambdaExp));
@@ -61,7 +61,7 @@ namespace XactJobs
 
             queue ??= QueueNames.Default;
 
-            return new XactJobPeriodic(id, name, DateTime.UtcNow, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, queue, isActive: true);
+            return new XactJobPeriodic(id, DateTime.UtcNow, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, queue, isActive: true);
         }
 
         internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)

@@ -33,8 +33,6 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
 
-            builder.Property(x => x.Name).HasColumnName(_sqlDialect.ColName);
-
             builder.Property(x => x.CreatedAt).HasColumnName(_sqlDialect.ColCreatedAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
@@ -61,10 +59,6 @@ namespace XactJobs.EntityConfigurations
                         v => v == 1
                     ));
             }
-
-            builder.HasIndex(x => x.Name)
-                .HasDatabaseName($"ix_{_sqlDialect.XactJobPeriodicTable}_{_sqlDialect.ColName}")
-                .IsUnique();
         }
     }
 }

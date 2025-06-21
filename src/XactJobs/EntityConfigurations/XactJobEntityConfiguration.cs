@@ -29,7 +29,8 @@ namespace XactJobs.EntityConfigurations
 
             builder.HasKey(x => new { x.Queue, x.ScheduledAt, x.Id }).HasName($"pk_{_sqlDialect.XactJobTable}");
 
-            builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
+            builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId)
+                .ValueGeneratedOnAdd();
 
             builder.Property(x => x.LeasedUntil).HasColumnName(_sqlDialect.ColLeasedUntil)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);

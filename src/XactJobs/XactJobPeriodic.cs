@@ -1,15 +1,11 @@
-﻿using System.Linq.Expressions;
-
-namespace XactJobs
+﻿namespace XactJobs
 {
     public class XactJobPeriodic
     {
-        public Guid Id { get; private set; }
-
         /// <summary>
         /// Unique periodic job name
         /// </summary>
-        public string Name { get; private set; }
+        public string Id { get; private set; }
 
         /// <summary>
         /// When was the job first created
@@ -53,8 +49,7 @@ namespace XactJobs
         /// </summary>
         public bool IsActive { get; private set; }
 
-        public XactJobPeriodic(Guid id,
-                               string name,
+        public XactJobPeriodic(string id,
                                DateTime createdAt,
                                DateTime updatedAt,
                                string cronExpression,
@@ -65,7 +60,6 @@ namespace XactJobs
                                bool isActive)
         {
             Id = id;
-            Name = name;
             CreatedAt = createdAt;
             UpdatedAt = updatedAt;
             CronExpression = cronExpression;

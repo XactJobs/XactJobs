@@ -29,7 +29,8 @@ namespace XactJobs.EntityConfigurations
 
             builder.HasKey(x => new { x.Id, x.ProcessedAt }).HasName($"pk_{_sqlDialect.XactJobHistoryTable}");
 
-            builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
+            builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId)
+                .ValueGeneratedNever();
 
             builder.Property(x => x.Status).HasColumnName(_sqlDialect.ColStatus);
 
@@ -50,7 +51,6 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.PeriodicJobId).HasColumnName(_sqlDialect.ColPeriodicJobId);
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
-            builder.Property(x => x.PeriodicJobName).HasColumnName(_sqlDialect.ColPeriodicJobName);
 
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"ix_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");

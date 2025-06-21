@@ -143,9 +143,9 @@ namespace XactJobs
                 XactJobPeriodic? periodicJob = null;
                 try
                 {
-                    if (job.PeriodicJobId.HasValue)
+                    if (job.PeriodicJobId != null)
                     {
-                        periodicJobs.TryGetValue(job.PeriodicJobId.Value, out periodicJob);
+                        periodicJobs.TryGetValue(job.PeriodicJobId, out periodicJob);
                     }
                     
                     await RunJobAsync(job, periodicJob, stoppingToken)
@@ -200,7 +200,7 @@ namespace XactJobs
             {
                 dbContext.Attach(job);
 
-                if (job.PeriodicJobId.HasValue && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job)))
+                if (job.PeriodicJobId != null && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job)))
                 {
                     // periodic job is inactive or deleted
                     RecordSkipped(dbContext, job, periodicJob);
@@ -280,19 +280,22 @@ namespace XactJobs
                 _ => throw new ArgumentOutOfRangeException(nameof(processingResult)),
             };
 
+
+            var errorCount = job.ErrorCount;
+
             if (status == XactJobStatus.Failed)
             {
                 // incompatible periodic jobs will never get here (they will be skipped)
-                job.MarkFailed();
+                errorCount++;
 
                 // TODO: implement configurable retry strategy
-                if (job.ErrorCount < 10)
+                if (errorCount < 10)
                 {
-                    var seconds = job.ErrorCount <= _retrySeconds.Length 
-                        ? _retrySeconds[job.ErrorCount - 1] 
+                    var seconds = errorCount <= _retrySeconds.Length 
+                        ? _retrySeconds[errorCount - 1] 
                         : _retrySeconds[^1];
 
-                    dbContext.Reschedule(job, DateTime.UtcNow.AddSeconds(seconds));
+                    dbContext.Reschedule(job, DateTime.UtcNow.AddSeconds(seconds), errorCount);
                 }
                 else
                 {
@@ -300,7 +303,7 @@ namespace XactJobs
                 }
             }
 
-            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, periodicJob, DateTime.UtcNow, status, ex));
+            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, periodicJob, DateTime.UtcNow, status, errorCount, ex));
 
             if (periodicJob != null 
                 && (status == XactJobStatus.Completed || status == XactJobStatus.Skipped)

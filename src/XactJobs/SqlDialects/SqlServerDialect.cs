@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using UUIDNext;
 
 namespace XactJobs.SqlDialects
 {
@@ -24,19 +23,15 @@ namespace XactJobs.SqlDialects
         public string ColStatus { get; } = "Status";
         public string ColQueue { get; } = "Queue";
         public string ColPeriodicJobId { get; } = "PeriodicJobId";
-        public string ColPeriodicJobName { get; } = "PeriodicJobName";
         public string ColErrorCount { get; } = "ErrorCount";
         public string ColErrorTime { get; } = "ErrorTime";
         public string ColErrorMessage { get; } = "ErrorMessage";
         public string ColErrorStackTrace { get; } = "ErrorStackTrace";
         public string ColCronExpression { get; } = "CronExpression";
-        public string ColName { get; } = "Name";
         public string ColUpdatedAt { get; } = "UpdatedAt";
         public string ColIsActive { get; } = "IsActive";
 
         public string DateTimeColumnType { get; } = "datetime2";
-
-        public Guid NewJobId() => Uuid.NewDatabaseFriendly(Database.SqlServer);
 
         public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
 
