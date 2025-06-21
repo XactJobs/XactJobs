@@ -1,16 +1,16 @@
 ﻿namespace XactJobs
 {
-    public interface IXactJobsRetryStrategy
+    public interface IRetryStrategy
     {
         DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount);
     }
 
-    public class XactJobsDefaultRetryStrategy : IXactJobsRetryStrategy
+    public class DefaultRetryStrategy : IRetryStrategy
     {
         public int MaxAttempts { get; }
         public IReadOnlyList<int> RetrySeconds { get; }
 
-        public XactJobsDefaultRetryStrategy(int maxAttempts = 10, int[]? retrySeconds = null)
+        public DefaultRetryStrategy(int maxAttempts = 10, int[]? retrySeconds = null)
         {
             MaxAttempts = maxAttempts;
             RetrySeconds = retrySeconds ?? [2, 2, 5, 10, 30, 60, 5 * 60, 15 * 60, 30 * 60, 60 * 60]; 

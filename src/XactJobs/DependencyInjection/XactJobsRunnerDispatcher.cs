@@ -11,13 +11,13 @@ namespace XactJobs.DependencyInjection
         private readonly List<Task> _runnerTasks = [];
 
         private readonly XactJobsOptions<TDbContext> _options;
-        private readonly XactJobsQuickPollChannels _quickPollChannels;
+        private readonly QuickPollChannels _quickPollChannels;
         private readonly IServiceScopeFactory _scopeFactory;
 
         private readonly ILoggerFactory _loggerFactory;
         private readonly ILogger<XactJobsRunnerDispatcher<TDbContext>> _logger;
 
-        public XactJobsRunnerDispatcher(XactJobsOptions<TDbContext> options, XactJobsQuickPollChannels quickPollChannels, IServiceScopeFactory scopeFactory, ILoggerFactory loggerFactory)
+        public XactJobsRunnerDispatcher(XactJobsOptions<TDbContext> options, QuickPollChannels quickPollChannels, IServiceScopeFactory scopeFactory, ILoggerFactory loggerFactory)
         {
             _options = options;
             _quickPollChannels = quickPollChannels;

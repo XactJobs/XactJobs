@@ -7,13 +7,13 @@ namespace XactJobs.Internal
     internal sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
         private readonly string _queueName;
-        private readonly XactJobsQuickPollChannel _quickPollChannel;
+        private readonly QuickPollChannel _quickPollChannel;
         private readonly Guid _leaser = Guid.NewGuid();
         private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(string queueName, XactJobsQuickPollChannel quickPollChannel, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(string queueName, QuickPollChannel quickPollChannel, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
             _queueName = queueName;
             _quickPollChannel = quickPollChannel;

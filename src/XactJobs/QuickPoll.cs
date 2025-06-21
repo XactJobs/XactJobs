@@ -3,12 +3,12 @@ using System.Threading.Channels;
 
 namespace XactJobs
 {
-    public class XactJobsQuickPollChannel
+    public class QuickPollChannel
     {
         private readonly SemaphoreSlim _batchLock = new(1, 1);
         private readonly Channel<bool> _notificationChannel;
 
-        public XactJobsQuickPollChannel(int capacity)
+        public QuickPollChannel(int capacity)
         {
             _notificationChannel = Channel.CreateBounded<bool>(new BoundedChannelOptions(capacity) 
             { 
@@ -48,18 +48,18 @@ namespace XactJobs
         }
     }
 
-    public class XactJobsQuickPollChannels
+    public class QuickPollChannels
     {
-        public Dictionary<string, XactJobsQuickPollChannel> Channels = [];
+        public Dictionary<string, QuickPollChannel> Channels = [];
     }
 
-    public class XactJobsQuickPoll<TDbContext> where TDbContext : DbContext
+    public class QuickPoll<TDbContext> where TDbContext : DbContext
     {
-        private readonly IReadOnlyDictionary<string, XactJobsQuickPollChannel> _channels;
+        private readonly IReadOnlyDictionary<string, QuickPollChannel> _channels;
 
         public TDbContext DbContext { get; }
 
-        public XactJobsQuickPoll(TDbContext dbContext, XactJobsQuickPollChannels quickPollChannels)
+        public QuickPoll(TDbContext dbContext, QuickPollChannels quickPollChannels)
         {
             DbContext = dbContext;
             _channels = quickPollChannels.Channels;

@@ -37,7 +37,7 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithRetryStrategy(IXactJobsRetryStrategy retryStrategy)
+        public TBuilder WithRetryStrategy(IRetryStrategy retryStrategy)
         {
             Options.RetryStrategy = retryStrategy;
             return (this as TBuilder)!;

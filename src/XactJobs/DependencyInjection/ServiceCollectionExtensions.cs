@@ -18,7 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(optionsBuilder.Options);
         services.AddSingleton(CreateQuickPollChannels(optionsBuilder.Options));
 
-        services.AddScoped<XactJobsQuickPoll<TDbContext>>();
+        services.AddScoped<QuickPoll<TDbContext>>();
         services.AddScoped<XactJobMaintenance<TDbContext>>();
 
         services.AddHostedService<XactJobsRunnerDispatcher<TDbContext>>();
@@ -27,19 +27,19 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static XactJobsQuickPollChannels CreateQuickPollChannels<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
+    private static QuickPollChannels CreateQuickPollChannels<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
     {
-        var qpc = new XactJobsQuickPollChannels();
+        var qpc = new QuickPollChannels();
 
         // 1k notifications kept so that another worker can quick poll (or the same worker in the next run),
         // if more than a batch of notifications are added to the channel.
         const int channelCapacity = 1_000; 
 
-        qpc.Channels.Add(QueueNames.Default, new XactJobsQuickPollChannel(channelCapacity));
+        qpc.Channels.Add(QueueNames.Default, new QuickPollChannel(channelCapacity));
 
         foreach (var (queueName, queueOptions) in options.IsolatedQueues)
         {
-            qpc.Channels.Add(queueName, new XactJobsQuickPollChannel(channelCapacity));
+            qpc.Channels.Add(queueName, new QuickPollChannel(channelCapacity));
         }
 
         return qpc;
