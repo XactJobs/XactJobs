@@ -1,7 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using XactJobs.SqlDialects;
+using XactJobs.Internal;
+using XactJobs.Internal.SqlDialects;
 
 namespace XactJobs.EntityConfigurations
 {

@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using XactJobs.Annotations;
 using XactJobs.Cron;
+using XactJobs.Internal;
 
 namespace XactJobs
 {
