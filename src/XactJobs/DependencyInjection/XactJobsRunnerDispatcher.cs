@@ -11,14 +11,16 @@ namespace XactJobs.DependencyInjection
         private readonly List<Task> _runnerTasks = [];
 
         private readonly XactJobsOptions<TDbContext> _options;
+        private readonly XactJobsQuickPollChannels _quickPollChannels;
         private readonly IServiceScopeFactory _scopeFactory;
 
         private readonly ILoggerFactory _loggerFactory;
         private readonly ILogger<XactJobsRunnerDispatcher<TDbContext>> _logger;
 
-        public XactJobsRunnerDispatcher(XactJobsOptions<TDbContext> options, IServiceScopeFactory scopeFactory, ILoggerFactory loggerFactory)
+        public XactJobsRunnerDispatcher(XactJobsOptions<TDbContext> options, XactJobsQuickPollChannels quickPollChannels, IServiceScopeFactory scopeFactory, ILoggerFactory loggerFactory)
         {
             _options = options;
+            _quickPollChannels = quickPollChannels;
             _scopeFactory = scopeFactory;
             _loggerFactory = loggerFactory;
             _logger = loggerFactory.CreateLogger<XactJobsRunnerDispatcher<TDbContext>>();
@@ -28,7 +30,7 @@ namespace XactJobs.DependencyInjection
         {
             for (var i = 0; i < _options.WorkerCount; i++)
             {
-                StartRunner(null, i, _options, stoppingToken);
+                StartRunner(QueueNames.Default, i, _options, stoppingToken);
             }
 
             foreach (var (queueName, queueOptions) in _options.IsolatedQueues)
@@ -44,15 +46,21 @@ namespace XactJobs.DependencyInjection
             _runnerTasks.Clear();
         }
 
-        private void StartRunner(string? queueName, int runnerIndex, XactJobsOptionsBase<TDbContext> options, CancellationToken stoppingToken)
+        private void StartRunner(string queueName, int runnerIndex, XactJobsOptionsBase<TDbContext> options, CancellationToken stoppingToken)
         {
             try
             {
-                _logger.LogInformation("Starting the runner for the {Queue} queue", queueName ?? "default");
+                if (!_quickPollChannels.Channels.TryGetValue(queueName, out var quickPollChannel))
+                {
+                    _logger.LogWarning("Could not find a QuickPoll channel for queue {Queue}", queueName);
+                    return;
+                }
+
+                _logger.LogInformation("Starting the runner for the {Queue} queue", queueName);
 
                 var runnerLogger = _loggerFactory.CreateLogger<XactJobRunner<TDbContext>>();
 
-                var runner = new XactJobRunner<TDbContext>(queueName, options, _scopeFactory, runnerLogger);
+                var runner = new XactJobRunner<TDbContext>(queueName, quickPollChannel, options, _scopeFactory, runnerLogger);
 
                 var initialDelayMs = GetDelayStepMs(options) * runnerIndex;
 

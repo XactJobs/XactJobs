@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Hosting;
+using System.Threading.Channels;
+
 using XactJobs;
 using XactJobs.DependencyInjection;
 
@@ -15,11 +16,27 @@ public static class ServiceCollectionExtensions
         configureOptions?.Invoke(optionsBuilder);
 
         services.AddSingleton(optionsBuilder.Options);
-        services.AddHostedService<XactJobsRunnerDispatcher<TDbContext>>();
+        services.AddSingleton(CreateQuickPollChannels(optionsBuilder.Options));
 
-        services.AddSingleton<IHostedService, XactJobsCronOptionsScheduler<TDbContext>>();
-        //services.AddSingleton<IHostedService, XactJobsCronOptionsScheduler<TDbContext>>();
+        services.AddScoped<XactJobsQuickPoll<TDbContext>>();
+
+        services.AddHostedService<XactJobsRunnerDispatcher<TDbContext>>();
+        services.AddHostedService<XactJobsCronOptionsScheduler<TDbContext>>();
 
         return services;
+    }
+
+    private static XactJobsQuickPollChannels CreateQuickPollChannels<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
+    {
+        var qpc = new XactJobsQuickPollChannels();
+
+        qpc.Channels.Add(QueueNames.Default, Channel.CreateBounded<bool>(options.BatchSize));
+
+        foreach (var (queueName, queueOptions) in options.IsolatedQueues)
+        {
+            qpc.Channels.Add(queueName, Channel.CreateBounded<bool>(queueOptions.BatchSize));
+        }
+
+        return qpc;
     }
 }

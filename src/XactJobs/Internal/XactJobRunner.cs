@@ -1,20 +1,23 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Threading.Channels;
 
 namespace XactJobs.Internal
 {
     internal sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
-        private readonly string? _queueName;
+        private readonly string _queueName;
+        private readonly Channel<bool> _quickPollChannel;
         private readonly Guid _leaser = Guid.NewGuid();
         private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(string? queueName, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(string queueName, Channel<bool> quickPollChannel, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
             _queueName = queueName;
+            _quickPollChannel = quickPollChannel;
             _options = options;
             _scopeFactory = scopeFactory;
             _logger = logger;
@@ -46,19 +49,11 @@ namespace XactJobs.Internal
 
                     if (delaySec > 0)
                     {
-                        // this following run time calculation is meant to keep
-                        // the run times consistent, in delaySec steps, so that multiple workers
-                        // do not start hitting the db at the same time
-
                         var now = DateTime.UtcNow;
-                        do
-                        {
-                            nextRunTime = nextRunTime.AddSeconds(delaySec);
-                        }
-                        while (nextRunTime <= now);
 
-                        await Task.Delay(nextRunTime.Subtract(now), stoppingToken)
-                            .ConfigureAwait(false);
+                        nextRunTime = AlignNextRun(nextRunTime, delaySec, now);
+
+                        await WaitForNextPoll(nextRunTime.Subtract(now), stoppingToken).ConfigureAwait(false);
                     }
 
                     lastRunJobCount = await RunJobsAsync(parallelOptions, stoppingToken)
@@ -86,6 +81,56 @@ namespace XactJobs.Internal
             {
                 _logger.LogError(ex, "{Queue}: Failed clearing leases for leaser '{Leaser}' during shutdown", GetQueueDisplayName(), _leaser);
             }
+        }
+
+        /// <summary>
+        /// This next run time calculation is meant to keep the run times consistent, in delaySec steps, 
+        /// so that multiple workers do not start hitting the Db at the same time.
+        /// </summary>
+        /// <param name="nextRunTime"></param>
+        /// <param name="delaySec"></param>
+        /// <param name="now"></param>
+        /// <returns></returns>
+        private static DateTime AlignNextRun(DateTime nextRunTime, int delaySec, DateTime now)
+        {
+            // if next run time is more than 200ms in the future, no need to do anything, just wait for the next poll
+            if (nextRunTime >= now.AddMilliseconds(200))
+            {
+                return nextRunTime;
+            }
+
+            do
+            {
+                nextRunTime = nextRunTime.AddSeconds(delaySec);
+            }
+            while (nextRunTime <= now);
+
+            return nextRunTime;
+        }
+
+        private async Task<bool> WaitForNextPoll(TimeSpan waitTime, CancellationToken stoppingToken)
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+            cts.CancelAfter(waitTime);
+
+            try
+            {
+                await _quickPollChannel.Reader.WaitToReadAsync(cts.Token)
+                    .ConfigureAwait(false);
+
+                // drain the channel, up to the batch size (we're about to poll)
+
+                var maxItems = _options.BatchSize;
+                while (maxItems-- > 0 && _quickPollChannel.Reader.TryRead(out _)) { }
+            }
+            catch (OperationCanceledException)
+            {
+                if (!cts.IsCancellationRequested) throw; // don't test cts.Token.IsCanellationRequested - we need to throw if stopping
+                // else: timeout hit, proceed to poll
+            }
+
+            return !cts.Token.IsCancellationRequested;
         }
 
         private async Task ClearLeases()
