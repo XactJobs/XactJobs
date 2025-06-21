@@ -24,13 +24,13 @@ namespace XactJobs.DependencyInjection
         {
             using var scope = ScopeFactory.CreateScope();
 
-            var db = scope.ServiceProvider.GetRequiredService<TDbContext>();
-
-            var dialect = db.Database.ProviderName.ToSqlDialect();
-
             IDbContextTransaction? tx = null; 
             try
             {
+                var db = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+                var dialect = db.Database.ProviderName.ToSqlDialect();
+
                 tx = db.Database.BeginTransaction();
 
                 await dialect.AcquireTableLockAsync(db, dialect.XactJobSchema, dialect.XactJobPeriodicTable, stoppingToken)
@@ -67,7 +67,14 @@ namespace XactJobs.DependencyInjection
             }
             finally
             {
-                tx?.Dispose();
+                try
+                {
+                    tx?.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to dispose transaction");
+                }
             }
         }
     }

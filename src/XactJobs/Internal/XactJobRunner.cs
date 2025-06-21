@@ -126,7 +126,9 @@ namespace XactJobs.Internal
             }
             catch (OperationCanceledException)
             {
-                if (!cts.IsCancellationRequested) throw; // don't test cts.Token.IsCanellationRequested - we need to throw if stopping
+                // we want to throw if the app is being stopped (caught outside)
+                if (stoppingToken.IsCancellationRequested) throw; 
+
                 // else: timeout hit, proceed to poll
             }
 

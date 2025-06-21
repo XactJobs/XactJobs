@@ -28,20 +28,30 @@ namespace XactJobs.DependencyInjection
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            for (var i = 0; i < _options.WorkerCount; i++)
+            try
             {
-                StartRunner(QueueNames.Default, i, _options, stoppingToken);
-            }
-
-            foreach (var (queueName, queueOptions) in _options.IsolatedQueues)
-            {
-                for (var i = 0; i < queueOptions.WorkerCount; i++)
+                for (var i = 0; i < _options.WorkerCount; i++)
                 {
-                    StartRunner(queueName, i, queueOptions, stoppingToken);
+                    StartRunner(QueueNames.Default, i, _options, stoppingToken);
+                }
+
+                foreach (var (queueName, queueOptions) in _options.IsolatedQueues)
+                {
+                    for (var i = 0; i < queueOptions.WorkerCount; i++)
+                    {
+                        StartRunner(queueName, i, queueOptions, stoppingToken);
+                    }
+                }
+
+                await Task.WhenAll(_runnerTasks);
+            }
+            catch (Exception ex)
+            {
+                if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogError(ex, "Error executing job workers");
                 }
             }
-
-            await Task.WhenAll(_runnerTasks);
 
             _runnerTasks.Clear();
         }
