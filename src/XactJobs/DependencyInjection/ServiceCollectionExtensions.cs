@@ -30,11 +30,11 @@ public static class ServiceCollectionExtensions
     {
         var qpc = new XactJobsQuickPollChannels();
 
-        qpc.Channels.Add(QueueNames.Default, Channel.CreateBounded<bool>(options.BatchSize));
+        qpc.Channels.Add(QueueNames.Default, new XactJobsQuickPollChannel(options.BatchSize));
 
         foreach (var (queueName, queueOptions) in options.IsolatedQueues)
         {
-            qpc.Channels.Add(queueName, Channel.CreateBounded<bool>(queueOptions.BatchSize));
+            qpc.Channels.Add(queueName, new XactJobsQuickPollChannel(queueOptions.BatchSize));
         }
 
         return qpc;

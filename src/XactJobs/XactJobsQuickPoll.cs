@@ -3,14 +3,58 @@ using System.Threading.Channels;
 
 namespace XactJobs
 {
+    public class XactJobsQuickPollChannel
+    {
+        private readonly int _batchSize;
+        private readonly SemaphoreSlim _batchLock = new(1, 1);
+        private readonly Channel<bool> _notificationChannel;
+
+        public XactJobsQuickPollChannel(int batchSize)
+        {
+            _notificationChannel = Channel.CreateBounded<bool>(batchSize);
+            _batchSize = batchSize;
+        }
+
+        internal void Notify()
+        {
+            _notificationChannel.Writer.TryWrite(true);
+        }
+
+        internal ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken)
+        {
+            return _notificationChannel.Reader.WaitToReadAsync(cancellationToken);
+        }
+
+        internal async Task<int> ConsumeBatchAsync(CancellationToken cancellationToken)
+        {
+            int consumedCount = 0;
+
+            try
+            {
+                await _batchLock.WaitAsync(cancellationToken);
+
+                while (consumedCount < _batchSize && _notificationChannel.Reader.TryRead(out _))
+                {
+                    consumedCount++;
+                }
+            }
+            finally
+            {
+                _batchLock.Release();
+            }
+
+            return consumedCount;
+        }
+    }
+
     public class XactJobsQuickPollChannels
     {
-        public Dictionary<string, Channel<bool>> Channels = [];
+        public Dictionary<string, XactJobsQuickPollChannel> Channels = [];
     }
 
     public class XactJobsQuickPoll<TDbContext> where TDbContext : DbContext
     {
-        private readonly IReadOnlyDictionary<string, Channel<bool>> _channels;
+        private readonly IReadOnlyDictionary<string, XactJobsQuickPollChannel> _channels;
 
         public TDbContext DbContext { get; }
 
@@ -42,14 +86,14 @@ namespace XactJobs
         {
             if (_channels.TryGetValue(queueName ?? QueueNames.Default, out var channel))
             {
-                channel.Writer.TryWrite(true);
+                channel.Notify();
             }
 
             foreach (var additionalQueue in additionalQueueNames)
             {
                 if (_channels.TryGetValue(additionalQueue, out var additionalChannel))
                 {
-                    additionalChannel.Writer.TryWrite(true);
+                    additionalChannel.Notify();
                 }
             }
         }

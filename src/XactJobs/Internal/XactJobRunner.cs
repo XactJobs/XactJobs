@@ -1,20 +1,19 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using System.Threading.Channels;
 
 namespace XactJobs.Internal
 {
     internal sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
         private readonly string _queueName;
-        private readonly Channel<bool> _quickPollChannel;
+        private readonly XactJobsQuickPollChannel _quickPollChannel;
         private readonly Guid _leaser = Guid.NewGuid();
         private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(string queueName, Channel<bool> quickPollChannel, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
+        public XactJobRunner(string queueName, XactJobsQuickPollChannel quickPollChannel, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
         {
             _queueName = queueName;
             _quickPollChannel = quickPollChannel;
@@ -53,7 +52,10 @@ namespace XactJobs.Internal
 
                         nextRunTime = AlignNextRun(nextRunTime, delaySec, now);
 
-                        await WaitForNextPoll(nextRunTime.Subtract(now), stoppingToken).ConfigureAwait(false);
+                        var shouldPoll = await WaitForNextPoll(nextRunTime.Subtract(now), stoppingToken)
+                            .ConfigureAwait(false);
+
+                        if (!shouldPoll) continue;
                     }
 
                     lastRunJobCount = await RunJobsAsync(parallelOptions, stoppingToken)
@@ -110,29 +112,36 @@ namespace XactJobs.Internal
 
         private async Task<bool> WaitForNextPoll(TimeSpan waitTime, CancellationToken stoppingToken)
         {
+            int consumedCount = 0;
+
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
             cts.CancelAfter(waitTime);
 
             try
             {
-                await _quickPollChannel.Reader.WaitToReadAsync(cts.Token)
+                var hasNotifications = await _quickPollChannel.WaitToReadAsync(cts.Token)
                     .ConfigureAwait(false);
 
-                // drain the channel, up to the batch size (we're about to poll)
-
-                var maxItems = _options.BatchSize;
-                while (maxItems-- > 0 && _quickPollChannel.Reader.TryRead(out _)) { }
+                if (hasNotifications)
+                {
+                    // drain the channel, up to the batch size (we're about to poll)
+                    consumedCount = await _quickPollChannel.ConsumeBatchAsync(stoppingToken)
+                        .ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException)
             {
                 // we want to throw if the app is being stopped (caught outside)
-                if (stoppingToken.IsCancellationRequested) throw; 
+                if (stoppingToken.IsCancellationRequested) throw;
 
                 // else: timeout hit, proceed to poll
             }
 
-            return !cts.Token.IsCancellationRequested;
+            // if we waited the entire waitTime or we consumed some notifications, it's ok to poll now
+            bool shouldPollNow = cts.IsCancellationRequested || consumedCount > 0;
+
+            return shouldPollNow;
         }
 
         private async Task ClearLeases()
