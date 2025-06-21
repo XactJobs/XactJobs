@@ -12,7 +12,7 @@ namespace XactJobs
 
         string XactJobSchema { get; }
         string XactJobTable { get; }
-        string XactJobArchiveTable { get; }
+        string XactJobHistoryTable { get; }
         string XactJobPeriodicTable { get; }
 
         string ColId { get; }

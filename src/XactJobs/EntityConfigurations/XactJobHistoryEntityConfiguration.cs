@@ -3,31 +3,31 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace XactJobs.EntityConfigurations
 {
-    public class XactJobArchiveEntityConfiguration : IEntityTypeConfiguration<XactJobArchive>
+    public class XactJobHistoryEntityConfiguration : IEntityTypeConfiguration<XactJobHistory>
     {
         private readonly ISqlDialect _sqlDialect;
         private readonly bool _excludeFromMigrations;
 
-        public XactJobArchiveEntityConfiguration(string? providerName, bool excludeFromMigrations = true)
+        public XactJobHistoryEntityConfiguration(string? providerName, bool excludeFromMigrations = true)
         {
             _sqlDialect = providerName.ToSqlDialect();
             _excludeFromMigrations = excludeFromMigrations;
         }
 
-        public void Configure(EntityTypeBuilder<XactJobArchive> builder)
+        public void Configure(EntityTypeBuilder<XactJobHistory> builder)
         {
             builder.Metadata.SetIsTableExcludedFromMigrations(_excludeFromMigrations);
 
             if (_sqlDialect.HasSchemaSupport)
             {
-                builder.ToTable(_sqlDialect.XactJobArchiveTable, _sqlDialect.XactJobSchema);
+                builder.ToTable(_sqlDialect.XactJobHistoryTable, _sqlDialect.XactJobSchema);
             }
             else
             {
-                builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobArchiveTable}");
+                builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobHistoryTable}");
             }
 
-            builder.HasKey(x => x.Id).HasName($"pk_{_sqlDialect.XactJobArchiveTable}");
+            builder.HasKey(x => x.Id).HasName($"pk_{_sqlDialect.XactJobHistoryTable}");
 
             builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
 
@@ -55,7 +55,7 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.PeriodicJobName).HasColumnName(_sqlDialect.ColPeriodicJobName);
 
             builder.HasIndex(x => x.CompletedAt)
-                .HasDatabaseName($"ix_{_sqlDialect.XactJobArchiveTable}_{_sqlDialect.ColCompletedAt}");
+                .HasDatabaseName($"ix_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColCompletedAt}");
         }
     }
 }

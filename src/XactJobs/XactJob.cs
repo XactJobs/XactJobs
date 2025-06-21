@@ -152,14 +152,14 @@
         }
     }
 
-    public class XactJobArchive: XactJobBase
+    public class XactJobHistory: XactJobBase
     {
         public DateTime CompletedAt { get; private set; }
 
         public string? PeriodicJobName { get; private set; }
         public string? CronExpression { get; private set; }
 
-        public XactJobArchive(Guid id,
+        public XactJobHistory(Guid id,
                               DateTime scheduledAt,
                               XactJobStatus status,
                               DateTime completedAt,
@@ -192,9 +192,9 @@
             CronExpression = cronExpression;
         }
 
-        public static XactJobArchive CreateFromJob(XactJob job, XactJobPeriodic? periodicJob, DateTime completedAt)
+        public static XactJobHistory CreateFromJob(XactJob job, XactJobPeriodic? periodicJob, DateTime completedAt)
         {
-            return new XactJobArchive(job.Id,
+            return new XactJobHistory(job.Id,
                                       job.ScheduledAt,
                                       job.Status,
                                       completedAt,

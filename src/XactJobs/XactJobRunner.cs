@@ -259,7 +259,7 @@ namespace XactJobs
 
         private static void ArchiveJob(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {
-            dbContext.Set<XactJobArchive>().Add(XactJobArchive.CreateFromJob(job, periodicJob, DateTime.UtcNow));
+            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, periodicJob, DateTime.UtcNow));
             dbContext.Set<XactJob>().Remove(job);
 
             if (periodicJob != null && dbContext.Entry(periodicJob).State != EntityState.Deleted)

@@ -9,7 +9,7 @@ namespace XactJobs.SqlDialects
 
         public string XactJobSchema { get; } = "XactJobs";
         public string XactJobTable { get; } = "Job";
-        public string XactJobArchiveTable { get; } = "JobArchive";
+        public string XactJobHistoryTable { get; } = "JobHistory";
         public string XactJobPeriodicTable { get; } = "JobPeriodic";
 
         public string ColId { get; } = "Id";
