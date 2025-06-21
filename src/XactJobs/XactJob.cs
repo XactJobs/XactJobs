@@ -2,11 +2,11 @@
 {
     public class XactJob: XactJobBase
     {
-        public DateTime? LeasedUntil { get; private set; }
-        public Guid? Leaser { get; set; }
+        public DateTime? LeasedUntil { get; init; }
+        public Guid? Leaser { get; init; }
 
         // needed for the FK
-        public XactJobPeriodic? PeriodicJob { get; private set; }
+        public XactJobPeriodic? PeriodicJob { get; init; }
 
         public XactJob(long id,
                        DateTime scheduledAt,

@@ -2,11 +2,11 @@
 {
     public class XactJobHistory: XactJobBase
     {
-        public DateTime ProcessedAt { get; private set; }
-        public XactJobStatus Status { get; private set; }
+        public DateTime ProcessedAt { get; init; }
+        public XactJobStatus Status { get; init; }
 
-        public string? ErrorMessage { get; protected set; }
-        public string? ErrorStackTrace { get; protected set; }
+        public string? ErrorMessage { get; init; }
+        public string? ErrorStackTrace { get; init; }
 
         public XactJobHistory(long id,
                               DateTime processedAt,

@@ -2,34 +2,34 @@
 {
     public class XactJobBase
     {
-        public long Id { get; private set; }
+        public long Id { get; init; }
 
         /// <summary>
         /// When should the job be executed
         /// </summary>
-        public DateTime ScheduledAt { get; private set; }
+        public DateTime ScheduledAt { get; init; }
 
         /// <summary>
         /// Assembly qualified name of the declaring type
         /// </summary>
-        public string TypeName { get; private set; }
+        public string TypeName { get; init; }
 
         /// <summary>
         /// Method name to be called
         /// </summary>
-        public string MethodName { get; private set; }
+        public string MethodName { get; init; }
 
         /// <summary>
         /// Arguments to be passed to the method
         /// </summary>
-        public string MethodArgs { get; private set; }
+        public string MethodArgs { get; init; }
 
-        public string Queue { get; private set; }
+        public string Queue { get; init; }
 
-        public string? PeriodicJobId { get; private set; }
-        public string? CronExpression { get; private set; }
+        public string? PeriodicJobId { get; init; }
+        public string? CronExpression { get; init; }
 
-        public int ErrorCount { get; private set; }
+        public int ErrorCount { get; init; }
 
         public XactJobBase(long id,
                            DateTime scheduledAt,
