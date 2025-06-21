@@ -5,9 +5,6 @@
         public DateTime? LeasedUntil { get; init; }
         public Guid? Leaser { get; init; }
 
-        // needed for the FK
-        public XactJobPeriodic? PeriodicJob { get; init; }
-
         public XactJob(long id,
                        DateTime scheduledAt,
                        string typeName,
