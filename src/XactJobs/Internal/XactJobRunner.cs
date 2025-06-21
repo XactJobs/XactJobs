@@ -126,7 +126,7 @@ namespace XactJobs.Internal
                 if (hasNotifications)
                 {
                     // drain the channel, up to the batch size (we're about to poll)
-                    consumedCount = await _quickPollChannel.ConsumeBatchAsync(stoppingToken)
+                    consumedCount = await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
                         .ConfigureAwait(false);
                 }
             }

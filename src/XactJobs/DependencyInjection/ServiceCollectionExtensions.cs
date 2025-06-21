@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System.Threading.Channels;
 
 using XactJobs;
 using XactJobs.DependencyInjection;
@@ -30,11 +29,15 @@ public static class ServiceCollectionExtensions
     {
         var qpc = new XactJobsQuickPollChannels();
 
-        qpc.Channels.Add(QueueNames.Default, new XactJobsQuickPollChannel(options.BatchSize));
+        // 1k notifications kept so that another worker can quick poll (or the same worker in the next run),
+        // if more than a batch of notifications are added to the channel.
+        const int channelCapacity = 1_000; 
+
+        qpc.Channels.Add(QueueNames.Default, new XactJobsQuickPollChannel(channelCapacity));
 
         foreach (var (queueName, queueOptions) in options.IsolatedQueues)
         {
-            qpc.Channels.Add(queueName, new XactJobsQuickPollChannel(queueOptions.BatchSize));
+            qpc.Channels.Add(queueName, new XactJobsQuickPollChannel(channelCapacity));
         }
 
         return qpc;

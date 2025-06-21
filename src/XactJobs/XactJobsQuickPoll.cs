@@ -5,14 +5,15 @@ namespace XactJobs
 {
     public class XactJobsQuickPollChannel
     {
-        private readonly int _batchSize;
         private readonly SemaphoreSlim _batchLock = new(1, 1);
         private readonly Channel<bool> _notificationChannel;
 
-        public XactJobsQuickPollChannel(int batchSize)
+        public XactJobsQuickPollChannel(int capacity)
         {
-            _notificationChannel = Channel.CreateBounded<bool>(batchSize);
-            _batchSize = batchSize;
+            _notificationChannel = Channel.CreateBounded<bool>(new BoundedChannelOptions(capacity) 
+            { 
+                FullMode = BoundedChannelFullMode.DropOldest 
+            });
         }
 
         internal void Notify()
@@ -25,7 +26,7 @@ namespace XactJobs
             return _notificationChannel.Reader.WaitToReadAsync(cancellationToken);
         }
 
-        internal async Task<int> ConsumeBatchAsync(CancellationToken cancellationToken)
+        internal async Task<int> ConsumeBatchAsync(int batchSize, CancellationToken cancellationToken)
         {
             int consumedCount = 0;
 
@@ -33,7 +34,7 @@ namespace XactJobs
             {
                 await _batchLock.WaitAsync(cancellationToken);
 
-                while (consumedCount < _batchSize && _notificationChannel.Reader.TryRead(out _))
+                while (consumedCount < batchSize && _notificationChannel.Reader.TryRead(out _))
                 {
                     consumedCount++;
                 }
