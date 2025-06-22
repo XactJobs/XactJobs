@@ -1,16 +1,16 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 
-namespace XactJobs.Internal.ExpressionUtil
+#nullable disable
+
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // Serves as the base class for all expression fingerprints. Provides a default implementation
     // of GetHashCode().
 
-    [ExcludeFromCodeCoverage]
     internal abstract class ExpressionFingerprint
     {
         protected ExpressionFingerprint(ExpressionType nodeType, Type type)
@@ -20,10 +20,10 @@ namespace XactJobs.Internal.ExpressionUtil
         }
 
         // the type of expression node, e.g. OP_ADD, MEMBER_ACCESS, etc.
-        public ExpressionType NodeType { get; }
+        public ExpressionType NodeType { get; private set; }
 
         // the CLR type resulting from this expression, e.g. int, string, etc.
-        public Type Type { get; }
+        public Type Type { get; private set; }
 
         internal virtual void AddToHashCodeCombiner(HashCodeCombiner combiner)
         {
@@ -33,9 +33,9 @@ namespace XactJobs.Internal.ExpressionUtil
 
         protected bool Equals(ExpressionFingerprint other)
         {
-            return other != null
-                   && NodeType == other.NodeType
-                   && Type == other.Type;
+            return (other != null)
+                   && (this.NodeType == other.NodeType)
+                   && Equals(this.Type, other.Type);
         }
 
         public override bool Equals(object obj)

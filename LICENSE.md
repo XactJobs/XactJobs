@@ -1,6 +1,3 @@
-# XactJobs
-Transactional background jobs scheduler and runner
-
 # License
 
 **XactJobs** is licensed under the  

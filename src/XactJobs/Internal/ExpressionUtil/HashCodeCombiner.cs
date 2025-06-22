@@ -1,18 +1,19 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections;
-using System.Diagnostics.CodeAnalysis;
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // based on System.Web.Util.HashCodeCombiner
-    [ExcludeFromCodeCoverage]
-    internal sealed class HashCodeCombiner
+    internal class HashCodeCombiner
     {
         private long _combinedHash64 = 0x1505L;
 
-        public int CombinedHash => _combinedHash64.GetHashCode();
+        public int CombinedHash
+        {
+            get { return _combinedHash64.GetHashCode(); }
+        }
 
         public void AddFingerprint(ExpressionFingerprint fingerprint)
         {
@@ -46,12 +47,12 @@ namespace XactJobs.Internal.ExpressionUtil
 
         public void AddInt32(int i)
         {
-            _combinedHash64 = (_combinedHash64 << 5) + _combinedHash64 ^ i;
+            _combinedHash64 = ((_combinedHash64 << 5) + _combinedHash64) ^ i;
         }
 
         public void AddObject(object o)
         {
-            int hashCode = o?.GetHashCode() ?? 0;
+            int hashCode = (o != null) ? o.GetHashCode() : 0;
             AddInt32(hashCode);
         }
     }

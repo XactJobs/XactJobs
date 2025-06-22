@@ -1,20 +1,19 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 
+#nullable disable
 #pragma warning disable 659 // overrides AddToHashCodeCombiner instead
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // LambdaExpression fingerprint class
     // Represents a lambda expression (root element in Expression<T>)
 
     [SuppressMessage("Microsoft.Usage", "CA2218:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [SuppressMessage("SonarLint", "S1206:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [ExcludeFromCodeCoverage]
     internal sealed class LambdaExpressionFingerprint : ExpressionFingerprint
     {
         public LambdaExpressionFingerprint(ExpressionType nodeType, Type type)
@@ -27,8 +26,8 @@ namespace XactJobs.Internal.ExpressionUtil
         public override bool Equals(object obj)
         {
             LambdaExpressionFingerprint other = obj as LambdaExpressionFingerprint;
-            return other != null
-                   && Equals(other);
+            return (other != null)
+                   && this.Equals(other);
         }
     }
 }

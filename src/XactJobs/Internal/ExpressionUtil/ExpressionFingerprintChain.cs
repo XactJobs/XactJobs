@@ -1,13 +1,12 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 
-// ReSharper disable All
+#nullable disable
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // Expression fingerprint chain class
     // Contains information used for generalizing, comparing, and recreating Expression instances
@@ -47,7 +46,6 @@ namespace XactJobs.Internal.ExpressionUtil
     // used to generate them, as the fingerprints will be cached, and caching a fingerprint that references
     // an Expression will root the Expression (and any objects it references).
 
-    [ExcludeFromCodeCoverage]
     internal sealed class ExpressionFingerprintChain : IEquatable<ExpressionFingerprintChain>
     {
         public readonly List<ExpressionFingerprint> Elements = new List<ExpressionFingerprint>();
@@ -57,14 +55,19 @@ namespace XactJobs.Internal.ExpressionUtil
             // Two chains are considered equal if two elements appearing in the same index in
             // each chain are equal (value equality, not referential equality).
 
-            if (Elements.Count != other?.Elements.Count)
+            if (other == null)
             {
                 return false;
             }
 
-            for (int i = 0; i < Elements.Count; i++)
+            if (this.Elements.Count != other.Elements.Count)
             {
-                if (!Equals(Elements[i], other.Elements[i]))
+                return false;
+            }
+
+            for (int i = 0; i < this.Elements.Count; i++)
+            {
+                if (!Equals(this.Elements[i], other.Elements[i]))
                 {
                     return false;
                 }

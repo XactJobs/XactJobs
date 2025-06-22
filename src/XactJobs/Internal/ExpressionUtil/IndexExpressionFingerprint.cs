@@ -1,21 +1,20 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 
+#nullable disable
 #pragma warning disable 659 // overrides AddToHashCodeCombiner instead
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // IndexExpression fingerprint class
     // Represents certain forms of array access or indexer property access
 
     [SuppressMessage("Microsoft.Usage", "CA2218:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [SuppressMessage("SonarLint", "S1206:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [ExcludeFromCodeCoverage]
     internal sealed class IndexExpressionFingerprint : ExpressionFingerprint
     {
         public IndexExpressionFingerprint(ExpressionType nodeType, Type type, PropertyInfo indexer)
@@ -28,14 +27,14 @@ namespace XactJobs.Internal.ExpressionUtil
         }
 
         // http://msdn.microsoft.com/en-us/library/system.linq.expressions.indexexpression.indexer.aspx
-        public PropertyInfo Indexer { get; }
+        public PropertyInfo Indexer { get; private set; }
 
         public override bool Equals(object obj)
         {
             IndexExpressionFingerprint other = obj as IndexExpressionFingerprint;
-            return other != null
-                   && Equals(Indexer, other.Indexer)
-                   && Equals(other);
+            return (other != null)
+                   && Equals(this.Indexer, other.Indexer)
+                   && this.Equals(other);
         }
 
         internal override void AddToHashCodeCombiner(HashCodeCombiner combiner)

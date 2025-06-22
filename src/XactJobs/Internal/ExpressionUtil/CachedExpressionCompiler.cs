@@ -1,18 +1,16 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 
-// ReSharper disable All
+#nullable disable
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
-    [ExcludeFromCodeCoverage]
     internal static class CachedExpressionCompiler
     {
         // This is the entry point to the cached expression compilation system. The system
@@ -68,7 +66,12 @@ namespace XactJobs.Internal.ExpressionUtil
                     // model => model
 
                     // don't need to lock, as all identity funcs are identical
-                    return _identityFunc ?? (_identityFunc = expr.Compile());
+                    if (_identityFunc == null)
+                    {
+                        _identityFunc = expr.Compile();
+                    }
+
+                    return _identityFunc;
                 }
 
                 return null;

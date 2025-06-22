@@ -1,13 +1,14 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 
+#nullable disable
 #pragma warning disable 659 // overrides AddToHashCodeCombiner instead
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // ConstantExpression fingerprint class
     //
@@ -17,8 +18,6 @@ namespace XactJobs.Internal.ExpressionUtil
     // be compiled and cached, and the array lookup happens at runtime.
 
     [SuppressMessage("Microsoft.Usage", "CA2218:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [SuppressMessage("SonarLint", "S1206:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [ExcludeFromCodeCoverage]
     internal sealed class ConstantExpressionFingerprint : ExpressionFingerprint
     {
         public ConstantExpressionFingerprint(ExpressionType nodeType, Type type)
@@ -31,8 +30,8 @@ namespace XactJobs.Internal.ExpressionUtil
         public override bool Equals(object obj)
         {
             ConstantExpressionFingerprint other = obj as ConstantExpressionFingerprint;
-            return other != null
-                   && Equals(other);
+            return (other != null)
+                   && this.Equals(other);
         }
     }
 }

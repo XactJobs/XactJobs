@@ -1,21 +1,20 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 
+#nullable disable
 #pragma warning disable 659 // overrides AddToHashCodeCombiner instead
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // MemberExpression fingerprint class
     // Expression of form xxx.FieldOrProperty
 
     [SuppressMessage("Microsoft.Usage", "CA2218:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [SuppressMessage("SonarLint", "S1206:OverrideGetHashCodeOnOverridingEquals", Justification = "Overrides AddToHashCodeCombiner() instead.")]
-    [ExcludeFromCodeCoverage]
     internal sealed class MemberExpressionFingerprint : ExpressionFingerprint
     {
         public MemberExpressionFingerprint(ExpressionType nodeType, Type type, MemberInfo member)
@@ -25,14 +24,14 @@ namespace XactJobs.Internal.ExpressionUtil
         }
 
         // http://msdn.microsoft.com/en-us/library/system.linq.expressions.memberexpression.member.aspx
-        public MemberInfo Member { get; }
+        public MemberInfo Member { get; private set; }
 
         public override bool Equals(object obj)
         {
             MemberExpressionFingerprint other = obj as MemberExpressionFingerprint;
-            return other != null
-                   && Equals(Member, other.Member)
-                   && Equals(other);
+            return (other != null)
+                   && Equals(this.Member, other.Member)
+                   && this.Equals(other);
         }
 
         internal override void AddToHashCodeCombiner(HashCodeCombiner combiner)

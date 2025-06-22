@@ -1,16 +1,16 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 
-namespace XactJobs.Internal.ExpressionUtil
+#nullable disable
+
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
     // This is a visitor which produces a fingerprint of an expression. It doesn't
     // rewrite the expression in a form which can be compiled and cached.
 
-    [ExcludeFromCodeCoverage]
     internal sealed class FingerprintingExpressionVisitor : ExpressionVisitor
     {
         private readonly List<object> _seenConstants = new List<object>();
@@ -119,12 +119,10 @@ namespace XactJobs.Internal.ExpressionUtil
             return base.VisitDefault(node);
         }
 
-#if !NETSTANDARD1_3
         protected override Expression VisitDynamic(DynamicExpression node)
         {
             return GiveUp(node);
         }
-#endif
 
         protected override ElementInit VisitElementInit(ElementInit node)
         {

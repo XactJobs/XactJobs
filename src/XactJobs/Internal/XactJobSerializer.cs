@@ -1,4 +1,23 @@
-﻿using System.Collections.Concurrent;
+﻿// This file is part of XactJobs.
+//
+// Portions of this file include code adapted from Hangfire, Copyright © 2013-2014 Hangfire OÜ.
+// Licensed under the GNU Lesser General Public License v3.0 or later.
+// See <http://www.gnu.org/licenses/>.
+//
+// XactJobs is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published
+// by the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// XactJobs is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -109,6 +128,9 @@ namespace XactJobs.Internal
             return new XactJobDispatchKey(typeName, methodName, paramCount);
         }
 
+        // The following method is adapted from Hangfire, Copyright © 2013-2014 Hangfire OÜ.
+        // Licensed under the GNU Lesser General Public License v3.0 or later.
+        // See <http://www.gnu.org/licenses/>.
         private static void Validate(MethodCallExpression callExpression)
         {
             var method = callExpression.Method;
@@ -174,6 +196,9 @@ namespace XactJobs.Internal
             }
         }
 
+        // The following method is adapted from Hangfire, Copyright © 2013-2014 Hangfire OÜ.
+        // Licensed under the GNU Lesser General Public License v3.0 or later.
+        // See <http://www.gnu.org/licenses/>.
         private static object?[] GetExpressionValues(IReadOnlyCollection<Expression> expressions)
         {
             var result = expressions.Count > 0 ? new object?[expressions.Count] : [];
@@ -187,11 +212,15 @@ namespace XactJobs.Internal
             return result;
         }
 
+
+        // The following method is adapted from Hangfire, Copyright © 2013-2014 Hangfire OÜ.
+        // Licensed under the GNU Lesser General Public License v3.0 or later.
+        // See <http://www.gnu.org/licenses/>.
         private static object? GetExpressionValue(Expression expression)
         {
             var value = expression is ConstantExpression constantExpression
                 ? constantExpression.Value
-                : CachedExpressionCompiler.Evaluate(expression);
+                : Microsoft.Web.Mvc.CachedExpressionCompiler.Evaluate(expression);
 
             return value?.GetType() == typeof(CancellationToken) 
                 ? null 

@@ -1,12 +1,9 @@
-﻿// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
-#nullable disable
-
-
-// Copyright (c) Microsoft Open Technologies, Inc. All rights reserved. See License.txt in the project root for license information.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System.Collections.Generic;
 
-namespace XactJobs.Internal.ExpressionUtil
+namespace Microsoft.Web.Mvc.ExpressionUtil
 {
-    internal delegate TValue Hoisted<in TModel, out TValue>(TModel model, List<object> capturedConstants);
+    internal delegate TValue Hoisted<TModel, TValue>(TModel model, List<object> capturedConstants);
 }
