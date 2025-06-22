@@ -16,7 +16,7 @@ namespace XactJobs.TestWorker
                 //options.UseOracle(builder.Configuration.GetConnectionString("OracleConnectionString"));
             });
 
-            builder.Services.AddXactJobs((Action<XactJobsOptionsBuilder<UserDbContext>>?)(options =>
+            builder.Services.AddXactJobs<UserDbContext>(options =>
             {
                 options.WithPriorityQueue();
                 options.WithLongRunningQueue();
@@ -25,7 +25,7 @@ namespace XactJobs.TestWorker
                     x => x.RunTestJobAsync(10, "test_1", new TestJob.TestPayload { PayloadId = 9, PayloadData = "Nine" }, CancellationToken.None),
                     "test_1",
                     Cron.SecondInterval(10));
-            }));
+            });
 
             builder.Services.AddTransient<TestJob>();
 
@@ -36,7 +36,7 @@ namespace XactJobs.TestWorker
             {
                 var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
 
-                //db.Database.EnsureDeleted();
+                db.Database.EnsureDeleted();
                 db.Database.EnsureCreated();
             }
 

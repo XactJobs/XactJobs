@@ -58,7 +58,9 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.TypeName).HasColumnName(_sqlDialect.ColTypeName);
             builder.Property(x => x.MethodName).HasColumnName(_sqlDialect.ColMethodName);
             builder.Property(x => x.MethodArgs).HasColumnName(_sqlDialect.ColMethodArgs);
-            builder.Property(x => x.Queue).HasColumnName(_sqlDialect.ColQueue);
+
+            builder.Property(x => x.Queue).HasColumnName(_sqlDialect.ColQueue)
+                .HasMaxLength(50); // to limit the max clustered index size
 
             builder.Property(x => x.PeriodicJobId).HasColumnName(_sqlDialect.ColPeriodicJobId);
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
