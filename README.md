@@ -142,8 +142,8 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 ```
 
 Finally create the XactJobs tables in your database using the SQL scripts below:
-- Sql Server
-- PostgreSQL
+- [Sql Server](sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql)
+- [PostgreSQL](sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql)
 - MySQL
 - Oracle
 
