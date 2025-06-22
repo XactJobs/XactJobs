@@ -41,50 +41,131 @@ namespace XactJobs
             _quickPollChannels = quickPollChannels;
         }
 
+        /// <summary>
+        /// Enqueues a background job and registers it for QuickPoll notification on SaveChanges or Commit
+        /// </summary>
+        /// <param name="jobExpression"></param>
+        /// <param name="queue"></param>
+        /// <returns></returns>
         public XactJob JobEnqueue([InstantHandle] Expression<Action> jobExpression, string? queue = null)
         {
             return JobAdd(jobExpression, queue);
         }
 
+        /// <summary>
+        /// Enqueues a background job and registers it for QuickPoll notification on SaveChanges or Commit
+        /// </summary>
+        /// <param name="jobExpression"></param>
+        /// <param name="queue"></param>
+        /// <returns></returns>
         public XactJob JobEnqueue<T>([InstantHandle] Expression<Action<T>> jobExpression, string? queue = null)
         {
             return JobAdd(jobExpression, queue);
         }
 
+        /// <summary>
+        /// Enqueues a background job and registers it for QuickPoll notification on SaveChanges or Commit
+        /// </summary>
+        /// <param name="jobExpression"></param>
+        /// <param name="queue"></param>
+        /// <returns></returns>
         public XactJob JobEnqueue( [InstantHandle] Expression<Func<Task>> jobExpression, string? queue = null)
         {
             return JobAdd(jobExpression, queue);
         }
 
+        /// <summary>
+        /// Enqueues a background job and registers it for QuickPoll notification on SaveChanges or Commit
+        /// </summary>
+        /// <param name="jobExpression"></param>
+        /// <param name="queue"></param>
+        /// <returns></returns>
         public XactJob JobEnqueue<T>([InstantHandle] Expression<Func<T, Task>> jobExpression, string? queue = null)
         {
             return JobAdd(jobExpression, queue);
         }
 
+        /// <summary>
+        /// Calls DbContext.SaveChangesAsync and notifies job workers to perform a quick poll for the affected queues.
+        /// This will work only if jobs were added with <see cref="QuickPoll.JobEnqueue"/>.
+        /// If there is a current transaction, the notification will not be performed until <see cref="QuickPoll.CommitAndNotifyAsync"/> is called.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task SaveChangesAndNotifyAsync(CancellationToken cancellationToken)
         {
             await DbContext.SaveChangesAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            Notify();
+            // only notify if not in transaction (CommitAndNotifyAsync should be used to notify when in transaction)
+            if (DbContext.Database.CurrentTransaction == null)
+            {
+                Notify();
+            }
         }
 
+        /// <summary>
+        /// Calls DbContext.SaveChanges and notifies job workers to perform a quick poll for the affected queues.
+        /// This will work only if jobs were added with <see cref="QuickPoll.JobEnqueue"/>.
+        /// If there is a current transaction, the notification will not be performed until <see cref="QuickPoll.CommitAndNotifyAsync"/> is called.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public void SaveChangesAndNotify()
+        {
+            DbContext.SaveChanges();
+
+            // only notify if not in transaction (CommitAndNotifyAsync should be used to notify when in transaction)
+            if (DbContext.Database.CurrentTransaction == null)
+            {
+                Notify();
+            }
+        }
+
+        /// <summary>
+        /// Calls DbContext.Database.CurrentTransaction.CommitAsync and notifies job workers to perform a quick poll for the affected queues.
+        /// This will work only if jobs were added with <see cref="QuickPoll.JobEnqueue"/>.
+        /// If there is no current transaction, then only notification is performed.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
         public async Task CommitAndNotifyAsync(CancellationToken cancellationToken)
         {
-            if (DbContext.Database.CurrentTransaction == null) throw new Exception($"Cannot commit - current transaction in DbContext is null");
-
-            await DbContext.Database.CurrentTransaction.CommitAsync(cancellationToken)
-                .ConfigureAwait(false);
+            if (DbContext.Database.CurrentTransaction != null)
+            {
+                await DbContext.Database.CurrentTransaction.CommitAsync(cancellationToken)
+                    .ConfigureAwait(false);
+            }
 
             Notify();
         }
 
+        /// <summary>
+        /// Calls DbContext.Database.CurrentTransaction.Commit and notifies job workers to perform a quick poll for the affected queues.
+        /// This will work only if jobs were added with <see cref="QuickPoll.JobEnqueue"/>.
+        /// If there is no current transaction, then only notification is performed.
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        /// <returns></returns>
+        public void CommitAndNotify()
+        {
+            DbContext.Database.CurrentTransaction?.Commit();
+            Notify();
+        }
+
+        /// <summary>
+        /// This is called automatically by <see cref="QuickPoll.SaveChangesAndNotifyAsync" /> and <see cref="QuickPoll.CommitAndNotifyAsync"/>.
+        /// No need to call it explicitely, unless saving and committing is done directly through the DbContext.
+        /// </summary>
+        /// <param name="queueNames"></param>
         public void Notify(params string[] queueNames)
         {
             foreach (var queue in _affectedQueues.Keys.Union(queueNames))
             {
                 _quickPollChannels.TryNotify(queue);
             }
+
+            _affectedQueues.Clear();
         }
 
         private XactJob JobAdd(LambdaExpression lambdaExp, string? queue)
