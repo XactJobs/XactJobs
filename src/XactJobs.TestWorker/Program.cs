@@ -36,7 +36,7 @@ namespace XactJobs.TestWorker
             {
                 var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
 
-                db.Database.EnsureDeleted();
+                //db.Database.EnsureDeleted();
                 db.Database.EnsureCreated();
             }
 

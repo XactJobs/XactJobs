@@ -109,7 +109,40 @@ public class YourWorkerOrController
 This can only work if the workers are running in the same process where the jobs are enqueued (which is the default).
 
 # Installation
-TODO
 
-# Configuration
-TODO
+Install the XactJobs nuget package:  
+```
+dotnet add package XactJobs
+```
+
+Add Entity Configurations to your DbContext:
+```csharp
+public class UserDbContext: DbContext
+{
+    // Your DbSets...
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Apply XactJobs entity configurations
+        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName); 
+
+        // Apply your entity configurations...
+    }
+}
+```
+
+Register XactJobs with your service provider
+```csharp
+// This registers 2 workers for the default queue
+builder.Services.AddXactJobs<UserDbContext>(options =>
+{
+    options.WithPriorityQueue();     // optional (2 additional workers)
+    options.WithLongRunningQueue();  // optional (2 additional workers)
+});
+```
+
+Finally create the XactJobs tables in your database using the SQL scripts below:
+- [Sql Server](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql)
+- [PostgreSQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql)
+- [MySQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql)
+- [Oracle](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql)
