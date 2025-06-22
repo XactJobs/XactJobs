@@ -29,12 +29,13 @@ namespace XactJobs
         public int LeaseDurationInSeconds { get; set; } = 120;
 
         /// <summary>
-        /// Database polling interval in seconds, per worker (Default 4 seconds).
+        /// Database polling interval in seconds, per worker (Default 6 seconds).
         /// The workers will be started with initial delay, to distribute workers execution in time.
-        /// By default, 2 workers will be started with 4 second polling interval. 
-        /// The initial delay between workers is (4 seconds / 2 workers) = 2 seconds.
+        /// By default, 2 workers will be started with 6 second polling interval. 
+        /// The initial delay between workers is (6 seconds / 2 workers) = 3 seconds.
+        /// It means these workers will take turns every 3 seconds.
         /// </summary>
-        public int PollingIntervalInSeconds { get; set; } = 4;
+        public int PollingIntervalInSeconds { get; set; } = 6;
 
         /// <summary>
         /// Time the workers will wait for to clear pending leases, on worker stop. (Default 10 seconds)

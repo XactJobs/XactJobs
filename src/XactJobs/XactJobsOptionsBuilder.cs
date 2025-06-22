@@ -84,6 +84,32 @@ namespace XactJobs
             return this;
         }
 
+        public XactJobsOptionsBuilder<TDbContext> WithPriorityQueue(Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
+        {
+            WithIsolatedQueue(QueueNames.Priority, options =>
+            {
+                options
+                    .WithPollingInterval(4)
+                    .WithWorkerCount(2);
+
+                configureAction?.Invoke(options);
+            });
+            return this;
+        }
+
+        public XactJobsOptionsBuilder<TDbContext> WithLongRunningQueue(Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
+        {
+            WithIsolatedQueue(QueueNames.LongRunning, options =>
+            {
+                options
+                    .WithPollingInterval(10)
+                    .WithWorkerCount(2);
+
+                configureAction?.Invoke(options);
+            });
+            return this;
+        }
+
         public XactJobsOptionsBuilder<TDbContext> WithIsolatedQueue(string queueName, Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
         {
             var builder = new XactJobsQueueOptionsBuilder<TDbContext>();

@@ -2,25 +2,39 @@
 {
     public class TestJob
     {
-        private readonly ILogger<TestJob> _logger;
-
-        public TestJob(ILogger<TestJob> logger)
+        public class TestPayload
         {
-            _logger = logger;
+            public int PayloadId { get; set; }
+            public string? PayloadData { get; set; }
         }
 
-        public Task RunAsync(int id, string name, Guid guid, CancellationToken cancellationToken)
+        private readonly ILogger<TestJob> _logger;
+        private readonly QuickPoll<UserDbContext> _quickPoll;
+
+        public TestJob(ILogger<TestJob> logger, QuickPoll<UserDbContext> quickPoll)
         {
-            //await _dbContext.JobDeletePeriodicAsync(name, cancellationToken)
-            //    .ConfigureAwait(false);
+            _logger = logger;
+            _quickPoll = quickPoll;
+        }
 
-            //throw new NotImplementedException();
+        public async Task RunTestJobAsync(int id, string name, TestPayload payload, CancellationToken cancellationToken)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5),cancellationToken);
 
-            if (Random.Shared.Next(100) < 50) throw new Exception("Some transient error");
+            //if (Random.Shared.Next(100) < 50) throw new Exception("Some transient error");
 
-            _logger.LogInformation("Job executed: {id}, {name}, {guid}", id, name, guid);
+            _logger.LogInformation("Job executed: {id}, {name}", id, name);
 
-            return Task.CompletedTask;
+            _quickPoll.JobEnqueue(() => RunTestJob(payload), QueueNames.Priority);
+            
+            await _quickPoll.SaveChangesAndNotifyAsync(cancellationToken);
+
+            //return Task.CompletedTask;
+        }
+
+        public void RunTestJob(TestPayload payload)
+        {
+            _logger.LogInformation("Job executed: {payloadId}, {payloadData}", payload.PayloadId, payload.PayloadData);
         }
     }
 

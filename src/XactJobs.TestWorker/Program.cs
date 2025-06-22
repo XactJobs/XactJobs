@@ -19,8 +19,11 @@ namespace XactJobs.TestWorker
 
             builder.Services.AddXactJobs<UserDbContext>(options =>
             {
+                options.WithPriorityQueue();
+                options.WithLongRunningQueue();
+
                 options.WithPeriodicJob<TestJob>(
-                    x => x.RunAsync(10, "test_1", Guid.NewGuid(), CancellationToken.None),
+                    x => x.RunTestJobAsync(10, "test_1", new TestJob.TestPayload { PayloadId = 9, PayloadData = "Nine" }, CancellationToken.None),
                     "test_1", 
                     CronBuilder.SecondInterval(10));
             });
@@ -34,7 +37,7 @@ namespace XactJobs.TestWorker
             {
                 var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
 
-                db.Database.EnsureDeleted();
+                //db.Database.EnsureDeleted();
                 db.Database.EnsureCreated();
             }
 
