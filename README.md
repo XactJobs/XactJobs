@@ -31,10 +31,10 @@ dbContext.SaveChanges();
 ```
 
 ### Recurring jobs
-Recurring jobs run periodically according to a specified cron schedule.
+Recurring jobs run periodically according to the specified cron schedule.
 
 ```csharp
-dbContext.JobEnsureRecurring(
+dbContext.JobEnsurePeriodic(
     () => Console.WriteLine("Recurring!"),
     "my_recurring_job",
     Cron.Daily());
@@ -109,10 +109,43 @@ public class YourWorkerOrController
 This can only work if the workers are running in the same process where the jobs are enqueued (which is the default).
 
 # Installation
-TODO
 
-# Configuration
-TODO
+Install the XactJobs nuget package:  
+```
+dotnet add package XactJobs
+```
+
+Add Entity Configurations to your DbContext:
+```csharp
+public class UserDbContext: DbContext
+{
+    // Your DbSets...
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Apply XactJobs entity configurations
+        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName); 
+
+        // Apply your entity configurations...
+    }
+}
+```
+
+Register XactJobs with your service provider
+```csharp
+// This registers 2 workers for the default queue
+builder.Services.AddXactJobs<UserDbContext>(options =>
+{
+    options.WithPriorityQueue();     // optional (2 additional workers)
+    options.WithLongRunningQueue();  // optional (2 additional workers)
+});
+```
+
+Finally create the XactJobs tables in your database using the SQL scripts below:
+- Sql Server
+- PostgreSQL
+- MySQL
+- Oracle
 
 # License
 
