@@ -122,7 +122,7 @@ namespace XactJobs
             return true;
         }
 
-        private static XactJob JobAdd(DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
+        internal static XactJob JobAdd(this DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
         {
             var job = XactJobSerializer.FromExpression(lambdaExp, scheduledAt, queue);
 

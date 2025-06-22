@@ -60,7 +60,7 @@ namespace XactJobs.DependencyInjection
         {
             try
             {
-                if (!_quickPollChannels.Channels.TryGetValue(queueName, out var quickPollChannel))
+                if (!_quickPollChannels.TryGetChannel(queueName, out var quickPollChannel))
                 {
                     _logger.LogWarning("Could not find a QuickPoll channel for queue {Queue}", queueName);
                     return;

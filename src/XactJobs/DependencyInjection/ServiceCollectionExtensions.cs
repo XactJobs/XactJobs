@@ -29,19 +29,20 @@ public static class ServiceCollectionExtensions
 
     private static QuickPollChannels CreateQuickPollChannels<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
     {
-        var qpc = new QuickPollChannels();
-
         // 1k notifications kept so that another worker can quick poll (or the same worker in the next run),
         // if more than a batch of notifications are added to the channel.
         const int channelCapacity = 1_000; 
 
-        qpc.Channels.Add(QueueNames.Default, new QuickPollChannel(channelCapacity));
-
-        foreach (var (queueName, queueOptions) in options.IsolatedQueues)
+        var channels = new Dictionary<string, QuickPollChannel>
         {
-            qpc.Channels.Add(queueName, new QuickPollChannel(channelCapacity));
+            { QueueNames.Default, new QuickPollChannel(channelCapacity) }
+        };
+
+        foreach (var (queueName, _) in options.IsolatedQueues)
+        {
+            channels.Add(queueName, new QuickPollChannel(channelCapacity));
         }
 
-        return qpc;
+        return new QuickPollChannels(channels);
     }
 }
