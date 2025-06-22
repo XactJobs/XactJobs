@@ -15,7 +15,7 @@
 
 using System.Collections;
 
-namespace XactJobs.Cron
+namespace XactJobs.CronUtil
 {
     /// <summary>
     /// Modeled by Java Spring Frameworks's CronSequenceGenerator

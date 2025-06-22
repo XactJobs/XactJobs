@@ -16,7 +16,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using XactJobs.Cron;
 using XactJobs.Internal;
 
 namespace XactJobs.DependencyInjection
@@ -66,7 +65,7 @@ namespace XactJobs.DependencyInjection
             await db.JobEnsurePeriodicAsync<XactJobMaintenance<TDbContext>>(
                 x => x.CleanupJobHistoryAsync(CancellationToken.None), 
                 "xj_history_cleanup", 
-                CronBuilder.HourInterval(1), 
+                Cron.HourInterval(1), 
                 stoppingToken);
         }
     }

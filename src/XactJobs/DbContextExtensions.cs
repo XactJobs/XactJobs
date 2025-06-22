@@ -16,7 +16,6 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using XactJobs.Annotations;
-using XactJobs.Cron;
 using XactJobs.Internal;
 
 namespace XactJobs
@@ -123,6 +122,46 @@ namespace XactJobs
             return JobAddOrUpdatePeriodicAsync(dbContext, jobExpression, id, cronExpression, null, cancellationToken);
         }
 
+        public static XactJobPeriodic JobEnsurePeriodic(this DbContext dbContext, [InstantHandle] Expression<Action> jobExpression, string id, string queue, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, queue);
+        }
+
+        public static XactJobPeriodic JobEnsurePeriodic<T>(this DbContext dbContext, [InstantHandle] Expression<Action<T>> jobExpression, string id, string queue, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, queue);
+        }
+
+        public static XactJobPeriodic JobEnsurePeriodic(this DbContext dbContext, [InstantHandle] Expression<Func<Task>> jobExpression, string id, string queue, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, queue);
+        }
+
+        public static XactJobPeriodic JobEnsurePeriodic<T>(this DbContext dbContext, [InstantHandle] Expression<Func<T, Task>> jobExpression, string id, string queue, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, queue);
+        }
+
+        public static XactJobPeriodic JobEnsurePeriodic(this DbContext dbContext, [InstantHandle] Expression<Action> jobExpression, string id, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, null);
+        }
+
+        public static XactJobPeriodic JobEnsurePeriodic<T>(this DbContext dbContext, [InstantHandle] Expression<Action<T>> jobExpression, string id, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, null);
+        }
+
+        public static XactJobPeriodic JobEnsurePeriodic(this DbContext dbContext, [InstantHandle] Expression<Func<Task>> jobExpression, string id, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, null);
+        }
+
+        public static XactJobPeriodic JobEnsurePeriodic<T>(this DbContext dbContext, [InstantHandle] Expression<Func<T, Task>> jobExpression, string id, string cronExpression)
+        {
+            return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, cronExpression, null);
+        }
+
         public static async Task<bool> JobDeletePeriodicAsync(this DbContext dbContext, string id, CancellationToken cancellationToken)
         {
             var periodicJob = await dbContext.Set<XactJobPeriodic>()
@@ -181,6 +220,40 @@ namespace XactJobs
 
             return periodicJob;
         }
+        
+        internal static XactJobPeriodic JobAddOrUpdatePeriodic(this DbContext db,
+                                                               LambdaExpression lambdaExp,
+                                                               string id,
+                                                               string cronExp,
+                                                               string? queue)
+        {
+            var periodicJob = db.Set<XactJobPeriodic>()
+                .FirstOrDefault(j => j.Id == id);
+
+            if (periodicJob == null)
+            {
+                periodicJob = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, cronExp, queue);
+
+                db.Set<XactJobPeriodic>().Add(periodicJob);
+
+                ScheduleNextRun(db, periodicJob);
+            }
+            else
+            {
+                var templateJob = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, cronExp, queue);
+
+                if (!periodicJob.IsCompatibleWith(templateJob))
+                {
+                    periodicJob.UpdateDefinition(templateJob);
+
+                    ScheduleNextRun(db, periodicJob);
+                }
+            }
+
+            periodicJob.Activate(true);
+
+            return periodicJob;
+        }
 
         internal static XactJob Reschedule(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount)
         {
@@ -201,7 +274,7 @@ namespace XactJobs
 
         internal static XactJob ScheduleNextRun(this DbContext dbContext, XactJobPeriodic periodicJob)
         {
-            var cronGenerator = new CronSequenceGenerator(periodicJob.CronExpression, TimeZoneInfo.Utc);
+            var cronGenerator = new CronUtil.CronSequenceGenerator(periodicJob.CronExpression, TimeZoneInfo.Utc);
 
             var nextRunUtc = cronGenerator.NextUtc(DateTime.UtcNow);
 

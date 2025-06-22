@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using XactJobs.Cron;
 
 namespace XactJobs.TestWorker
 {
@@ -17,16 +16,16 @@ namespace XactJobs.TestWorker
                 //options.UseOracle(builder.Configuration.GetConnectionString("OracleConnectionString"));
             });
 
-            builder.Services.AddXactJobs<UserDbContext>(options =>
+            builder.Services.AddXactJobs((Action<XactJobsOptionsBuilder<UserDbContext>>?)(options =>
             {
                 options.WithPriorityQueue();
                 options.WithLongRunningQueue();
 
                 options.WithPeriodicJob<TestJob>(
                     x => x.RunTestJobAsync(10, "test_1", new TestJob.TestPayload { PayloadId = 9, PayloadData = "Nine" }, CancellationToken.None),
-                    "test_1", 
-                    CronBuilder.SecondInterval(10));
-            });
+                    "test_1",
+                    Cron.SecondInterval(10));
+            }));
 
             builder.Services.AddTransient<TestJob>();
 

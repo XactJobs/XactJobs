@@ -13,7 +13,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-namespace XactJobs.Cron
+using System.Collections;
+
+namespace XactJobs.CronUtil
 {
-    enum FieldType { Seconds, Minutes, Hours, DaysOfWeek, DaysOfMonth, Months, Years };
+    static class BitArrayExtensions
+    {
+        public static int GetNextSetBit(this BitArray bits, int startIndex)
+        {
+            for (var i = startIndex; i < bits.Count; i++)
+            {
+                if (bits.Get(i)) return i;
+            }
+
+            return -1;
+        }
+    }
 }

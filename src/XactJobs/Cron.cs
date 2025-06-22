@@ -13,9 +13,9 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-namespace XactJobs.Cron
+namespace XactJobs
 {
-    public static class CronBuilder
+    public static class Cron
     {
         /// <summary>
         /// Every X seconds (0-59)
@@ -60,7 +60,7 @@ namespace XactJobs.Cron
         }
 
         /// <summary>
-        /// Every day at specific time (HH:mm:ss)
+        /// Every day at specific time (UTC)
         /// </summary>
         /// <param name="time"></param>
         /// <returns></returns>
@@ -74,14 +74,24 @@ namespace XactJobs.Cron
         }
 
         /// <summary>
-        /// Every week at specific times, at specific day(s)
+        /// Every day at midnight (UTC)
         /// </summary>
-        /// <param name="time"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public static string Daily()
+        {
+            return Daily(TimeSpan.Zero);
+        }
+
+        /// <summary>
+        /// Every week on specific days, at specific time (UTC)
+        /// </summary>
         /// <param name="day"></param>
+        /// <param name="time"></param>
         /// <param name="additionalDays"></param>
         /// <returns></returns>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public static string Weekly(TimeSpan time, DayOfWeek day, params DayOfWeek[] additionalDays)
+        public static string Weekly(DayOfWeek day, TimeSpan time, params DayOfWeek[] additionalDays)
         {
             if (time.TotalHours >= 24)
                 throw new ArgumentOutOfRangeException(nameof(time), "Time must be within a 24-hour period.");
@@ -98,6 +108,17 @@ namespace XactJobs.Cron
 
             return $"{time.Seconds} {time.Minutes} {time.Hours} * * {daysField}";
         }
-    }
 
+        /// <summary>
+        /// Every week on specific days, at midnight (UTC)
+        /// </summary>
+        /// <param name="day"></param>
+        /// <param name="additionalDays"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentOutOfRangeException"></exception>
+        public static string Weekly(DayOfWeek day, params DayOfWeek[] additionalDays)
+        {
+            return Weekly(day, TimeSpan.Zero, additionalDays);
+        }
+    }
 }
