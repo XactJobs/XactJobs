@@ -8,12 +8,12 @@ Transactional background jobs scheduler and runner
 
 ## Included Third-Party Code
 
-- Portions of this project include code adapted from **Hangfire**,  
+- The file [Internal/XactJobSerializer.cs](https://github.com/XactJobs/XactJobs/blob/main/src/XactJobs/Internal/XactJobSerializer.cs) includes code adapted from **Hangfire**,  
   licensed under the **LGPL-3.0-or-later**.  
   Copyright © 2013-2014 Hangfire OÜ.  
   See [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
 
-- Some source files are copied unchanged from the **ASP.NET MVC** project,  
+- Source files in the folder [Internal/ExpressionUtil](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs/Internal/ExpressionUtil) are copied unchanged from the **ASP.NET MVC** project,  
   licensed under the **Apache License 2.0**.  
   Copyright © .NET Foundation.  
   See [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0).
