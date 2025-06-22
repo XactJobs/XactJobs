@@ -21,7 +21,7 @@ Transactional background jobs scheduler and runner
 ## License Texts
 
 - The full text of the LGPL-3.0 license is available in the `COPYING.LESSER` file.  
-- The full Apache License 2.0 text is available in the `LICENSE-ASP.NET.txt` file.
+- The Apache License 2.0 text is available in the `LICENSE-ASP.NET.txt` file.
 
 ## Disclaimer
 
