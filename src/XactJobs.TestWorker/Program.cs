@@ -31,6 +31,7 @@ namespace XactJobs.TestWorker
 
             var host = builder.Build();
 
+            /*
             // re-create the DB (this is for TESTING ONLY)
             using (var scope = host.Services.CreateScope())
             {
@@ -39,6 +40,7 @@ namespace XactJobs.TestWorker
                 //db.Database.EnsureDeleted();
                 db.Database.EnsureCreated();
             }
+            */
 
             host.Run();
         }

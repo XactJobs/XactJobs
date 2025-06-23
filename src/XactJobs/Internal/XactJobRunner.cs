@@ -67,7 +67,7 @@ namespace XactJobs.Internal
 
                         nextRunTime = AlignNextRun(nextRunTime, delaySec, now);
 
-                        var shouldPoll = await WaitForNextPoll(nextRunTime.Subtract(now), stoppingToken)
+                        var shouldPoll = await WaitForNextPollAsync(nextRunTime.Subtract(now), stoppingToken)
                             .ConfigureAwait(false);
 
                         if (!shouldPoll) continue;
@@ -98,7 +98,8 @@ namespace XactJobs.Internal
 
             try
             {
-                await ClearLeases();
+                await ClearLeasesAsync()
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -131,7 +132,7 @@ namespace XactJobs.Internal
             return nextRunTime;
         }
 
-        private async Task<bool> WaitForNextPoll(TimeSpan waitTime, CancellationToken stoppingToken)
+        private async Task<bool> WaitForNextPollAsync(TimeSpan waitTime, CancellationToken stoppingToken)
         {
             int consumedCount = 0;
 
@@ -162,7 +163,7 @@ namespace XactJobs.Internal
             return shouldPollNow;
         }
 
-        private async Task ClearLeases()
+        private async Task ClearLeasesAsync()
         {
             using var scope = _scopeFactory.CreateScope();
 
@@ -187,7 +188,7 @@ namespace XactJobs.Internal
             var acquireLeaseSql = dialect.GetAcquireLeaseSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
             var fetchJobsSql = dialect.GetFetchJobsSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
 
-            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLease);
+            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLeaseAsync);
 
             extendLeaseTimer.Start();
 
@@ -250,7 +251,7 @@ namespace XactJobs.Internal
             return jobs.Count;
         }
 
-        private async Task ExtendLease(CancellationToken token)
+        private async Task ExtendLeaseAsync(CancellationToken token)
         {
             using var scope = _scopeFactory.CreateScope();
 

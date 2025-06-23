@@ -46,7 +46,8 @@ namespace XactJobs
 
             try
             {
-                await _batchLock.WaitAsync(cancellationToken);
+                await _batchLock.WaitAsync(cancellationToken)
+                    .ConfigureAwait(false);
 
                 while (consumedCount < batchSize && _notificationChannel.Reader.TryRead(out _))
                 {

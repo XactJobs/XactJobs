@@ -32,12 +32,12 @@ namespace XactJobs.DependencyInjection
 
         protected override async Task EnsurePeriodicJobsAsync(TDbContext db, CancellationToken stoppingToken)
         {
-            await EnsurePeriodicJobsForQueue(db, null, _options, stoppingToken)
+            await EnsurePeriodicJobsForQueueAsync(db, null, _options, stoppingToken)
                                 .ConfigureAwait(false);
 
             foreach (var (queueName, queueOptions) in _options.IsolatedQueues)
             {
-                await EnsurePeriodicJobsForQueue(db, queueName, queueOptions, stoppingToken)
+                await EnsurePeriodicJobsForQueueAsync(db, queueName, queueOptions, stoppingToken)
                     .ConfigureAwait(false);
             }
 
@@ -48,7 +48,7 @@ namespace XactJobs.DependencyInjection
                 .ConfigureAwait(false);
         }
 
-        private static async Task EnsurePeriodicJobsForQueue(TDbContext db,
+        private static async Task EnsurePeriodicJobsForQueueAsync(TDbContext db,
                                                              string? queueName,
                                                              XactJobsOptionsBase<TDbContext> options,
                                                              CancellationToken stoppingToken)
@@ -66,7 +66,7 @@ namespace XactJobs.DependencyInjection
                 x => x.CleanupJobHistoryAsync(CancellationToken.None), 
                 "xj_history_cleanup", 
                 Cron.HourInterval(1), 
-                stoppingToken);
+                stoppingToken).ConfigureAwait(false);
         }
     }
 }

@@ -70,12 +70,14 @@ namespace XactJobs.Internal
             if (_cts == null)
                 return;
 
-            _cts.Cancel();
+            await _cts.CancelAsync().ConfigureAwait(false);
 
             try
             {
                 if (_runningTask != null)
+                {
                     await _runningTask.ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException)
             {

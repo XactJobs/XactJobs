@@ -58,7 +58,8 @@ namespace XactJobs.DependencyInjection
                     }
                 }
 
-                await Task.WhenAll(_runnerTasks);
+                await Task.WhenAll(_runnerTasks)
+                    .ConfigureAwait(false);
             }
             catch (Exception ex)
             {
