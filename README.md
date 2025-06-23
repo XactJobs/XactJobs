@@ -123,8 +123,7 @@ public class UserDbContext: DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Apply XactJobs entity configurations
-        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName); 
+        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName);
 
         // Apply your entity configurations...
     }
@@ -147,6 +146,21 @@ Finally create the XactJobs tables in your database using the SQL scripts below:
 - [MySQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql)
 - [Oracle](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql)
 
+Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
+```csharp
+public class UserDbContext: DbContext
+{
+    // Your DbSets...
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName,
+            excludeFromMigrations: false); // <--- key part here
+
+        // Apply your entity configurations...
+    }
+}
+```
 # License
 
 **XactJobs** is licensed under the  
