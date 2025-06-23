@@ -146,6 +146,7 @@ Finally create the XactJobs tables in your database using the SQL scripts below:
 - [MySQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql)
 - [Oracle](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql)
 
+## Using EF Migrations
 Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
 ```csharp
 public class UserDbContext: DbContext
@@ -160,6 +161,10 @@ public class UserDbContext: DbContext
         // Apply your entity configurations...
     }
 }
+```
+And then create the migration like you normally would:
+```bash
+dotnet ef migrations add XactJobsTables
 ```
 # License
 
