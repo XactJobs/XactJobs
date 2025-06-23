@@ -1,23 +1,8 @@
-﻿// This file is part of XactJobs.
-//
-// XactJobs is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published
-// by the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// XactJobs is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 
 namespace XactJobs.Internal.SqlDialects
 {
-    public class PostgreSqlDialect : ISqlDialect
+    public class SqliteDialect : ISqlDialect
     {
         public string XactJobSchema { get; } = "xact_jobs";
         public string XactJobTable { get; } = "job";
@@ -47,51 +32,48 @@ namespace XactJobs.Internal.SqlDialects
         public string ColUpdatedAt { get; } = "updated_at";
         public string ColIsActive { get; } = "is_active";
 
-        public bool HasSchemaSupport { get; } = true;
+        public bool HasSchemaSupport { get; } = false;
 
-        public string DateTimeColumnType { get; } = "timestamptz";
+        public string DateTimeColumnType { get; } = "DATETIME"; // SQLite stores datetimes as ISO8601 text
 
         public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
 
         public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
 WITH cte AS (
   SELECT {ColId}, {ColQueue}, {ColScheduledAt}
-  FROM {XactJobSchema}.{XactJobTable}
-  WHERE {ColScheduledAt} <= current_timestamp
+  FROM {XactJobSchema}_{XactJobTable}
+  WHERE {ColScheduledAt} <= datetime('subsec')
     AND {ColQueue} = '{queueName ?? QueueNames.Default}'
-    AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < current_timestamp)
+    AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < datetime('subsec'))
   ORDER BY {ColScheduledAt}
-  FOR UPDATE SKIP LOCKED
   LIMIT {maxJobs}
 )
-UPDATE {XactJobSchema}.{XactJobTable}
-SET {ColLeaser} = '{leaser}'::uuid, {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeaser} = '{leaser}', 
+    {ColLeasedUntil} = datetime('now', '+{leaseDurationInSeconds} seconds')
 FROM cte
-WHERE -- we need to join on all these, since these are the PK
-    {XactJobSchema}.{XactJobTable}.{ColId} = cte.{ColId}
-    AND {XactJobSchema}.{XactJobTable}.{ColQueue} = cte.{ColQueue}
-    AND {XactJobSchema}.{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
-RETURNING {XactJobSchema}.{XactJobTable}.*
+WHERE
+    {XactJobSchema}_{XactJobTable}.{ColId} = cte.{ColId}
+    AND {XactJobSchema}_{XactJobTable}.{ColQueue} = cte.{ColQueue}
+    AND {XactJobSchema}_{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
+RETURNING *
 ";
 
         public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}.{XactJobTable}
-SET {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
-WHERE {ColLeaser} = '{leaser}'::uuid
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeasedUntil} = datetime('now', '+{leaseDurationInSeconds} seconds')
+WHERE {ColLeaser} = '{leaser}'
 ";
 
         public string GetClearLeaseSql(Guid leaser) => $@"
-UPDATE {XactJobSchema}.{XactJobTable}
+UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
-WHERE {ColLeaser} = '{leaser}'::uuid
+WHERE {ColLeaser} = '{leaser}'
 ";
 
-        public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
+        public Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
-            var sql = @$"LOCK TABLE {XactJobSchema}.{XactJobPeriodicTable} IN EXCLUSIVE MODE";
-
-            await db.Database.ExecuteSqlRawAsync(sql, cancellationToken)
-                .ConfigureAwait(false);
+            return Task.CompletedTask;
         }
 
         public Task ReleaseTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
@@ -100,3 +82,4 @@ WHERE {ColLeaser} = '{leaser}'::uuid
         }
     }
 }
+

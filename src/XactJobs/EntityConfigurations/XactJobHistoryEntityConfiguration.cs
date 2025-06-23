@@ -16,6 +16,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using XactJobs.Internal;
+using XactJobs.Internal.SqlDialects;
 
 namespace XactJobs.EntityConfigurations
 {
@@ -43,7 +44,17 @@ namespace XactJobs.EntityConfigurations
                 builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobHistoryTable}");
             }
 
-            builder.HasKey(x => new { x.Id, x.ProcessedAt }).HasName($"pk_{_sqlDialect.XactJobHistoryTable}");
+            if (_sqlDialect is SqliteDialect)
+            {
+                // Sqlite only supports autoincrement for INTEGER PRIMARY KEY
+                builder.HasKey(x => x.Id)
+                    .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobHistoryTable}");
+            }
+            else
+            {
+                builder.HasKey(x => new { x.Id, x.ProcessedAt })
+                    .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobHistoryTable}");
+            }
 
             builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId)
                 .ValueGeneratedNever();
@@ -69,7 +80,7 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
 
             builder.HasIndex(x => x.ProcessedAt)
-                .HasDatabaseName($"ix_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
         }
     }
 }

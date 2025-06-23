@@ -14,6 +14,7 @@ namespace XactJobs.TestWorker
                 //options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServerConnectionString"));
                 //options.UseMySql(builder.Configuration.GetConnectionString("MySqlConnectionString"), ServerVersion.Parse("8.5.4"));
                 //options.UseOracle(builder.Configuration.GetConnectionString("OracleConnectionString"));
+                //options.UseSqlite(builder.Configuration.GetConnectionString("SqliteConnectionString"));
             });
 
             builder.Services.AddXactJobs<UserDbContext>(options =>

@@ -482,3 +482,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+/src/XactJobs.TestWorker/xact_jobs.db
+/src/XactJobs.TestWorker/xact_jobs.db-shm
+/src/XactJobs.TestWorker/xact_jobs.db-wal

@@ -45,7 +45,8 @@ namespace XactJobs.EntityConfigurations
                 builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobPeriodicTable}");
             }
 
-            builder.HasKey(x => x.Id).HasName($"pk_{_sqlDialect.XactJobPeriodicTable}");
+            builder.HasKey(x => x.Id)
+                .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobPeriodicTable}");
 
             builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId);
 

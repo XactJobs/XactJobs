@@ -29,6 +29,9 @@ namespace XactJobs.Internal
         string XactJobHistoryTable { get; }
         string XactJobPeriodicTable { get; }
 
+        string PrimaryKeyPrefix { get; }
+        string IndexPrefix { get; }
+
         string ColId { get; }
         string ColCreatedAt { get; }
         string ColScheduledAt { get; }
@@ -85,6 +88,7 @@ namespace XactJobs.Internal
                 if (key.EndsWith(".postgresql")) return new PostgreSqlDialect();
                 if (key.EndsWith(".mysql")) return new MySqlDialect();
                 if (key.StartsWith("oracle.")) return new OracleDialect();
+                if (key.EndsWith(".sqlite")) return new SqliteDialect();
 
                 throw new NotSupportedException($"XactJobs does not support provider '{key}'.");
             });

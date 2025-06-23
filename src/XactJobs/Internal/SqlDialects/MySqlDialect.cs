@@ -26,6 +26,9 @@ namespace XactJobs.Internal.SqlDialects
         public string XactJobHistoryTable { get; } = "job_history";
         public string XactJobPeriodicTable { get; } = "job_periodic";
 
+        public string PrimaryKeyPrefix { get; } = "pk";
+        public string IndexPrefix { get; } = "ix";
+
         public string ColId { get; } = "id";
         public string ColCreatedAt { get; } = "created_at";
         public string ColScheduledAt { get; } = "scheduled_at";
