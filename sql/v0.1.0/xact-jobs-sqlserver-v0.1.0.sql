@@ -16,10 +16,10 @@ CREATE TABLE [XactJobs].[Job] (
   [PeriodicJobId] nvarchar(max) NULL,
   [CronExpression] nvarchar(max) NULL,
   [ErrorCount] int NOT NULL,
-  CONSTRAINT [pk_Job] PRIMARY KEY ([Queue], [ScheduledAt], [Id])
+  CONSTRAINT [PK_Job] PRIMARY KEY ([Queue], [ScheduledAt], [Id])
 );
 
-CREATE INDEX [ix_Job_Leaser] ON [XactJobs].[Job] ([Leaser]);
+CREATE INDEX [IX_Job_Leaser] ON [XactJobs].[Job] ([Leaser]);
 
 -- ===============================
 -- Table storing execution history
@@ -39,10 +39,10 @@ CREATE TABLE [XactJobs].[JobHistory] (
   [PeriodicJobId] nvarchar(max) NULL,
   [CronExpression] nvarchar(max) NULL,
   [ErrorCount] int NOT NULL,
-  CONSTRAINT [pk_JobHistory] PRIMARY KEY ([Id], [ProcessedAt])
+  CONSTRAINT [PK_JobHistory] PRIMARY KEY ([Id], [ProcessedAt])
 );
 
-CREATE INDEX [ix_JobHistory_ProcessedAt] ON [XactJobs].[JobHistory] ([ProcessedAt]);
+CREATE INDEX [IX_JobHistory_ProcessedAt] ON [XactJobs].[JobHistory] ([ProcessedAt]);
 
 -- ============================
 -- Table storing recurring jobs
@@ -58,5 +58,5 @@ CREATE TABLE [XactJobs].[JobPeriodic] (
   [MethodArgs] nvarchar(max) NOT NULL,
   [Queue] nvarchar(max) NOT NULL,
   [IsActive] bit NOT NULL,
-  CONSTRAINT [pk_JobPeriodic] PRIMARY KEY ([Id])
+  CONSTRAINT [PK_JobPeriodic] PRIMARY KEY ([Id])
 );

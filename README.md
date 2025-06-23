@@ -2,7 +2,7 @@
 XactJobs lets you schedule and run background jobs **with full database transaction support** using EntityFrameworkCore. 
 Jobs are saved alongside your business data and only execute if your transaction commits - no more “ghost” jobs on rollback.
 
-Supports SqlServer, PostgreSql, MySql, and Oracle. 
+Supports SQL Server, PostgreSQL, MySQL, Oracle, and SQLite. 
 
 ## Development Status
 This library is still in early development, but the users are invited to test and report issues.
@@ -141,10 +141,11 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 ```
 
 Finally create the XactJobs tables in your database using the SQL scripts below:
-- [Sql Server](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql)
+- [SQL Server](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql)
 - [PostgreSQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql)
 - [MySQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql)
 - [Oracle](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql)
+- [SQLite](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql)
 
 ## Using EF Migrations
 Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
