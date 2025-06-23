@@ -80,12 +80,27 @@ namespace XactJobs.Internal
                 callArgs[i] = Expression.Convert(argAccess, paramType);
             }
 
-            Expression? instanceExpr = method.IsStatic
-                ? null
-                : Expression.Convert(
-                    Expression.Call(typeof(ServiceProviderServiceExtensions), nameof(ServiceProviderServiceExtensions.GetRequiredService), [type], spParam),
-                    type
-                );
+            Expression? instanceExpr = null;
+
+            if (!method.IsStatic)
+            {
+                // Find first constructor
+                var ctor = type.GetConstructors().FirstOrDefault() 
+                    ?? throw new InvalidOperationException($"Type {type.FullName} does not have a public constructor.");
+
+                var ctorParams = ctor.GetParameters();
+
+                var ctorArgs = ctorParams
+                    .Select(p =>
+                        (Expression)Expression.Call(
+                            typeof(ServiceProviderServiceExtensions),
+                            nameof(ServiceProviderServiceExtensions.GetRequiredService),
+                            [p.ParameterType],
+                            spParam))
+                    .ToArray();
+
+                instanceExpr = Expression.New(ctor, ctorArgs);
+            }
 
             var callExpr = Expression.Call(instanceExpr, method, callArgs);
 
