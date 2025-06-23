@@ -27,8 +27,6 @@ namespace XactJobs.TestWorker
                     Cron.SecondInterval(10));
             });
 
-            builder.Services.AddTransient<TestJob>();
-
             var host = builder.Build();
 
             /*
