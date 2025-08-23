@@ -176,6 +176,69 @@ namespace XactJobs
             return true;
         }
 
+        public static bool JobDeletePeriodic(this DbContext dbContext, string id)
+        {
+            var periodicJob = dbContext.Set<XactJobPeriodic>()
+                .FirstOrDefault(x => x.Id == id);
+
+            if (periodicJob == null) return false;
+
+            dbContext.Set<XactJobPeriodic>()
+                .Remove(periodicJob);
+
+            return true;
+        }
+
+        public static async Task<bool> JobDeleteAsync(this DbContext dbContext, long id, CancellationToken cancellationToken)
+        {
+            var job = await dbContext.Set<XactJob>().FindAsync([id], cancellationToken)
+                .ConfigureAwait(false);
+
+            if (job == null) 
+            {
+                return false;
+            }
+
+            dbContext.Set<XactJob>().Remove(job);
+
+            if (job.PeriodicJobId != null)
+            {
+                var periodicJob = await dbContext.Set<XactJobPeriodic>().FindAsync([job.PeriodicJobId], cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (periodicJob != null && periodicJob.IsCompatibleWith(job))
+                {
+                    ScheduleNextRun(dbContext, periodicJob);
+                }
+            }
+
+            return true;
+        }
+
+        public static bool JobDelete(this DbContext dbContext, long id)
+        {
+            var job = dbContext.Set<XactJob>().Find([id]);
+
+            if (job == null) 
+            {
+                return false;
+            }
+
+            dbContext.Set<XactJob>().Remove(job);
+
+            if (job.PeriodicJobId != null)
+            {
+                var periodicJob = dbContext.Set<XactJobPeriodic>().Find([job.PeriodicJobId]);
+
+                if (periodicJob != null && periodicJob.IsCompatibleWith(job))
+                {
+                    ScheduleNextRun(dbContext, periodicJob);
+                }
+            }
+
+            return true;
+        }
+
         internal static XactJob JobAdd(this DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
         {
             var job = XactJobSerializer.FromExpression(lambdaExp, scheduledAt, queue);
