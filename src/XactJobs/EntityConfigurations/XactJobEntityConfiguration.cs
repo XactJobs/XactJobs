@@ -75,6 +75,7 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.PeriodicJobId).HasColumnName(_sqlDialect.ColPeriodicJobId);
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
+            builder.Property(x => x.PeriodicJobVersion).HasColumnName(_sqlDialect.ColPeriodicJobVersion);
 
             builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
 

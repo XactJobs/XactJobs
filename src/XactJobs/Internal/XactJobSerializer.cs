@@ -80,7 +80,7 @@ namespace XactJobs.Internal
 
             queue ??= QueueNames.Default;
 
-            return new XactJobPeriodic(id, DateTime.UtcNow, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, queue, isActive: true);
+            return new XactJobPeriodic(id, DateTime.UtcNow, DateTime.UtcNow, cronExp, typeName, methodName, serializedArgs, queue, isActive: true, version: 1);
         }
 
         internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)

@@ -28,6 +28,7 @@ namespace XactJobs
                        string queue,
                        string? periodicJobId = null,
                        string? cronExpression = null,
+                       int? periodicJobVersion = null,
                        int errorCount = 0,
                        Guid? leaser = null,
                        DateTime? leasedUntil = null)
@@ -39,6 +40,7 @@ namespace XactJobs
                    queue,
                    periodicJobId,
                    cronExpression,
+                   periodicJobVersion,
                    errorCount)
         {
             Leaser = leaser;

@@ -44,6 +44,7 @@ namespace XactJobs.Internal
         string ColStatus { get; }
         string ColQueue { get; }
         string ColPeriodicJobId { get; }
+        string ColPeriodicJobVersion { get; }
         string ColErrorCount { get; }
         string ColErrorTime { get; }
         string ColErrorMessage { get; }
@@ -51,6 +52,7 @@ namespace XactJobs.Internal
         string ColCronExpression { get; }
         string ColUpdatedAt { get; }
         string ColIsActive { get; }
+        string ColVersion { get; }
 
         string DateTimeColumnType { get; }
 

@@ -41,6 +41,7 @@ namespace XactJobs.Internal.SqlDialects
         public string ColStatus { get; } = "Status";
         public string ColQueue { get; } = "Queue";
         public string ColPeriodicJobId { get; } = "PeriodicJobId";
+        public string ColPeriodicJobVersion { get; } = "PeriodicJobVersion";
         public string ColErrorCount { get; } = "ErrorCount";
         public string ColErrorTime { get; } = "ErrorTime";
         public string ColErrorMessage { get; } = "ErrorMessage";
@@ -48,6 +49,7 @@ namespace XactJobs.Internal.SqlDialects
         public string ColCronExpression { get; } = "CronExpression";
         public string ColUpdatedAt { get; } = "UpdatedAt";
         public string ColIsActive { get; } = "IsActive";
+        public string ColVersion { get; } = "Version";
 
         public string DateTimeColumnType { get; } = "datetime2";
 

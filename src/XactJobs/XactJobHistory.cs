@@ -32,8 +32,9 @@ namespace XactJobs
                               string methodArgs,
                               string queue,
                               string? periodicJobId = null,
-                              int errorCount = 0,
                               string? cronExpression = null,
+                              int? periodicJobVersion = null,
+                              int errorCount = 0,
                               string? errorMessage = null,
                               string? errorStackTrace = null)
             : base(id,
@@ -44,6 +45,7 @@ namespace XactJobs
                    queue,
                    periodicJobId,
                    cronExpression,
+                   periodicJobVersion,
                    errorCount)
         {
             ProcessedAt = processedAt;
@@ -53,7 +55,6 @@ namespace XactJobs
         }
 
         public static XactJobHistory CreateFromJob(XactJob job,
-                                                   XactJobPeriodic? periodicJob,
                                                    DateTime processedAt,
                                                    XactJobStatus status,
                                                    int errorCount,
@@ -74,8 +75,9 @@ namespace XactJobs
                                       job.MethodArgs,
                                       job.Queue,
                                       job.PeriodicJobId,
+                                      job.CronExpression,
+                                      job.PeriodicJobVersion,
                                       errorCount,
-                                      periodicJob?.CronExpression,
                                       innerMostEx?.Message,
                                       ex?.StackTrace);
         }

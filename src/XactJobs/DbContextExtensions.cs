@@ -265,6 +265,7 @@ namespace XactJobs
                                      job.Queue,
                                      job.PeriodicJobId,
                                      job.CronExpression,
+                                     job.PeriodicJobVersion,
                                      errorCount);
 
             dbContext.Set<XactJob>().Add(newJob);
@@ -285,7 +286,8 @@ namespace XactJobs
                                   periodicJob.MethodArgs,
                                   periodicJob.Queue,
                                   periodicJob.Id,
-                                  periodicJob.CronExpression);
+                                  periodicJob.CronExpression,
+                                  periodicJob.Version);
 
             dbContext.Set<XactJob>().Add(job);
 

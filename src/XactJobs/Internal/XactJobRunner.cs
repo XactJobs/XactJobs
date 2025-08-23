@@ -37,6 +37,13 @@ namespace XactJobs.Internal
             _logger = logger;
         }
 
+        /// <summary>
+        /// Executes the job runner loop, polling for jobs and processing them in batches.
+        /// Handles initial delay, polling intervals, error backoff, and graceful shutdown.
+        /// </summary>
+        /// <param name="stoppingToken">A <see cref="CancellationToken"/> to observe while waiting for the task to complete.</param>
+        /// <param name="initialDelayMs">The initial delay in milliseconds before starting job polling.</param>
+        /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
         public async Task ExecuteAsync(CancellationToken stoppingToken, int initialDelayMs)
         {
             await Task.Delay(TimeSpan.FromMilliseconds(initialDelayMs), stoppingToken)
@@ -370,7 +377,7 @@ namespace XactJobs.Internal
                 }
             }
 
-            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, periodicJob, DateTime.UtcNow, status, errorCount, ex));
+            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, ex));
 
             if (periodicJob != null 
                 && status != XactJobStatus.Failed // only failed jobs are not re-scheduled to prevent overlap (they are re-scheduled above)
