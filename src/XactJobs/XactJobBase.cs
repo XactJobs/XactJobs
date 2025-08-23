@@ -43,6 +43,7 @@ namespace XactJobs
 
         public string? PeriodicJobId { get; init; }
         public string? CronExpression { get; init; }
+        public int? PeriodicJobVersion { get; init; }
 
         public int ErrorCount { get; init; }
 
@@ -54,6 +55,7 @@ namespace XactJobs
                            string queue,
                            string? periodicJobId = null,
                            string? cronExpression = null,
+                           int? periodicJobVersion = null,
                            int errorCount = 0)
         {
             Id = id;
@@ -64,6 +66,7 @@ namespace XactJobs
             Queue = queue;
             PeriodicJobId = periodicJobId;
             CronExpression = cronExpression;
+            PeriodicJobVersion = periodicJobVersion;
             ErrorCount = errorCount;
         }
     }

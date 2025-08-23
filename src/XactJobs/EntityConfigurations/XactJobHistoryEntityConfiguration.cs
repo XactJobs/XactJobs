@@ -78,6 +78,7 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.PeriodicJobId).HasColumnName(_sqlDialect.ColPeriodicJobId);
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
+            builder.Property(x => x.PeriodicJobVersion).HasColumnName(_sqlDialect.ColPeriodicJobVersion);
 
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");

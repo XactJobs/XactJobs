@@ -64,6 +64,7 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.Queue).HasColumnName(_sqlDialect.ColQueue);
 
             builder.Property(x => x.IsActive).HasColumnName(_sqlDialect.ColIsActive);
+            builder.Property(x => x.Version).HasColumnName(_sqlDialect.ColVersion);
 
             if (_sqlDialect is OracleDialect)
             {

@@ -64,6 +64,11 @@ namespace XactJobs
         /// </summary>
         public bool IsActive { get; private set; }
 
+        /// <summary>
+        /// Version is increased every time the period job changes.
+        /// </summary>
+        public int Version { get; private set; }
+
         public XactJobPeriodic(string id,
                                DateTime createdAt,
                                DateTime updatedAt,
@@ -72,7 +77,8 @@ namespace XactJobs
                                string methodName,
                                string methodArgs,
                                string queue,
-                               bool isActive)
+                               bool isActive,
+                               int version)
         {
             Id = id;
             CreatedAt = createdAt;
@@ -83,6 +89,7 @@ namespace XactJobs
             MethodArgs = methodArgs;
             Queue = queue;
             IsActive = isActive;
+            Version = version;
         }
 
         internal void UpdateDefinition(XactJobPeriodic job)
@@ -93,6 +100,7 @@ namespace XactJobs
             MethodArgs = job.MethodArgs;
             CronExpression = job.CronExpression;
             Queue = job.Queue;
+            Version = Version + 1;
         }
 
         internal bool IsCompatibleWith(XactJobPeriodic job)
@@ -110,7 +118,8 @@ namespace XactJobs
                 && MethodName == job.MethodName 
                 && MethodArgs == job.MethodArgs 
                 && CronExpression == job.CronExpression 
-                && Queue == job.Queue;
+                && Queue == job.Queue
+                && Version == (job.PeriodicJobVersion ?? 1);
         }
 
         internal void Activate(bool isActive = true)
