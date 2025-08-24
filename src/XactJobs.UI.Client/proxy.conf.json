@@ -1,0 +1,7 @@
+{
+  "/xactjobs-ui/api/*": {
+    "target": "https://localhost:7152",
+    "secure": false,
+    "changeOrigin": true
+  }
+}

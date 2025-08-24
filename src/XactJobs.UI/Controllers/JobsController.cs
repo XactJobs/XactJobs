@@ -7,14 +7,14 @@ using System.Threading.Tasks;
 namespace XactJobs.UI.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
-    public class JobsController<TDbContext> : ControllerBase where TDbContext: DbContext
+    [Route(Constants.RoutePrefix + "/api/[controller]")]
+    public class JobsController : ControllerBase 
     {
-        private readonly TDbContext _db;
+        private readonly DbContext _db;
 
-        public JobsController(TDbContext db)
+        public JobsController(XactJobsDbContextAccessor acc)
         {
-            _db = db;
+            _db = acc.DbContext;
         }
 
         // List all jobs (active, scheduled, etc.)
@@ -61,8 +61,8 @@ namespace XactJobs.UI.Controllers
         }
 
         // Delete a recurring job
-        [HttpDelete("recurring/{id}")]
-        public async Task<IActionResult> DeleteRecurringJob(string id, CancellationToken cancellationToken)
+        [HttpDelete("periodic/{id}")]
+        public async Task<IActionResult> DeletePeriodicJob(string id, CancellationToken cancellationToken)
         {
             if (!await _db.JobDeletePeriodicAsync(id, cancellationToken))
             {

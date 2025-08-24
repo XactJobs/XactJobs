@@ -32,6 +32,10 @@
 	</ItemGroup>
 
     <ItemGroup>
+      <EmbeddedResource Include="EmbeddedUI\**\*" />
+    </ItemGroup>
+
+    <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
     </ItemGroup>
 
