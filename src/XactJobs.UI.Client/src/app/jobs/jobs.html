@@ -1,0 +1,61 @@
+<div class="space-y-6">
+  @if (loading()) {
+    <div class="flex justify-center items-center h-32">
+      <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  } @else {
+    <!-- Queues Section -->
+    <div class="bg-white rounded-lg border">
+      <div class="p-6">
+        <h2 class="text-xl font-semibold mb-6">Queues</h2>
+        <div class="space-y-4">
+          @for (queue of queues(); track queue.name) {
+            <div class="border-b pb-4 last:border-b-0">
+              <div class="grid grid-cols-4 gap-4 items-center mb-2">
+                <div class="text-blue-600 font-medium">{{queue.name}}</div>
+                <div>{{queue.length}}</div>
+                <div>{{queue.fetched}}</div>
+                <div class="text-gray-600">Next jobs</div>
+              </div>
+
+              @if (queue.jobs.length > 0) {
+                <div class="ml-4">
+                  <div class="grid grid-cols-4 gap-4 text-sm text-gray-600 mb-2">
+                    <div>Id</div>
+                    <div>State</div>
+                    <div>Job</div>
+                    <div>Enqueued</div>
+                  </div>
+
+                  @for (job of queue.jobs; track job.id) {
+                    <div class="grid grid-cols-4 gap-4 text-sm py-1">
+                      <div class="text-blue-600">{{job.id}}</div>
+                      <div>
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">{{job.state}}</span>
+                      </div>
+                      <div>{{job.job}}</div>
+                      <div>{{job.enqueuedTime}}</div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="ml-4 text-gray-500 italic">
+                  No jobs queued.
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+
+  @if (error()) {
+    <div class="bg-red-50 border border-red-200 p-4 rounded">
+      <p class="text-red-800">{{error()}}</p>
+      <button (click)="loadQueues()" class="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+        Retry
+      </button>
+    </div>
+  }
+</div>

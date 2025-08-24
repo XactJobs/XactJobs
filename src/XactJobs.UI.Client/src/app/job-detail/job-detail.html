@@ -1,0 +1,66 @@
+<div class="bg-white rounded-lg border">
+  <div class="p-6">
+    <h2 class="text-xl font-semibold mb-6">IEmailService.SendCampaignEmailAsync</h2>
+
+    <div class="mb-6">
+      <div class="text-sm text-gray-600 mb-2">// Id: fd1e5734-731e-4f6c-ad81-9bb3c0534a5b</div>
+      <div class="bg-gray-50 p-4 rounded">
+        <code class="text-sm">
+          <span class="text-blue-600">using</span> ConsoleSample;<br/>
+          <br/>
+          <span class="text-blue-600">var</span> iEmailService = Activate&lt;<span class="text-blue-600">IEmailService</span>&gt;();<br/>
+          <span class="text-blue-600">await</span> iEmailService.SendCampaignEmailAsync(83, 1902);
+        </code>
+      </div>
+    </div>
+
+    <div class="mb-6">
+      <h3 class="text-lg font-semibold mb-4">Parameters</h3>
+      <div class="space-y-2">
+        <div class="grid grid-cols-2 gap-4">
+          <div class="text-sm text-gray-600">RetryCount</div>
+          <div class="text-sm">5</div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="text-sm text-gray-600">BatchId</div>
+          <div class="text-sm">"7a67af43-9809-4b83-a96f-29fcf111e914"</div>
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div class="text-sm text-gray-600">CurrentCulture</div>
+          <div class="text-sm">"en-US"</div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-semibold">State</h3>
+        <div class="space-x-2">
+          <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Requeue</button>
+          <button class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">Delete</button>
+        </div>
+      </div>
+
+      <div class="space-y-4">
+        <div class="bg-blue-50 p-4 rounded">
+          <div class="font-medium text-blue-800">Scheduled</div>
+          <div class="text-sm text-blue-600 mt-1">
+            Retry attempt 5 of 10: Syntax error, command unrecognized.
+          </div>
+          <div class="text-sm text-gray-600 mt-2">
+            <strong>Enqueue at:</strong> in 6 minutes
+          </div>
+          <div class="text-xs text-gray-500 mt-1">a few seconds ago (+3ms)</div>
+        </div>
+
+        <div class="bg-red-50 p-4 rounded">
+          <div class="font-medium text-red-800">Failed</div>
+          <div class="text-sm text-red-600 mt-1">
+            An exception occurred during performance of the job.
+          </div>
+          <div class="text-xs text-gray-500 mt-1">+18ms</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

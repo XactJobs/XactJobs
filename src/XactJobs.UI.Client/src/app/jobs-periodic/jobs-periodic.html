@@ -1,0 +1,67 @@
+<div class="bg-white rounded-lg border">
+  <div class="p-6">
+    <h2 class="text-xl font-semibold mb-6">Recurring Jobs</h2>
+
+    <div class="flex justify-between items-center mb-4">
+      <div class="flex space-x-2">
+        <button class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+          Trigger now
+        </button>
+        <button class="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+          Delete
+        </button>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span class="text-sm text-gray-600">Items per page:</span>
+        <select class="border rounded px-2 py-1 text-sm">
+          <option>10</option>
+          <option>20</option>
+          <option>50</option>
+          <option>100</option>
+          <option>500</option>
+          <option>1,000</option>
+          <option>5,000</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="min-w-full">
+        <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2 text-left text-sm font-medium text-gray-900"></th>
+          <th class="px-4 py-2 text-left text-sm font-medium text-gray-900">Id</th>
+          <th class="px-4 py-2 text-left text-sm font-medium text-gray-900">Cron</th>
+          <th class="px-4 py-2 text-left text-sm font-medium text-gray-900">Time zone</th>
+          <th class="px-4 py-2 text-left text-sm font-medium text-gray-900">Next execution</th>
+          <th class="px-4 py-2 text-left text-sm font-medium text-gray-900">Last execution</th>
+          <th class="px-4 py-2 text-left text-sm font-medium text-gray-900">Created</th>
+        </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+          @for (job of recurringJobs(); track job.id) {
+            <tr class="hover:bg-gray-50">
+              <td class="px-4 py-2">
+                <input type="checkbox" class="rounded">
+              </td>
+              <td class="px-4 py-2 font-medium">{{job.id}}</td>
+              <td class="px-4 py-2">
+                <span class="font-mono text-sm">{{job.cron}}</span>
+              </td>
+              <td class="px-4 py-2 text-sm">{{job.timeZone}}</td>
+              <td class="px-4 py-2 text-sm">{{job.nextExecution}}</td>
+              <td class="px-4 py-2">
+                <span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">{{job.lastExecution}}</span>
+              </td>
+              <td class="px-4 py-2 text-sm text-gray-600">{{job.created}}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mt-4 text-sm text-gray-600">
+      Total items: {{recurringJobs().length}}
+    </div>
+  </div>
+</div>

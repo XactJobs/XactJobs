@@ -1,2 +1,119 @@
+<div class="min-h-screen bg-gray-50">
+  <!-- Header -->
+  <header class="bg-white shadow-sm border-b">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex justify-between items-center h-16">
+        <div class="flex items-center space-x-8">
+          <h1 class="text-xl font-semibold text-gray-900"><a routerLink="/overview">XactJobs UI</a></h1>
 
-<router-outlet />
+          <nav class="flex space-x-6">
+            <a routerLink="/jobs" routerLinkActive="text-blue-600 border-b-2 border-blue-600"
+               class="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
+              Jobs
+              <span class="ml-2 px-2 py-1 bg-gray-200 text-gray-700 rounded-full text-xs">{{jobStats().enqueued + jobStats().processing + jobStats().scheduled + jobStats().succeeded + jobStats().failed + jobStats().deleted + jobStats().awaiting}}</span>
+              <span class="ml-1 px-2 py-1 bg-red-500 text-white rounded-full text-xs">{{jobStats().failed}}</span>
+            </a>
+
+            <a routerLink="/retries" routerLinkActive="text-blue-600 border-b-2 border-blue-600"
+               class="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
+              Retries
+              <span class="ml-2 px-2 py-1 bg-yellow-200 text-yellow-800 rounded-full text-xs">1</span>
+            </a>
+
+            <a routerLink="/recurring-jobs" routerLinkActive="text-blue-600 border-b-2 border-blue-600"
+               class="flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-gray-900">
+              Recurring Jobs
+              <span class="ml-2 px-2 py-1 bg-gray-200 text-gray-700 rounded-full text-xs">6</span>
+            </a>
+
+          </nav>
+        </div>
+
+        <div>
+          <!-- <button class="text-gray-600 hover:text-gray-900">Back to site</button> -->
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex">
+      <!-- Sidebar -->
+      <aside class="w-64 mr-8">
+        <div class="bg-white rounded-lg border p-4">
+          <nav class="space-y-2">
+            <a routerLink="/overview" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Overview
+            </a>
+
+            <a routerLink="/jobs" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Enqueued
+              <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">{{jobStats().enqueued}}/2</span>
+            </a>
+
+            <a routerLink="/scheduled" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Scheduled
+              <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{{jobStats().scheduled}}</span>
+            </a>
+
+            <a routerLink="/processing" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Processing
+              <span class="px-2 py-1 bg-orange-100 text-orange-800 rounded-full text-xs">{{jobStats().processing}}</span>
+            </a>
+
+            <a routerLink="/succeeded" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Succeeded
+              <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{{jobStats().succeeded}}</span>
+            </a>
+
+            <a routerLink="/failed-jobs" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Failed
+              <span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs">{{jobStats().failed}}</span>
+            </a>
+
+            <a routerLink="/deleted" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Deleted
+              <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{{jobStats().deleted}}</span>
+            </a>
+
+            <a routerLink="/awaiting" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Awaiting
+              <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{{jobStats().awaiting}}</span>
+            </a>
+
+            <a routerLink="/awaiting-batch" routerLinkActive="bg-blue-50 text-blue-600 border-blue-200"
+               class="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded border border-transparent">
+              Awaiting Batch
+              <span class="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">{{jobStats().awaitingBatch}}</span>
+            </a>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Content Area -->
+      <div class="flex-1">
+        <router-outlet></router-outlet>
+      </div>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t mt-auto">
+    <div class="max-w-7xl mx-auto px-4 py-4">
+      <div class="flex justify-between items-center text-sm text-gray-600">
+        <div>
+          Copyright © 2025 XactJobs.
+        </div>
+      </div>
+    </div>
+  </footer>
+</div>
