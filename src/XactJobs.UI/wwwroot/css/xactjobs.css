@@ -1,0 +1,143 @@
+/* XactJobs Dashboard Styles */
+
+:root {
+    --xj-primary: #0d6efd;
+    --xj-success: #198754;
+    --xj-danger: #dc3545;
+    --xj-warning: #ffc107;
+    --xj-info: #0dcaf0;
+}
+
+/* Navbar customization */
+.navbar-brand {
+    font-weight: 600;
+}
+
+/* Card improvements */
+.card {
+    border: none;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #dee2e6;
+}
+
+/* Stats cards */
+.card.text-bg-primary,
+.card.text-bg-success,
+.card.text-bg-danger,
+.card.text-bg-warning {
+    border: none;
+}
+
+.card.text-bg-primary { background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important; }
+.card.text-bg-success { background: linear-gradient(135deg, #198754 0%, #146c43 100%) !important; }
+.card.text-bg-danger { background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%) !important; }
+.card.text-bg-warning { background: linear-gradient(135deg, #ffc107 0%, #ffca2c 100%) !important; }
+
+/* Table styling */
+.table {
+    margin-bottom: 0;
+}
+
+.table th {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.table td {
+    vertical-align: middle;
+}
+
+/* Code styling */
+code {
+    font-size: 0.875em;
+    color: #d63384;
+    background-color: #f8f9fa;
+    padding: 0.125rem 0.25rem;
+    border-radius: 0.25rem;
+}
+
+/* Badge styling */
+.badge {
+    font-weight: 500;
+}
+
+/* Button styling */
+.btn-sm {
+    padding: 0.25rem 0.5rem;
+}
+
+/* Modal improvements */
+.modal-header.bg-danger .btn-close-white {
+    filter: brightness(0) invert(1);
+}
+
+/* Chart container */
+#jobsChart {
+    min-height: 300px;
+}
+
+/* Responsive table */
+.table-responsive {
+    border-radius: 0.375rem;
+}
+
+/* Animation for HTMX swaps */
+.htmx-swapping {
+    opacity: 0;
+    transition: opacity 0.5s ease-out;
+}
+
+/* Alert styling */
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+/* Pagination styling */
+.pagination {
+    margin-bottom: 0;
+}
+
+.page-link {
+    border: none;
+    margin: 0 0.125rem;
+    border-radius: 0.375rem !important;
+}
+
+/* Loading indicator */
+.htmx-request .htmx-indicator {
+    display: inline-block;
+}
+
+.htmx-indicator {
+    display: none;
+}
+
+/* Scrollbar styling for code blocks */
+pre {
+    scrollbar-width: thin;
+    scrollbar-color: #6c757d #343a40;
+}
+
+pre::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+pre::-webkit-scrollbar-track {
+    background: #343a40;
+    border-radius: 4px;
+}
+
+pre::-webkit-scrollbar-thumb {
+    background: #6c757d;
+    border-radius: 4px;
+}
+
+pre::-webkit-scrollbar-thumb:hover {
+    background: #adb5bd;
+}

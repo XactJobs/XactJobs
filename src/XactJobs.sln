@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36127.28
@@ -10,6 +10,8 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XactJobs.Tests", "XactJobs.Tests\XactJobs.Tests.csproj", "{B49795CF-F730-4B36-B5C8-1BAAB5DC6DB4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XactJobs.UI", "XactJobs.UI\XactJobs.UI.csproj", "{834B81F6-1849-4C48-AFDB-3651C0C380B6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -29,6 +31,10 @@ Global
 		{B49795CF-F730-4B36-B5C8-1BAAB5DC6DB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B49795CF-F730-4B36-B5C8-1BAAB5DC6DB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B49795CF-F730-4B36-B5C8-1BAAB5DC6DB4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{834B81F6-1849-4C48-AFDB-3651C0C380B6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{834B81F6-1849-4C48-AFDB-3651C0C380B6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{834B81F6-1849-4C48-AFDB-3651C0C380B6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{834B81F6-1849-4C48-AFDB-3651C0C380B6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

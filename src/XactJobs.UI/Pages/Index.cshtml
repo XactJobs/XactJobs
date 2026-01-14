@@ -1,0 +1,237 @@
+@page "/xactjobs"
+@model XactJobs.UI.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary"
+                hx-get="@Model.Options.ApiBasePath/stats"
+                hx-target="#stats-cards"
+                hx-swap="innerHTML"
+                hx-on::after-request="updateStatsCards(event)">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div id="stats-cards" class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card text-bg-primary h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Pending</h6>
+                        <h2 class="card-title mb-0" id="stat-pending">@Model.Stats.PendingJobs</h2>
+                    </div>
+                    <i class="bi bi-clock fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-warning h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Processing</h6>
+                        <h2 class="card-title mb-0" id="stat-processing">@Model.Stats.ProcessingJobs</h2>
+                    </div>
+                    <i class="bi bi-play-circle fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-success h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Succeeded (24h)</h6>
+                        <h2 class="card-title mb-0" id="stat-succeeded">@Model.Stats.SucceededLast24h</h2>
+                    </div>
+                    <i class="bi bi-check-circle fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-danger h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Failed (24h)</h6>
+                        <h2 class="card-title mb-0" id="stat-failed">@Model.Stats.FailedLast24h</h2>
+                    </div>
+                    <i class="bi bi-x-circle fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Job Processing Over Time (Last 24h)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="jobsChart" height="300"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Success Rate (24h)</h5>
+            </div>
+            <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                <canvas id="successChart" width="250" height="250"></canvas>
+                <div class="mt-3 text-center">
+                    <h3 id="success-rate">@Model.Stats.SuccessRateLast24h.ToString("F1")%</h3>
+                    <p class="text-muted mb-0">Success Rate</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Periodic Jobs Summary -->
+<div class="row g-4 mt-2">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Periodic Jobs</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-around text-center">
+                    <div>
+                        <h3 class="text-success" id="stat-periodic-active">@Model.Stats.PeriodicJobsActive</h3>
+                        <p class="text-muted mb-0">Active</p>
+                    </div>
+                    <div>
+                        <h3 class="text-secondary" id="stat-periodic-inactive">@Model.Stats.PeriodicJobsInactive</h3>
+                        <p class="text-muted mb-0">Inactive</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const apiBasePath = '@Model.Options.ApiBasePath';
+    const refreshInterval = @Model.Options.RefreshIntervalSeconds * 1000;
+
+    // Initialize charts
+    document.addEventListener('DOMContentLoaded', function() {
+        initCharts();
+        setInterval(refreshStats, refreshInterval);
+    });
+
+    function initCharts() {
+        // Fetch chart data and initialize
+        fetch(`${apiBasePath}/chart-data?intervalMinutes=60`)
+            .then(r => r.json())
+            .then(data => {
+                const ctx = document.getElementById('jobsChart').getContext('2d');
+                window.jobsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => new Date(d.timestamp).toLocaleTimeString()),
+                        datasets: [
+                            {
+                                label: 'Succeeded',
+                                data: data.map(d => d.succeeded),
+                                borderColor: '#198754',
+                                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Failed',
+                                data: data.map(d => d.failed),
+                                borderColor: '#dc3545',
+                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            });
+
+        // Success rate doughnut
+        const successCtx = document.getElementById('successChart').getContext('2d');
+        const succeeded = @Model.Stats.SucceededLast24h;
+        const failed = @Model.Stats.FailedLast24h;
+        window.successChart = new Chart(successCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Succeeded', 'Failed'],
+                datasets: [{
+                    data: [succeeded, failed],
+                    backgroundColor: ['#198754', '#dc3545'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                cutout: '70%'
+            }
+        });
+    }
+
+    function refreshStats() {
+        fetch(`${apiBasePath}/stats`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('stat-pending').textContent = data.pendingJobs;
+                document.getElementById('stat-processing').textContent = data.processingJobs;
+                document.getElementById('stat-succeeded').textContent = data.succeededLast24h;
+                document.getElementById('stat-failed').textContent = data.failedLast24h;
+                document.getElementById('stat-periodic-active').textContent = data.periodicJobsActive;
+                document.getElementById('stat-periodic-inactive').textContent = data.periodicJobsInactive;
+                document.getElementById('success-rate').textContent = data.successRateLast24h.toFixed(1) + '%';
+
+                // Update success chart
+                if (window.successChart) {
+                    window.successChart.data.datasets[0].data = [data.succeededLast24h, data.failedLast24h];
+                    window.successChart.update();
+                }
+            });
+    }
+
+    function updateStatsCards(event) {
+        if (event.detail.successful) {
+            const data = JSON.parse(event.detail.xhr.responseText);
+            document.getElementById('stat-pending').textContent = data.pendingJobs;
+            document.getElementById('stat-processing').textContent = data.processingJobs;
+            document.getElementById('stat-succeeded').textContent = data.succeededLast24h;
+            document.getElementById('stat-failed').textContent = data.failedLast24h;
+        }
+    }
+</script>
+}
