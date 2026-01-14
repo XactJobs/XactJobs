@@ -488,3 +488,6 @@ $RECYCLE.BIN/
 /src/XactJobs.TestWorker/xact_jobs.db
 /src/XactJobs.TestWorker/xact_jobs.db-shm
 /src/XactJobs.TestWorker/xact_jobs.db-wal
+/src/XactJobs.TestWeb/xactjobs_test.db
+/src/XactJobs.TestWeb/xactjobs_test.db-shm
+/src/XactJobs.TestWeb/xactjobs_test.db-wal

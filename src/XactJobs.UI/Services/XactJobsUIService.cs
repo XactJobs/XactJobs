@@ -6,16 +6,15 @@ namespace XactJobs.UI.Services;
 public class XactJobsUIService<TDbContext> : IXactJobsUIService
     where TDbContext : DbContext
 {
-    private readonly IDbContextFactory<TDbContext> _dbContextFactory;
+    private readonly TDbContext db;
 
-    public XactJobsUIService(IDbContextFactory<TDbContext> dbContextFactory)
+    public XactJobsUIService(TDbContext dbContext)
     {
-        _dbContextFactory = dbContextFactory;
+        db = dbContext;
     }
 
     public async Task<DashboardStatsDto> GetDashboardStatsAsync(CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var now = DateTime.UtcNow;
         var last24h = now.AddHours(-24);
 
@@ -55,8 +54,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     public async Task<IReadOnlyList<JobCountsOverTimeDto>> GetJobCountsOverTimeAsync(
         DateTime from, DateTime to, TimeSpan interval, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var history = await db.Set<XactJobHistory>()
             .Where(h => h.ProcessedAt >= from && h.ProcessedAt <= to)
             .Select(h => new { h.ProcessedAt, h.Status })
@@ -88,8 +85,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     public async Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
         int page, int pageSize, string? queue = null, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var query = db.Set<XactJob>().AsNoTracking();
 
         if (!string.IsNullOrEmpty(queue))
@@ -128,8 +123,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<JobDto?> GetJobByIdAsync(long id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         return await db.Set<XactJob>()
             .AsNoTracking()
             .Where(j => j.Id == id)
@@ -150,8 +143,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<bool> DeleteJobAsync(long id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var deleted = await db.Set<XactJob>()
             .Where(j => j.Id == id)
             .ExecuteDeleteAsync(ct);
@@ -161,8 +152,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<bool> RequeueJobAsync(long id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var updated = await db.Set<XactJob>()
             .Where(j => j.Id == id)
             .ExecuteUpdateAsync(s => s
@@ -189,8 +178,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     private async Task<PagedResultDto<JobHistoryDto>> GetHistoryByStatusAsync(
         XactJobStatus status, int page, int pageSize, string? queue, CancellationToken ct)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var query = db.Set<XactJobHistory>()
             .AsNoTracking()
             .Where(h => h.Status == status);
@@ -233,8 +220,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<JobHistoryDto?> GetJobHistoryByIdAsync(long id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         return await db.Set<XactJobHistory>()
             .AsNoTracking()
             .Where(h => h.Id == id)
@@ -257,8 +242,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<bool> RetryFailedJobAsync(long id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var history = await db.Set<XactJobHistory>()
             .AsNoTracking()
             .FirstOrDefaultAsync(h => h.Id == id && h.Status == XactJobStatus.Failed, ct);
@@ -288,8 +271,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     public async Task<PagedResultDto<PeriodicJobDto>> GetPeriodicJobsAsync(
         int page, int pageSize, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var query = db.Set<XactJobPeriodic>().AsNoTracking();
 
         var totalCount = await query.CountAsync(ct);
@@ -323,8 +304,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<PeriodicJobDto?> GetPeriodicJobByIdAsync(string id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         return await db.Set<XactJobPeriodic>()
             .AsNoTracking()
             .Where(p => p.Id == id)
@@ -345,8 +324,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<bool> TogglePeriodicJobAsync(string id, bool isActive, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         // Use raw SQL update since IsActive setter is private
         var updated = await db.Database.ExecuteSqlRawAsync(
             "UPDATE XactJobPeriodic SET IsActive = {0} WHERE Id = {1}",
@@ -357,8 +334,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<bool> TriggerPeriodicJobNowAsync(string id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
         var periodicJob = await db.Set<XactJobPeriodic>()
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == id, ct);
@@ -387,12 +362,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<bool> DeletePeriodicJobAsync(string id, CancellationToken ct = default)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
-        var deleted = await db.Set<XactJobPeriodic>()
-            .Where(p => p.Id == id)
-            .ExecuteDeleteAsync(ct);
-
-        return deleted > 0;
+        return await db.JobDeletePeriodicAsync(id, ct);
     }
 }
