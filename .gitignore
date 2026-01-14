@@ -482,6 +482,9 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Claude Code local settings
+.claude/settings.local.json
 /src/XactJobs.TestWorker/xact_jobs.db
 /src/XactJobs.TestWorker/xact_jobs.db-shm
 /src/XactJobs.TestWorker/xact_jobs.db-wal
