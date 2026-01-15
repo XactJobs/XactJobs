@@ -34,7 +34,7 @@ public class XactJobsUIOptions
     public string DashboardTitle { get; set; } = "XactJobs Dashboard";
 
     /// <summary>
-    /// Poll interval for auto-refresh in seconds. Default is 30.
+    /// Poll interval for auto-refresh in seconds. Default is 5.
     /// </summary>
-    public int RefreshIntervalSeconds { get; set; } = 30;
+    public int RefreshIntervalSeconds { get; set; } = 5;
 }
