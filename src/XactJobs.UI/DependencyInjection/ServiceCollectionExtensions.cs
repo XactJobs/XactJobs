@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using XactJobs.UI.Services;
@@ -23,6 +24,13 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(builder.Options);
         services.AddScoped<IXactJobsUIService, XactJobsUIService<TDbContext>>();
+
+        // Add Razor Pages support for the UI with custom route prefix convention
+        services.AddRazorPages(options =>
+        {
+            // Apply route prefix convention to all XactJobs UI pages
+            options.Conventions.Add(new XactJobsPageRouteModelConvention(builder.Options.BasePath));
+        });
 
         return services;
     }

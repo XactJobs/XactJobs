@@ -3,14 +3,14 @@ namespace XactJobs.UI;
 public class XactJobsUIOptions
 {
     /// <summary>
-    /// Base path for the UI dashboard. Default is "/xactjobs".
+    /// Base path for the UI dashboard. Default is "/XactJobs".
     /// </summary>
-    public string BasePath { get; set; } = "/xactjobs";
+    public string BasePath { get; set; } = "/XactJobs";
 
     /// <summary>
-    /// Base path for the API endpoints. Default is "/api/xactjobs".
+    /// Base path for the API endpoints. Default is "/api/XactJobs".
     /// </summary>
-    public string ApiBasePath { get; set; } = "/api/xactjobs";
+    public string ApiBasePath { get; set; } = "/api/XactJobs";
 
     /// <summary>
     /// Page size for job listings. Default is 20.

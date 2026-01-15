@@ -1,8 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
-using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.FileProviders;
 using XactJobs.UI.Api;
 
 namespace XactJobs.UI.DependencyInjection;
@@ -42,19 +40,9 @@ public static class ApplicationBuilderExtensions
             pagesGroup.RequireAuthorization();
         }
 
-        return endpoints;
-    }
+        // Map Razor Pages routes
+        endpoints.MapRazorPages();
 
-    /// <summary>
-    /// Adds XactJobs UI middleware for serving embedded static files.
-    /// Call this before UseRouting().
-    /// </summary>
-    /// <param name="app">The application builder.</param>
-    /// <returns>The application builder for chaining.</returns>
-    public static IApplicationBuilder UseXactJobsUI(this IApplicationBuilder app)
-    {
-        // Static files are served automatically by Razor Class Library
-        // via the StaticWebAssetBasePath configured in .csproj
-        return app;
+        return endpoints;
     }
 }

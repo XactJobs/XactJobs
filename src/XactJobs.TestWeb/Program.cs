@@ -79,7 +79,6 @@ app.MapGet("/enqueue/scheduled", (AppDbContext db) =>
 });
 
 // Enable XactJobs UI
-app.UseXactJobsUI();
 app.MapXactJobsUI();
 
 app.Run();
