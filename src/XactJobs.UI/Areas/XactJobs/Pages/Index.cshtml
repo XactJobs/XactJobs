@@ -9,11 +9,7 @@
         <h1><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
     </div>
     <div class="col-auto">
-        <button class="btn btn-outline-secondary"
-                hx-get="@Model.Options.ApiBasePath/stats"
-                hx-target="#stats-cards"
-                hx-swap="innerHTML"
-                hx-on::after-request="updateStatsCards(event)">
+        <button class="btn btn-outline-secondary" onclick="refreshDashboard()">
             <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>
     </div>
@@ -226,14 +222,22 @@
             });
     }
 
-    function updateStatsCards(event) {
-        if (event.detail.successful) {
-            const data = JSON.parse(event.detail.xhr.responseText);
-            document.getElementById('stat-pending').textContent = data.pendingJobs;
-            document.getElementById('stat-processing').textContent = data.processingJobs;
-            document.getElementById('stat-succeeded').textContent = data.succeededLast24h;
-            document.getElementById('stat-failed').textContent = data.failedLast24h;
-        }
+    function refreshChartData() {
+        fetch(`${apiBasePath}/chart-data?intervalMinutes=60`)
+            .then(r => r.json())
+            .then(data => {
+                if (window.jobsChart) {
+                    window.jobsChart.data.labels = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+                    window.jobsChart.data.datasets[0].data = data.map(d => d.succeeded);
+                    window.jobsChart.data.datasets[1].data = data.map(d => d.failed);
+                    window.jobsChart.update();
+                }
+            });
+    }
+
+    function refreshDashboard() {
+        refreshStats();
+        refreshChartData();
     }
 </script>
 }
