@@ -17,8 +17,6 @@
 		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 		<IncludeSymbols>true</IncludeSymbols>
 		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
-
-		<StaticWebAssetBasePath>xactjobs-ui</StaticWebAssetBasePath>
 	</PropertyGroup>
 
 	<ItemGroup>

@@ -1,6 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using XactJobs;
-using XactJobs.DependencyInjection;
 using XactJobs.TestWeb;
 using XactJobs.UI.DependencyInjection;
 
@@ -77,6 +76,9 @@ app.MapGet("/enqueue/scheduled", (AppDbContext db) =>
     db.SaveChanges();
     return Results.Ok("Job scheduled to run in 30 seconds!");
 });
+
+// needed for the css/js in XactJobs.UI lib
+app.UseStaticFiles();
 
 // Enable XactJobs UI
 app.MapXactJobsUI();
