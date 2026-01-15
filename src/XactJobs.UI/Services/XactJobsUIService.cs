@@ -325,9 +325,9 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     public async Task<bool> TogglePeriodicJobAsync(string id, bool isActive, CancellationToken ct = default)
     {
         // Use raw SQL update since IsActive setter is private
-        var updated = await db.Database.ExecuteSqlRawAsync(
-            "UPDATE XactJobPeriodic SET IsActive = {0} WHERE Id = {1}",
-            [isActive, id], ct);
+        var updated = await db.Set<XactJobPeriodic>()
+            .Where(x => x.Id == id)
+            .ExecuteUpdateAsync(x => x.SetProperty(x => x.IsActive, x => !x.IsActive), ct);
 
         return updated > 0;
     }
