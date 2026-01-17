@@ -27,7 +27,7 @@ public static class XactJobsApiEndpoints
             [FromQuery] int? intervalMinutes,
             CancellationToken ct) =>
         {
-            var fromDate = from ?? DateTime.UtcNow.AddDays(-7);
+            var fromDate = from ?? DateTime.UtcNow.AddHours(-24);
             var toDate = to ?? DateTime.UtcNow;
             var interval = TimeSpan.FromMinutes(intervalMinutes ?? 60);
             return Results.Ok(await service.GetJobCountsOverTimeAsync(fromDate, toDate, interval, ct));
