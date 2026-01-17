@@ -31,6 +31,8 @@ namespace XactJobs.Internal
 
         string PrimaryKeyPrefix { get; }
         string IndexPrefix { get; }
+        string CheckConstraintPrefix { get; }
+        string UniquePrefix { get; }
 
         string ColId { get; }
         string ColCreatedAt { get; }
@@ -70,6 +72,10 @@ namespace XactJobs.Internal
         string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds);
 
         string GetClearLeaseSql(Guid leaser);
+
+        string GetPeriodicJobCheckConstraintSql();
+
+        string GetPeriodicJobUniqueIndexFilterSql();
 
         Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken);
 

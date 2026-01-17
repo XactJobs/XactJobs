@@ -35,13 +35,20 @@ namespace XactJobs.EntityConfigurations
         {
             builder.Metadata.SetIsTableExcludedFromMigrations(_excludeFromMigrations);
 
+            void tableBuilder(TableBuilder<XactJob> tb) 
+            {
+                // make sure every periodic job is valid (either both PeriodicJobId and PeriodicJobVersion are NULL or both are NOT NULL)
+                tb.HasCheckConstraint($"{_sqlDialect.CheckConstraintPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}", 
+                    _sqlDialect.GetPeriodicJobCheckConstraintSql());
+            }
+
             if (_sqlDialect.HasSchemaSupport)
             {
-                builder.ToTable(_sqlDialect.XactJobTable, _sqlDialect.XactJobSchema);
+                builder.ToTable(_sqlDialect.XactJobTable, _sqlDialect.XactJobSchema, tableBuilder);
             }
             else
             {
-                builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobTable}");
+                builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobTable}", tableBuilder);
             }
 
             if (_sqlDialect is SqliteDialect)
@@ -49,6 +56,9 @@ namespace XactJobs.EntityConfigurations
                 // Sqlite only supports autoincrement for INTEGER PRIMARY KEY
                 builder.HasKey(x => x.Id)
                     .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobTable}");
+
+                builder.HasIndex(x => new { x.Queue, x.ScheduledAt })
+                    .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColQueue}_{_sqlDialect.ColScheduledAt}");
             }
             else
             {
@@ -81,6 +91,11 @@ namespace XactJobs.EntityConfigurations
 
             builder.HasIndex(x => x.Leaser)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColLeaser}");
+
+            builder.HasIndex(x => new { x.PeriodicJobId, x.PeriodicJobVersion })
+                .IsUnique()
+                .HasFilter(_sqlDialect.GetPeriodicJobUniqueIndexFilterSql())
+                .HasDatabaseName($"{_sqlDialect.UniquePrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}");
         }
     }
 }

@@ -28,6 +28,8 @@ namespace XactJobs.Internal.SqlDialects
 
         public string PrimaryKeyPrefix { get; } = "PK";
         public string IndexPrefix { get; } = "IX";
+        public string CheckConstraintPrefix { get; } = "CHK";
+        public string UniquePrefix { get; } = "UQ";
 
         public string ColId { get; } = "Id";
         public string ColCreatedAt { get; } = "CreatedAt";
@@ -86,6 +88,12 @@ UPDATE [{XactJobSchema}].[{XactJobTable}]
 SET [{ColLeaser}] = NULL, [{ColLeasedUntil}] = NULL
 WHERE [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
 ";
+
+        public string GetPeriodicJobCheckConstraintSql() => $@"
+([{ColPeriodicJobId}] IS NULL AND [{ColPeriodicJobVersion}] IS NULL)
+    OR ([{ColPeriodicJobId}] IS NOT NULL AND [{ColPeriodicJobVersion}] IS NOT NULL)";
+
+        public string GetPeriodicJobUniqueIndexFilterSql() => $"[{ColPeriodicJobId}] IS NOT NULL";
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
