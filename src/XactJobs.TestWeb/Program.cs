@@ -5,11 +5,15 @@ using XactJobs.UI.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var dbPath = Path.Combine(builder.Environment.ContentRootPath, "xactjobs_test.db");
-
-// Configure SQLite
+// Configure DBContext
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+{
+    options.UseNpgsql(builder.Configuration.GetConnectionString("PostgresConnectionString"));
+    //options.UseSqlServer(builder.Configuration.GetConnectionString("SqlServerConnectionString"));
+    //options.UseMySql(builder.Configuration.GetConnectionString("MySqlConnectionString"), ServerVersion.Parse("8.5.4"));
+    //options.UseOracle(builder.Configuration.GetConnectionString("OracleConnectionString"));
+    //options.UseSqlite(builder.Configuration.GetConnectionString("SqliteConnectionString"));
+});
 
 // Register sample job class for DI
 builder.Services.AddTransient<SampleJobs>();

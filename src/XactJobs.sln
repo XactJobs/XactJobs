@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.14.36127.28
+# Visual Studio Version 18
+VisualStudioVersion = 18.2.11408.102 d18.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XactJobs", "XactJobs\XactJobs.csproj", "{61A81CF3-9094-4EED-B433-27734B11245F}"
 EndProject
@@ -91,6 +91,8 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{5B5F99BF-6F07-1A11-C85B-B6FFAE38BA6B} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{B49795CF-F730-4B36-B5C8-1BAAB5DC6DB4} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
+		{A338ED1D-7F67-4453-9F8C-E7CE161D3FD4} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A244C2AD-AD14-460F-9F2F-A8D4AB211CD0}
