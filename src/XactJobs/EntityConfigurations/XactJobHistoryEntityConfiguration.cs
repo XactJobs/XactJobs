@@ -80,6 +80,13 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
             builder.Property(x => x.PeriodicJobVersion).HasColumnName(_sqlDialect.ColPeriodicJobVersion);
 
+            if (_sqlDialect is OracleDialect)
+            {
+                // the default is NVARCHAR2(2000), and a failure that doesn't fit can't be recorded
+                builder.Property(x => x.ErrorMessage).HasColumnType("NCLOB");
+                builder.Property(x => x.ErrorStackTrace).HasColumnType("NCLOB");
+            }
+
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
         }
