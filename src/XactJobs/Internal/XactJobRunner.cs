@@ -232,11 +232,6 @@ namespace XactJobs.Internal
                     
                     await RunJobAsync(job, periodicJob, stoppingToken)
                         .ConfigureAwait(false);
-
-                    if (_logger.IsEnabled(LogLevel.Debug))
-                    {
-                        _logger.LogDebug("{Queue}: Job completed - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
-                    }
                 }
                 catch (Exception ex)
                 {
@@ -312,7 +307,9 @@ namespace XactJobs.Internal
             {
                 dbContext.Attach(job);
 
-                if (job.PeriodicJobId != null && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job)))
+                var isSkipped = job.PeriodicJobId != null && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job));
+
+                if (isSkipped)
                 {
                     // periodic job is inactive or deleted
                     RecordSkipped(dbContext, job, periodicJob);
@@ -339,6 +336,11 @@ namespace XactJobs.Internal
                     await dbContext.Database.CurrentTransaction.CommitAsync(stoppingToken)
                         .ConfigureAwait(false);
                 }
+
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug("{Queue}: Job {Outcome} - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), isSkipped ? "skipped" : "completed", job.TypeName, job.MethodName, job.Id);
+                }
             }
             catch (Exception ex)
             {
@@ -353,6 +355,8 @@ namespace XactJobs.Internal
                 {
                     throw;
                 }
+
+                _logger.LogDebug("{Queue}: Job cancelled by shutdown, it will run again - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
             }
             finally
             {
