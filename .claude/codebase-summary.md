@@ -30,7 +30,7 @@ Library (NuGet package) for reliable job scheduling and execution with full data
 │   ├── XactJobs.TestWorker/      # Test worker application
 │   ├── XactJobs.TestWeb/         # Test web application
 │   └── XactJobs.sln              # Solution file
-├── sql/                          # Database schema scripts (v0.1.0, v0.1.4)
+├── sql/                          # Database schema scripts (v0.1.0, v0.1.4, v0.1.5)
 ├── docker/                       # Docker compose files (mysql, oracle, postgresql)
 └── .claude/                      # Claude reference files
 
@@ -133,7 +133,7 @@ dbContext.JobEnsurePeriodicAsync("daily-cleanup", "0 0 * * * *", () => Cleanup()
 
 ## Important Notes
 
-- Current version: 0.1.4
+- Current version: 0.1.5
 - Targets: net8.0, net9.0
 - License: LGPL-3.0-or-later
 
