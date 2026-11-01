@@ -79,7 +79,13 @@ namespace XactJobs
         /// <remarks>Adjust this value to control how long historical data is kept. Setting a lower value
         /// may reduce storage usage,  while a higher value retains data for longer periods.</remarks>
         public int HistoryRetentionPeriodInDays { get; set; } = 30;
-        
+
+        /// <summary>
+        /// How often each node looks for active periodic jobs without a pending run, and schedules their next run.
+        /// Default 300 seconds.
+        /// </summary>
+        public int PeriodicJobReconciliationIntervalInSeconds { get; set; } = 300;
+
         /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>

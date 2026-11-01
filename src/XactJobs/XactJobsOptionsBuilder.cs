@@ -99,6 +99,14 @@ namespace XactJobs
             return this;
         }
 
+        public XactJobsOptionsBuilder<TDbContext> WithPeriodicJobReconciliationInterval(int intervalInSeconds)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(intervalInSeconds, 1);
+
+            Options.PeriodicJobReconciliationIntervalInSeconds = intervalInSeconds;
+            return this;
+        }
+
         public XactJobsOptionsBuilder<TDbContext> WithPriorityQueue(Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
         {
             WithIsolatedQueue(QueueNames.Priority, options =>
