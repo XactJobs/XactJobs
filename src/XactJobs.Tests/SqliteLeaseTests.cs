@@ -138,6 +138,7 @@ public class SqliteLeaseTests : IAsyncLifetime
         {
             options
                 .WithWorkerCount(2)
+                .WithShutdownTimeout(0)
                 .WithLeaseDuration(leaseDurationInSeconds);
         });
 
@@ -159,12 +160,12 @@ public class SqliteLeaseTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Stop_ClearsLeasesOfRunningAndNotStartedJobs_ButNotOfOtherLeasers()
+    public async Task Stop_ClearsLeasesOfRunningJobs_ButNotOfOtherLeasers()
     {
         await CreateHostAsync(options =>
         {
-            options.WithWorkerCount(1);
-            options.Options.MaxDegreeOfParallelism = 1;
+            options.WithWorkerCount(1).WithShutdownTimeout(0);
+            options.Options.MaxDegreeOfParallelism = 2;
         });
 
         var jobIds = await EnqueueBlockingJobsAsync(2);
@@ -175,11 +176,9 @@ public class SqliteLeaseTests : IAsyncLifetime
 
         await _host!.StartAsync();
 
-        await _state.WaitForStartedAsync(1).WaitAsync(WaitTimeout);
+        await _state.WaitForStartedAsync(2).WaitAsync(WaitTimeout);
 
-        // both claimed, only one of them running
         Assert.All(await GetJobsAsync(jobIds), j => Assert.NotNull(j.Leaser));
-        Assert.Equal(1, _state.StartedCount);
 
         await _host.StopAsync();
 

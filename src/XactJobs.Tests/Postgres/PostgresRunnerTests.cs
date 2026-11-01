@@ -188,7 +188,7 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
     {
         const int leaseDurationInSeconds = 2;
 
-        CreateHost(options => options.WithWorkerCount(2).WithLeaseDuration(leaseDurationInSeconds));
+        CreateHost(options => options.WithWorkerCount(2).WithShutdownTimeout(0).WithLeaseDuration(leaseDurationInSeconds));
 
         var jobId = await WithDbAsync(async db =>
         {
@@ -214,12 +214,12 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
     }
 
     [PostgresFact]
-    public async Task Stop_ClearsLeasesOfRunningAndNotStartedJobs_ButNotOfOtherLeasers()
+    public async Task Stop_ClearsLeasesOfRunningJobs_ButNotOfOtherLeasers()
     {
         CreateHost(options =>
         {
-            options.WithWorkerCount(1);
-            options.Options.MaxDegreeOfParallelism = 1;
+            options.WithWorkerCount(1).WithShutdownTimeout(0);
+            options.Options.MaxDegreeOfParallelism = 2;
         });
 
         var (jobIds, otherJobId) = await WithDbAsync(async db =>
@@ -240,10 +240,9 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
 
         await _host!.StartAsync();
 
-        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 1), "the first job to start");
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 2), "the jobs to start");
 
         Assert.All(await GetJobsAsync(jobIds), j => Assert.NotNull(j.Leaser));
-        Assert.Equal(1, _state.BlockedCount);
 
         await _host.StopAsync();
 
@@ -255,6 +254,82 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
         });
 
         Assert.NotNull((await GetJobsAsync([otherJobId])).Single().Leaser);
+    }
+
+    [PostgresFact]
+    public async Task SlowJob_DoesNotStopShortJobsOnTheSameWorker()
+    {
+        const int shortJobs = 20;
+
+        CreateHost(options =>
+        {
+            options.WithWorkerCount(1).WithShutdownTimeout(0);
+            options.Options.MaxDegreeOfParallelism = 2;
+        });
+
+        await WithDbAsync(db =>
+        {
+            db.JobEnqueue<PostgresJob>(x => x.BlockUntilCancelledAsync(CancellationToken.None));
+
+            return db.SaveChangesAsync();
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 1), "the slow job to start");
+
+        // added now, so that they can only run if the worker keeps polling while the slow job is running
+        await WithDbAsync(db =>
+        {
+            for (var i = 0; i < shortJobs; i++)
+            {
+                var number = i;
+
+                db.JobEnqueue<PostgresJob>(x => x.Count(number));
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        await WaitForAsync(() => Task.FromResult(_state.Runs.Count == shortJobs), "the short jobs to finish");
+
+        // only the slow one is left, still leased
+        var left = await WithDbAsync(db => db.Jobs.AsNoTracking().Where(j => j.PeriodicJobId == null).SingleAsync());
+
+        Assert.NotNull(left.Leaser);
+    }
+
+    [PostgresFact]
+    public async Task Stop_AfterTheTimeout_ClearsLeasesOnlyOfUnfinishedJobs()
+    {
+        CreateHost(options =>
+        {
+            options.WithWorkerCount(1).WithShutdownTimeout(1);
+            options.Options.MaxDegreeOfParallelism = 2;
+        });
+
+        var (blockedId, finishedId) = await WithDbAsync(async db =>
+        {
+            var blocked = db.JobScheduleAt<PostgresJob>(x => x.BlockUntilCancelledAsync(CancellationToken.None), DateTime.UtcNow.AddHours(-1));
+            var finished = db.JobEnqueue<PostgresJob>(x => x.Count(1));
+
+            await db.SaveChangesAsync();
+
+            return (blocked.Id, finished.Id);
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(db => db.JobHistory.AnyAsync(h => h.Id == finishedId)), "the short job to finish");
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 1), "the slow job to start");
+
+        await _host.StopAsync();
+
+        var blocked = (await GetJobsAsync([blockedId])).Single();
+
+        Assert.Null(blocked.Leaser);
+        Assert.Equal(0, blocked.ErrorCount);
+        Assert.Empty(await GetJobsAsync([finishedId]));
     }
 
     [PostgresFact]

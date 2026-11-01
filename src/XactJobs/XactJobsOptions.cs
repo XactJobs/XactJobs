@@ -21,7 +21,9 @@ namespace XactJobs
     public class XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
     {
         /// <summary>
-        /// How many jobs to fetch and executee at a time. Default is 100.
+        /// The most jobs to claim at a time. Default is 100.
+        /// Jobs are only claimed for free slots, so a worker never has more jobs in flight than the lower of this
+        /// and <see cref="MaxDegreeOfParallelism"/>.
         /// </summary>
         public int BatchSize { get; set; } = 100;
 
@@ -39,7 +41,7 @@ namespace XactJobs
         public int MaxDegreeOfParallelism { get; set; } = -1;
 
         /// <summary>
-        /// Default 120 (jobs runner will prolong the lease every 1/2 of this time)
+        /// Default 120 (jobs runner will prolong the lease every 3/4 of this time)
         /// </summary>
         public int LeaseDurationInSeconds { get; set; } = 120;
 
@@ -51,6 +53,13 @@ namespace XactJobs
         /// It means these workers will take turns every 3 seconds.
         /// </summary>
         public int PollingIntervalInSeconds { get; set; } = 6;
+
+        /// <summary>
+        /// On worker stop, how long running jobs get to finish before they are cancelled. (Default 10 seconds)
+        /// Make sure this fits in the shutdown timeout of the host, along with <see cref="ClearLeaseTimeoutInSeconds"/>
+        /// and 5 seconds for the jobs to react to the cancellation.
+        /// </summary>
+        public int ShutdownTimeoutInSeconds { get; set; } = 10;
 
         /// <summary>
         /// Time the workers will wait for to clear pending leases, on worker stop. (Default 10 seconds)

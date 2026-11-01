@@ -52,6 +52,14 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
+        public TBuilder WithShutdownTimeout(int timeoutInSeconds)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(timeoutInSeconds);
+
+            Options.ShutdownTimeoutInSeconds = timeoutInSeconds;
+            return (this as TBuilder)!;
+        }
+
         public TBuilder WithRetryStrategy(IRetryStrategy retryStrategy)
         {
             Options.RetryStrategy = retryStrategy;
