@@ -69,10 +69,12 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
             return db.SaveChangesAsync();
         });
 
-        await WaitForAsync(() => Task.FromResult(_state.QuickCount == shortJobs), "the short jobs to finish");
+        await WaitForAsync(() => Task.FromResult(_state.QuickCount == shortJobs), "the short jobs to run");
+
+        // their history rows are added when the worker commits, right after they run
+        await WaitForAsync(() => WithDbAsync(async db => await db.JobHistory.CountAsync() == shortJobs), "the short jobs to be committed");
 
         Assert.Equal(0, _state.ReleasedCount);
-        Assert.Equal(shortJobs, await WithDbAsync(db => db.JobHistory.CountAsync()));
 
         _state.ReleaseAll();
 

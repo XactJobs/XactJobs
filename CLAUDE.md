@@ -35,7 +35,7 @@ dotnet test --verbosity=detailed src/XactJobs.Tests/XactJobs.Tests.csproj
 dotnet test --collect:"XPlat Code Coverage" src/XactJobs.Tests/XactJobs.Tests.csproj
 ```
 
-The tests in `src/XactJobs.Tests/Postgres/` run against a Postgres container (Testcontainers) and are skipped if Docker isn't running.
+The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. The first run downloads the images.
 
 ## Code Quality
 

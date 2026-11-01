@@ -291,7 +291,10 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
             return db.SaveChangesAsync();
         });
 
-        await WaitForAsync(() => Task.FromResult(_state.Runs.Count == shortJobs), "the short jobs to finish");
+        await WaitForAsync(() => Task.FromResult(_state.Runs.Count == shortJobs), "the short jobs to run");
+
+        // their rows are removed when the worker commits, right after they run
+        await WaitForAsync(() => WithDbAsync(async db => await db.Jobs.CountAsync(j => j.PeriodicJobId == null) == 1), "the short jobs to be committed");
 
         // only the slow one is left, still leased
         var left = await WithDbAsync(db => db.Jobs.AsNoTracking().Where(j => j.PeriodicJobId == null).SingleAsync());
