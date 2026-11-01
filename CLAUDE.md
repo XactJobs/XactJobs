@@ -35,6 +35,8 @@ dotnet test --verbosity=detailed src/XactJobs.Tests/XactJobs.Tests.csproj
 dotnet test --collect:"XPlat Code Coverage" src/XactJobs.Tests/XactJobs.Tests.csproj
 ```
 
+The tests in `src/XactJobs.Tests/Postgres/` run against a Postgres container (Testcontainers) and are skipped if Docker isn't running.
+
 ## Code Quality
 
 - `TreatWarningsAsErrors` is enabled - all warnings fail the build
