@@ -332,7 +332,10 @@ namespace XactJobs.Internal
                     await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
                         .ConfigureAwait(false);
 
-                    RecordSuccess(dbContext, job, periodicJob);
+                    // detached means the job deleted its own periodic job and saved that, so there's no next run to schedule
+                    var isPeriodicJobDeleted = periodicJob != null && dbContext.Entry(periodicJob).State == EntityState.Detached;
+
+                    RecordSuccess(dbContext, job, isPeriodicJobDeleted ? null : periodicJob);
                 }
 
                 await dbContext.SaveChangesAsync(stoppingToken)
