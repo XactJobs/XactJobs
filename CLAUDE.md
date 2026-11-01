@@ -93,16 +93,6 @@ XactJobs is a .NET library for background job processing with full database tran
 - net8.0, net9.0 (library)
 - net10.0 (tests only)
 
-## EF Migrations
-
-```bash
-# Restore tools first
-dotnet tool restore
-
-# Create migration (from TestWorker project)
-dotnet ef migrations add MigrationName -p src/XactJobs.TestWorker/
-```
-
 ## Third-Party Code
 
 - `Internal/XactJobSerializer.cs` - Adapted from Hangfire (LGPL-3.0)

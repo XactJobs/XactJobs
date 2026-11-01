@@ -27,7 +27,6 @@ Library (NuGet package) for reliable job scheduling and execution with full data
 /workspace/
 ├── src/
 │   ├── XactJobs/                 # Core library (main NuGet package)
-│   ├── XactJobs.TestWorker/      # Test worker application
 │   ├── XactJobs.TestWeb/         # Test web application
 │   └── XactJobs.sln              # Solution file
 ├── sql/                          # Database schema scripts (v0.1.0, v0.1.4, v0.1.5)
@@ -122,7 +121,6 @@ dbContext.JobEnsurePeriodicAsync("daily-cleanup", "0 0 * * * *", () => Cleanup()
 
 ## Test Projects
 
-- **XactJobs.TestWorker** - Worker service demonstrating background job usage
 - **XactJobs.TestWeb** - ASP.NET Core web application demonstrating job enqueueing
 
 ## Configuration Files
