@@ -88,9 +88,9 @@ namespace XactJobs.Internal
         /// <summary>
         /// For databases that can update rows and return them in one statement.
         /// </summary>
-        public static Task<List<XactJob>> ClaimJobsInOneStatementAsync(DbContext db, string claimJobsSql, CancellationToken cancellationToken)
+        public static Task<List<XactJob>> ClaimJobsInOneStatementAsync(DbContext db, (string Sql, object[] Parameters) claimJobs, CancellationToken cancellationToken)
         {
-            return db.Set<XactJob>().FromSqlRaw(claimJobsSql)
+            return db.Set<XactJob>().FromSqlRaw(claimJobs.Sql, claimJobs.Parameters)
                 .AsNoTracking()
                 .ToListAsync(cancellationToken);
         }
@@ -100,7 +100,7 @@ namespace XactJobs.Internal
         /// then leases them by primary key, in one transaction.
         /// </summary>
         public static Task<List<XactJob>> ClaimJobsWithLockAsync(DbContext db,
-                                                                 string lockJobsSql,
+                                                                 (string Sql, object[] Parameters) lockJobs,
                                                                  Func<XactJob[], (string Sql, object[] Parameters)> getLeaseJobsSql,
                                                                  CancellationToken cancellationToken)
         {
@@ -110,7 +110,7 @@ namespace XactJobs.Internal
                 using var transaction = await db.Database.BeginTransactionAsync(token)
                     .ConfigureAwait(false);
 
-                var jobs = await db.Set<XactJob>().FromSqlRaw(lockJobsSql)
+                var jobs = await db.Set<XactJob>().FromSqlRaw(lockJobs.Sql, lockJobs.Parameters)
                     .AsNoTracking()
                     .ToListAsync(token)
                     .ConfigureAwait(false);

@@ -63,15 +63,15 @@ namespace XactJobs.Internal.SqlDialects
 
         // Oracle doesn't allow FOR UPDATE with an ordered subquery or FETCH FIRST, so jobs aren't claimed oldest first.
         // ROWNUM is applied before locked rows are skipped, so this can return fewer rows than maxJobs.
-        public string GetLockJobsSql(string? queueName, int maxJobs) => $@"
+        public (string Sql, object[] Parameters) GetLockJobsSql(string? queueName, int maxJobs) => ($@"
 SELECT *
 FROM {XactJobSchema}_{XactJobTable}
 WHERE {ColScheduledAt} <= SYS_EXTRACT_UTC(systimestamp)
-  AND {ColQueue} = '{queueName ?? QueueNames.Default}'
+  AND {ColQueue} = {{0}}
   AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
-  AND ROWNUM <= {maxJobs}
+  AND ROWNUM <= {{1}}
 FOR UPDATE SKIP LOCKED
-";
+", [queueName ?? QueueNames.Default, maxJobs]);
 
         // the leaser is passed as a hex string, for HEXTORAW
         public (string Sql, object[] Parameters) GetLeaseJobsSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)

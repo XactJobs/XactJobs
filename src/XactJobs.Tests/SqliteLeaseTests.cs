@@ -85,11 +85,54 @@ public class SqliteLeaseTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Claim_WithSpecialCharactersInQueueName_TreatsThemAsData()
+    {
+        await CreateHostAsync();
+
+        const string queueName = "o'brien\"; --";
+
+        await WithDbAsync(db =>
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddMinutes(-1), "Type", "Method", "[]", queueName));
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddMinutes(-1), "Type", "Method", "[]", QueueNames.Default));
+
+            return db.SaveChangesAsync();
+        });
+
+        var claimed = await WithDbAsync(db => _dialect.ClaimJobsAsync(db, queueName, 10, Guid.NewGuid(), 60, CancellationToken.None));
+
+        Assert.Equal(queueName, Assert.Single(claimed).Queue);
+    }
+
+    [Fact]
+    public async Task ClaimAndExtend_KeepFractionsOfASecondInTheLease()
+    {
+        await CreateHostAsync();
+
+        await WithDbAsync(db =>
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddMinutes(-1), "Type", "Method", "[]", QueueNames.Default));
+
+            return db.SaveChangesAsync();
+        });
+
+        var leaser = Guid.NewGuid();
+
+        var claimed = await WithDbAsync(db => _dialect.ClaimJobsAsync(db, QueueNames.Default, 1, leaser, 60, CancellationToken.None));
+
+        // datetime('subsec') always writes 3 decimals, while the whole second version writes none
+        Assert.Matches(@"\.\d{3}$", await GetRawLeasedUntilAsync());
+
+        var (sql, parameters) = _dialect.GetExtendLeaseSql(leaser, claimed, 60);
+
+        Assert.Equal(1, await ExecuteAsync(sql, parameters));
+        Assert.Matches(@"\.\d{3}$", await GetRawLeasedUntilAsync());
+    }
+
+    [Fact]
     public async Task RunningJob_KeepsItsLeaseExtended_AndNoOtherWorkerClaimsIt()
     {
-        // long enough for the extension to win: Sqlite truncates the lease to whole seconds, so it can be up to 1s
-        // shorter, and the first extension comes after 3/4 of the duration
-        const int leaseDurationInSeconds = 8;
+        const int leaseDurationInSeconds = 3;
 
         await CreateHostAsync(options =>
         {
@@ -215,6 +258,20 @@ public class SqliteLeaseTests : IAsyncLifetime
             await db.Database.ExecuteSqlRawAsync("UPDATE xact_jobs_job SET leaser = {0} WHERE id = {1}", leaser.ToString(), job.Id);
 
             return job;
+        });
+    }
+
+    private Task<string> GetRawLeasedUntilAsync()
+    {
+        return WithDbAsync(async db =>
+        {
+            await db.Database.OpenConnectionAsync();
+
+            await using var command = db.Database.GetDbConnection().CreateCommand();
+
+            command.CommandText = "SELECT leased_until FROM xact_jobs_job WHERE leased_until IS NOT NULL";
+
+            return (string)(await command.ExecuteScalarAsync())!;
         });
     }
 

@@ -71,16 +71,64 @@ public class SqlDialectLeaseSqlTests
     }
 
     [Fact]
+    public void PostgreSql_FetchJobsSql_IsFullyParameterized()
+    {
+        var (sql, parameters) = new PostgreSqlDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration);
+
+        AssertFullyParameterized(sql, parameters);
+        Assert.Equal(["queue-a", 10, Leaser, LeaseDuration], parameters);
+    }
+
+    [Fact]
+    public void SqlServer_FetchJobsSql_IsFullyParameterized()
+    {
+        var (sql, parameters) = new SqlServerDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration);
+
+        AssertFullyParameterized(sql, parameters);
+        Assert.Equal([10, "queue-a", Leaser, LeaseDuration], parameters);
+    }
+
+    [Fact]
+    public void Sqlite_FetchJobsSql_IsFullyParameterized()
+    {
+        var (sql, parameters) = new SqliteDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration);
+
+        AssertFullyParameterized(sql, parameters);
+        Assert.Equal(["queue-a", 10, Leaser.ToString(), LeaseDuration], parameters);
+    }
+
+    [Fact]
+    public void MySql_AllStatements_UseTimestampsWithFractionsOfASecond()
+    {
+        var dialect = new MySqlDialect();
+
+        string[] statements =
+        [
+            dialect.GetLockJobsSql("queue-a", 10).Sql,
+            dialect.GetLeaseJobsSql(Leaser, Jobs, LeaseDuration).Sql,
+            dialect.GetExtendLeaseSql(Leaser, Jobs, LeaseDuration).Sql,
+        ];
+
+        Assert.All(statements, sql =>
+        {
+            Assert.Contains("UTC_TIMESTAMP(6)", sql);
+            Assert.DoesNotMatch(@"UTC_TIMESTAMP(?!\(6\))", sql);
+        });
+    }
+
+    [Fact]
     public void MySql_ClaimLocksRowsOldestFirst_ThenLeasesThemByPrimaryKey()
     {
         var dialect = new MySqlDialect();
 
-        var lockSql = dialect.GetLockJobsSql("queue-a", 10);
+        var (lockSql, lockParameters) = dialect.GetLockJobsSql("queue-a", 10);
 
+        AssertFullyParameterized(lockSql, lockParameters);
         Assert.Contains("ORDER BY scheduled_at", lockSql);
-        Assert.Contains("LIMIT 10", lockSql);
+        Assert.Contains("LIMIT {1}", lockSql);
         Assert.Contains("FOR UPDATE SKIP LOCKED", lockSql);
         Assert.DoesNotContain("leaser", lockSql);
+        Assert.Equal(["queue-a", 10], lockParameters);
 
         var (leaseSql, parameters) = dialect.GetLeaseJobsSql(Leaser, Jobs, LeaseDuration);
 
@@ -94,11 +142,13 @@ public class SqlDialectLeaseSqlTests
     {
         var dialect = new OracleDialect();
 
-        var lockSql = dialect.GetLockJobsSql("queue-a", 10);
+        var (lockSql, lockParameters) = dialect.GetLockJobsSql("queue-a", 10);
 
-        Assert.Contains("ROWNUM <= 10", lockSql);
+        AssertFullyParameterized(lockSql, lockParameters);
+        Assert.Contains("ROWNUM <= {1}", lockSql);
         Assert.Contains("FOR UPDATE SKIP LOCKED", lockSql);
         Assert.DoesNotContain("LEASER", lockSql);
+        Assert.Equal(["queue-a", 10], lockParameters);
 
         var (leaseSql, parameters) = dialect.GetLeaseJobsSql(Leaser, Jobs, LeaseDuration);
 

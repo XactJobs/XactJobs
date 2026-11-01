@@ -94,19 +94,18 @@ public class SqliteDialectTests
         const int leaseDuration = 30;
 
         // Act
-        var sql = _dialect.GetFetchJobsSql(queueName, maxJobs, leaser, leaseDuration);
+        var (sql, parameters) = _dialect.GetFetchJobsSql(queueName, maxJobs, leaser, leaseDuration);
 
         // Assert
-        Assert.NotNull(sql);
         Assert.Contains("WITH cte AS", sql);
         Assert.Contains("SELECT", sql);
         Assert.Contains("UPDATE", sql);
         Assert.Contains("RETURNING *", sql);
-        Assert.Contains($"LIMIT {maxJobs}", sql);
-        Assert.Contains($"'{queueName}'", sql);
-        Assert.Contains($"'{leaser}'", sql);
-        Assert.Contains("datetime('subsec')", sql);
-        Assert.Contains("datetime('now'", sql);
+        Assert.Contains($"{_dialect.ColQueue} = {{0}}", sql);
+        Assert.Contains("LIMIT {1}", sql);
+        Assert.Contains($"SET {_dialect.ColLeaser} = {{2}}", sql);
+        Assert.Contains("datetime('subsec', '+' || {3} || ' seconds')", sql);
+        Assert.Equal([queueName, maxJobs, leaser.ToString(), leaseDuration], parameters);
     }
 
     [Fact]
@@ -116,10 +115,10 @@ public class SqliteDialectTests
         var leaser = Guid.NewGuid();
 
         // Act
-        var sql = _dialect.GetFetchJobsSql(null, 5, leaser, 30);
+        var (_, parameters) = _dialect.GetFetchJobsSql(null, 5, leaser, 30);
 
         // Assert
-        Assert.Contains($"'{QueueNames.Default}'", sql);
+        Assert.Equal(QueueNames.Default, parameters[0]);
     }
 
     [Fact]
@@ -129,7 +128,7 @@ public class SqliteDialectTests
         var leaser = Guid.NewGuid();
 
         // Act
-        var sql = _dialect.GetFetchJobsSql(QueueNames.Default, 10, leaser, 30);
+        var (sql, _) = _dialect.GetFetchJobsSql(QueueNames.Default, 10, leaser, 30);
 
         // Assert
         Assert.Contains($"{_dialect.ColScheduledAt} <= datetime('subsec')", sql);
@@ -142,7 +141,7 @@ public class SqliteDialectTests
         var leaser = Guid.NewGuid();
 
         // Act
-        var sql = _dialect.GetFetchJobsSql(QueueNames.Default, 10, leaser, 30);
+        var (sql, _) = _dialect.GetFetchJobsSql(QueueNames.Default, 10, leaser, 30);
 
         // Assert
         Assert.Contains($"ORDER BY {_dialect.ColScheduledAt}", sql);
@@ -162,7 +161,7 @@ public class SqliteDialectTests
         // Assert
         Assert.Contains("UPDATE", sql);
         Assert.Contains($"{_dialect.XactJobSchema}_{_dialect.XactJobTable}", sql);
-        Assert.Contains($"SET {_dialect.ColLeasedUntil} = datetime('now', '+' || {{0}} || ' seconds')", sql);
+        Assert.Contains($"SET {_dialect.ColLeasedUntil} = datetime('subsec', '+' || {{0}} || ' seconds')", sql);
         Assert.Contains($"WHERE {_dialect.ColLeaser} = {{1}}", sql);
         Assert.Contains($"{_dialect.ColId} IN ({{2}}, {{3}})", sql);
         Assert.Equal([leaseDuration, leaser.ToString(), 7L, 9L], parameters);
@@ -215,30 +214,13 @@ public class SqliteDialectTests
     }
 
     [Fact]
-    public void GetFetchJobsSql_WithDifferentMaxJobs_ReturnsCorrectLimit()
-    {
-        // Arrange
-        var leaser = Guid.NewGuid();
-        var testCases = new[] { 1, 5, 10, 50, 100 };
-
-        foreach (var maxJobs in testCases)
-        {
-            // Act
-            var sql = _dialect.GetFetchJobsSql(QueueNames.Default, maxJobs, leaser, 30);
-
-            // Assert
-            Assert.Contains($"LIMIT {maxJobs}", sql);
-        }
-    }
-
-    [Fact]
     public void GetFetchJobsSql_ChecksLeasedUntilIsNullOrExpired()
     {
         // Arrange
         var leaser = Guid.NewGuid();
 
         // Act
-        var sql = _dialect.GetFetchJobsSql(QueueNames.Default, 10, leaser, 30);
+        var (sql, _) = _dialect.GetFetchJobsSql(QueueNames.Default, 10, leaser, 30);
 
         // Assert
         Assert.Contains($"({_dialect.ColLeasedUntil} IS NULL OR {_dialect.ColLeasedUntil} < datetime('subsec'))", sql);

@@ -43,29 +43,30 @@ namespace XactJobs.Internal.SqlDialects
             return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchJobsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
         }
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        // The leaser is passed as a string, because the provider would bind a Guid in uppercase.
+        // All the statements must write and compare it in the same case.
+        public (string Sql, object[] Parameters) GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
 WITH cte AS (
   SELECT {ColId}, {ColQueue}, {ColScheduledAt}
   FROM {XactJobSchema}_{XactJobTable}
   WHERE {ColScheduledAt} <= datetime('subsec')
-    AND {ColQueue} = '{queueName ?? QueueNames.Default}'
+    AND {ColQueue} = {{0}}
     AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < datetime('subsec'))
   ORDER BY {ColScheduledAt}
-  LIMIT {maxJobs}
+  LIMIT {{1}}
 )
 UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeaser} = '{leaser}', 
-    {ColLeasedUntil} = datetime('now', '+{leaseDurationInSeconds} seconds')
+SET {ColLeaser} = {{2}},
+    {ColLeasedUntil} = datetime('subsec', '+' || {{3}} || ' seconds')
 FROM cte
 WHERE
     {XactJobSchema}_{XactJobTable}.{ColId} = cte.{ColId}
     AND {XactJobSchema}_{XactJobTable}.{ColQueue} = cte.{ColQueue}
     AND {XactJobSchema}_{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
 RETURNING *
-";
+", [queueName ?? QueueNames.Default, maxJobs, leaser.ToString(), leaseDurationInSeconds]);
 
         // The primary key is just the id on Sqlite (see XactJobEntityConfiguration).
-        // The leaser is passed as a string, because the provider would bind a Guid in uppercase, and the claim writes it in lowercase.
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {
             List<object> parameters = [leaseDurationInSeconds, leaser.ToString()];
@@ -74,7 +75,7 @@ RETURNING *
 
             return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeasedUntil} = datetime('now', '+' || {{0}} || ' seconds')
+SET {ColLeasedUntil} = datetime('subsec', '+' || {{0}} || ' seconds')
 WHERE {ColLeaser} = {{1}}
   AND {ColId} IN ({jobIds})
 ", parameters.ToArray());

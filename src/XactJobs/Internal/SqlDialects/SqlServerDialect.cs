@@ -58,25 +58,25 @@ namespace XactJobs.Internal.SqlDialects
             return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchJobsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
         }
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public (string Sql, object[] Parameters) GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
 WITH cte AS (
-    SELECT TOP ({maxJobs}) [{ColId}], [{ColQueue}], [{ColScheduledAt}]
+    SELECT TOP ({{0}}) [{ColId}], [{ColQueue}], [{ColScheduledAt}]
     FROM [{XactJobSchema}].[{XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
     WHERE [{ColScheduledAt}] <= SYSUTCDATETIME()
-      AND [{ColQueue}] = '{queueName ?? QueueNames.Default}'
+      AND [{ColQueue}] = {{1}}
       AND ([{ColLeasedUntil}] IS NULL OR [{ColLeasedUntil}] < SYSUTCDATETIME())
     ORDER BY [{ColScheduledAt}]
 )
 UPDATE target
-SET [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER),
-    [{ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
+SET [{ColLeaser}] = {{2}},
+    [{ColLeasedUntil}] = DATEADD(SECOND, {{3}}, SYSUTCDATETIME())
 OUTPUT inserted.*
 FROM [{XactJobSchema}].[{XactJobTable}] AS target
 INNER JOIN cte ON -- we need to join on the entire PK
     target.[{ColId}] = cte.[{ColId}]
     AND target.[{ColQueue}] = cte.[{ColQueue}]
     AND target.[{ColScheduledAt}] = cte.[{ColScheduledAt}]
-";
+", [maxJobs, queueName ?? QueueNames.Default, leaser, leaseDurationInSeconds]);
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {

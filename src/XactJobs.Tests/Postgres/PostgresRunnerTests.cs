@@ -86,6 +86,26 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
     }
 
     [PostgresFact]
+    public async Task Claim_WithSpecialCharactersInQueueName_TreatsThemAsData()
+    {
+        CreateHost();
+
+        const string queueName = "o'brien\"; --";
+
+        await WithDbAsync(db =>
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddMinutes(-1), "Type", "Method", "[]", queueName));
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddMinutes(-1), "Type", "Method", "[]", QueueNames.Default));
+
+            return db.SaveChangesAsync();
+        });
+
+        var claimed = await WithDbAsync(db => _dialect.ClaimJobsAsync(db, queueName, 10, Guid.NewGuid(), 60, CancellationToken.None));
+
+        Assert.Equal(queueName, Assert.Single(claimed).Queue);
+    }
+
+    [PostgresFact]
     public async Task LeaseSql_OnlyTouchesGivenJobsStillLeasedByTheLeaser()
     {
         CreateHost();

@@ -58,26 +58,26 @@ namespace XactJobs.Internal.SqlDialects
             return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchJobsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
         }
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public (string Sql, object[] Parameters) GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
 WITH cte AS (
   SELECT {ColId}, {ColQueue}, {ColScheduledAt}
   FROM {XactJobSchema}.{XactJobTable}
   WHERE {ColScheduledAt} <= current_timestamp
-    AND {ColQueue} = '{queueName ?? QueueNames.Default}'
+    AND {ColQueue} = {{0}}
     AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < current_timestamp)
   ORDER BY {ColScheduledAt}
   FOR UPDATE SKIP LOCKED
-  LIMIT {maxJobs}
+  LIMIT {{1}}
 )
 UPDATE {XactJobSchema}.{XactJobTable}
-SET {ColLeaser} = '{leaser}'::uuid, {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
+SET {ColLeaser} = {{2}}, {ColLeasedUntil} = current_timestamp + make_interval(secs => {{3}}::double precision)
 FROM cte
 WHERE -- we need to join on all these, since these are the PK
     {XactJobSchema}.{XactJobTable}.{ColId} = cte.{ColId}
     AND {XactJobSchema}.{XactJobTable}.{ColQueue} = cte.{ColQueue}
     AND {XactJobSchema}.{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
 RETURNING {XactJobSchema}.{XactJobTable}.*
-";
+", [queueName ?? QueueNames.Default, maxJobs, leaser, leaseDurationInSeconds]);
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds) => ($@"
 UPDATE {XactJobSchema}.{XactJobTable} AS j

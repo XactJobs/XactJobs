@@ -61,16 +61,17 @@ namespace XactJobs.Internal.SqlDialects
                                                                cancellationToken);
         }
 
-        public string GetLockJobsSql(string? queueName, int maxJobs) => $@"
+        // UTC_TIMESTAMP(6) keeps the fraction of a second: with plain UTC_TIMESTAMP a lease can be up to 1s too short
+        public (string Sql, object[] Parameters) GetLockJobsSql(string? queueName, int maxJobs) => ($@"
 SELECT *
 FROM {XactJobSchema}_{XactJobTable}
-WHERE {ColScheduledAt} <= UTC_TIMESTAMP
-  AND {ColQueue} = '{queueName ?? QueueNames.Default}'
-  AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < UTC_TIMESTAMP)
+WHERE {ColScheduledAt} <= UTC_TIMESTAMP(6)
+  AND {ColQueue} = {{0}}
+  AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < UTC_TIMESTAMP(6))
 ORDER BY {ColScheduledAt}
-LIMIT {maxJobs}
+LIMIT {{1}}
 FOR UPDATE SKIP LOCKED
-";
+", [queueName ?? QueueNames.Default, maxJobs]);
 
         // the leaser is passed as a string, because the column is char(36)
         public (string Sql, object[] Parameters) GetLeaseJobsSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
@@ -82,7 +83,7 @@ FOR UPDATE SKIP LOCKED
             return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = {{0}},
-    {ColLeasedUntil} = UTC_TIMESTAMP + INTERVAL {{1}} SECOND
+    {ColLeasedUntil} = UTC_TIMESTAMP(6) + INTERVAL {{1}} SECOND
 WHERE {jobKeys}
 ", parameters.ToArray());
         }
@@ -95,7 +96,7 @@ WHERE {jobKeys}
 
             return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeasedUntil} = UTC_TIMESTAMP + INTERVAL {{0}} SECOND
+SET {ColLeasedUntil} = UTC_TIMESTAMP(6) + INTERVAL {{0}} SECOND
 WHERE {ColLeaser} = {{1}}
   AND ({jobKeys})
 ", parameters.ToArray());
