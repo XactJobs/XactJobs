@@ -72,13 +72,16 @@ public class SqliteDialectTests
     }
 
     [Fact]
-    public void GetAcquireLeaseSql_ReturnsNull()
+    public void JobTable_HasNoLeaserIndex()
     {
+        // Arrange
+        using var context = CreateTestContext();
+
         // Act
-        var sql = _dialect.GetAcquireLeaseSql(QueueNames.Default, 10, Guid.NewGuid(), 30);
+        var indexes = context.Model.FindEntityType(typeof(XactJob))!.GetIndexes();
 
         // Assert
-        Assert.Null(sql);
+        Assert.Empty(indexes);
     }
 
     [Fact]

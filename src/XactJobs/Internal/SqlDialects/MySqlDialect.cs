@@ -53,34 +53,40 @@ namespace XactJobs.Internal.SqlDialects
 
         public string DateTimeColumnType { get; } = "datetime(6)";
 
-        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}_{XactJobTable} AS t
-JOIN (
-    SELECT {ColId}, {ColQueue}, {ColScheduledAt}
-    FROM {XactJobSchema}_{XactJobTable}
-    WHERE {ColScheduledAt} <= UTC_TIMESTAMP 
-      AND {ColQueue} = '{queueName ?? QueueNames.Default}'
-      AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < UTC_TIMESTAMP)
-    ORDER BY {ColScheduledAt}
-    LIMIT {maxJobs}
-    FOR UPDATE SKIP LOCKED
-) AS sub ON -- join on the entire PK
-    t.{ColId} = sub.{ColId}
-    AND t.{ColQueue} = sub.{ColQueue}
-    AND t.{ColScheduledAt} = sub.{ColScheduledAt}
-SET t.{ColLeaser} = '{leaser}',
-    t.{ColLeasedUntil} = UTC_TIMESTAMP + INTERVAL {leaseDurationInSeconds} SECOND
-";
+        public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        {
+            return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               GetLockJobsSql(queueName, maxJobs),
+                                                               jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
+                                                               cancellationToken);
+        }
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public string GetLockJobsSql(string? queueName, int maxJobs) => $@"
 SELECT *
 FROM {XactJobSchema}_{XactJobTable}
-WHERE {ColLeaser} = '{leaser}'
-  AND {ColLeasedUntil} >= UTC_TIMESTAMP
+WHERE {ColScheduledAt} <= UTC_TIMESTAMP
+  AND {ColQueue} = '{queueName ?? QueueNames.Default}'
+  AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < UTC_TIMESTAMP)
+ORDER BY {ColScheduledAt}
 LIMIT {maxJobs}
+FOR UPDATE SKIP LOCKED
 ";
 
-        // the leaser is passed as a string, in the same format the claim writes it
+        // the leaser is passed as a string, because the column is char(36)
+        public (string Sql, object[] Parameters) GetLeaseJobsSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaser.ToString(), leaseDurationInSeconds];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
+
+            return ($@"
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeaser} = {{0}},
+    {ColLeasedUntil} = UTC_TIMESTAMP + INTERVAL {{1}} SECOND
+WHERE {jobKeys}
+", parameters.ToArray());
+        }
+
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {
             List<object> parameters = [leaseDurationInSeconds, leaser.ToString()];

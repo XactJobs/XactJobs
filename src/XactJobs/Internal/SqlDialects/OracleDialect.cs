@@ -53,25 +53,41 @@ namespace XactJobs.Internal.SqlDialects
 
         public string DateTimeColumnType { get; } = "TIMESTAMP";
 
-        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeaser} = HEXTORAW('{leaser:N}'),
-    {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + INTERVAL '{leaseDurationInSeconds}' SECOND
+        public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        {
+            return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               GetLockJobsSql(queueName, maxJobs),
+                                                               jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
+                                                               cancellationToken);
+        }
+
+        // Oracle doesn't allow FOR UPDATE with an ordered subquery or FETCH FIRST, so jobs aren't claimed oldest first.
+        // ROWNUM is applied before locked rows are skipped, so this can return fewer rows than maxJobs.
+        public string GetLockJobsSql(string? queueName, int maxJobs) => $@"
+SELECT *
+FROM {XactJobSchema}_{XactJobTable}
 WHERE {ColScheduledAt} <= SYS_EXTRACT_UTC(systimestamp)
   AND {ColQueue} = '{queueName ?? QueueNames.Default}'
   AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
   AND ROWNUM <= {maxJobs}
+FOR UPDATE SKIP LOCKED
 ";
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
-SELECT *
-FROM {XactJobSchema}_{XactJobTable}
-WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-  AND {ColLeasedUntil} >= SYS_EXTRACT_UTC(systimestamp)
-  AND ROWNUM <= {maxJobs}
-";
+        // the leaser is passed as a hex string, for HEXTORAW
+        public (string Sql, object[] Parameters) GetLeaseJobsSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaser.ToString("N"), leaseDurationInSeconds];
 
-        // the leaser is passed as a hex string, in the same format the claim writes it
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
+
+            return ($@"
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeaser} = HEXTORAW({{0}}),
+    {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + NUMTODSINTERVAL({{1}}, 'SECOND')
+WHERE {jobKeys}
+", parameters.ToArray());
+        }
+
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {
             List<object> parameters = [leaseDurationInSeconds, leaser.ToString("N")];

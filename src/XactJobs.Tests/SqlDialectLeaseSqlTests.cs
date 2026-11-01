@@ -70,6 +70,44 @@ public class SqlDialectLeaseSqlTests
         Assert.Equal(Leaser, parameters[4]);
     }
 
+    [Fact]
+    public void MySql_ClaimLocksRowsOldestFirst_ThenLeasesThemByPrimaryKey()
+    {
+        var dialect = new MySqlDialect();
+
+        var lockSql = dialect.GetLockJobsSql("queue-a", 10);
+
+        Assert.Contains("ORDER BY scheduled_at", lockSql);
+        Assert.Contains("LIMIT 10", lockSql);
+        Assert.Contains("FOR UPDATE SKIP LOCKED", lockSql);
+        Assert.DoesNotContain("leaser", lockSql);
+
+        var (leaseSql, parameters) = dialect.GetLeaseJobsSql(Leaser, Jobs, LeaseDuration);
+
+        AssertFullyParameterized(leaseSql, parameters);
+        Assert.Contains("queue = {2} AND scheduled_at = {3} AND id = {4}", leaseSql);
+        Assert.Equal([Leaser.ToString(), LeaseDuration, "queue-a", ScheduledAt, 11L, "queue-b", ScheduledAt, 22L], parameters);
+    }
+
+    [Fact]
+    public void Oracle_ClaimLocksRows_ThenLeasesThemByPrimaryKey()
+    {
+        var dialect = new OracleDialect();
+
+        var lockSql = dialect.GetLockJobsSql("queue-a", 10);
+
+        Assert.Contains("ROWNUM <= 10", lockSql);
+        Assert.Contains("FOR UPDATE SKIP LOCKED", lockSql);
+        Assert.DoesNotContain("LEASER", lockSql);
+
+        var (leaseSql, parameters) = dialect.GetLeaseJobsSql(Leaser, Jobs, LeaseDuration);
+
+        AssertFullyParameterized(leaseSql, parameters);
+        Assert.Contains("HEXTORAW({0})", leaseSql);
+        Assert.Contains("QUEUE = {2} AND SCHEDULED_AT = {3} AND ID = {4}", leaseSql);
+        Assert.Equal([Leaser.ToString("N"), LeaseDuration, "queue-a", ScheduledAt, 11L, "queue-b", ScheduledAt, 22L], parameters);
+    }
+
     private static void AssertFullyParameterized(string sql, object[] parameters)
     {
         Assert.DoesNotContain(Leaser.ToString(), sql, StringComparison.OrdinalIgnoreCase);

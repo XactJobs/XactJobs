@@ -22,9 +22,6 @@ namespace XactJobs.Internal
 {
     internal sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
-        // keeps a lease statement within the parameter limits of all dialects (SQL Server allows 2100, at 3 per job)
-        private const int MaxJobsPerLeaseStatement = 500;
-
         // Jobs claimed by this runner and not finished yet, by job id.
         // Jobs that were cancelled or never started because of a shutdown stay here, so their leases get cleared.
         private readonly ConcurrentDictionary<long, XactJob> _inFlightJobs = new();
@@ -198,7 +195,7 @@ namespace XactJobs.Internal
 
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            foreach (var chunk in jobs.Chunk(MaxJobsPerLeaseStatement))
+            foreach (var chunk in jobs.Chunk(SqlDialectExtensions.MaxJobsPerStatement))
             {
                 var (sql, parameters) = getLeaseSql(dialect, chunk);
 
@@ -215,22 +212,11 @@ namespace XactJobs.Internal
 
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            var acquireLeaseSql = dialect.GetAcquireLeaseSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
-            var fetchJobsSql = dialect.GetFetchJobsSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
-
             using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLeaseAsync);
 
             extendLeaseTimer.Start();
 
-            if (acquireLeaseSql != null)
-            {
-                await dbContext.Database.ExecuteSqlRawAsync(acquireLeaseSql, stoppingToken)
-                    .ConfigureAwait(false);
-            }
-
-            var jobs = await dbContext.Set<XactJob>().FromSqlRaw(fetchJobsSql)
-                .AsNoTracking()
-                .ToListAsync(stoppingToken)
+            var jobs = await dialect.ClaimJobsAsync(dbContext, _queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
                 .ConfigureAwait(false);
 
             var periodicJobIds = jobs.Select(job => job.PeriodicJobId).ToList();
