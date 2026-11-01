@@ -56,9 +56,7 @@ namespace XactJobs.Internal
             _scopeFactory = scopeFactory;
             _logger = logger;
 
-            var maxDegreeOfParallelism = options.MaxDegreeOfParallelism > 0 ? options.MaxDegreeOfParallelism : Environment.ProcessorCount;
-
-            _capacity = Math.Max(1, Math.Min(options.BatchSize, maxDegreeOfParallelism));
+            _capacity = options.MaxDegreeOfParallelism > 0 ? options.MaxDegreeOfParallelism : Environment.ProcessorCount;
         }
 
         /// <summary>
@@ -118,7 +116,7 @@ namespace XactJobs.Internal
                             .ConfigureAwait(false);
 
                         // consume batch of notifications, since we're about to poll
-                        await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
+                        await _quickPollChannel.ConsumeBatchAsync(_capacity, stoppingToken)
                             .ConfigureAwait(false);
                     }
                     else
@@ -262,8 +260,8 @@ namespace XactJobs.Internal
                 await _quickPollChannel.WaitToReadAsync(cts.Token)
                     .ConfigureAwait(false);
 
-                // drain the channel, up to the batch size (we're about to poll)
-                consumedCount = await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
+                // drain the channel, up to the capacity (we're about to poll)
+                consumedCount = await _quickPollChannel.ConsumeBatchAsync(_capacity, stoppingToken)
                     .ConfigureAwait(false);
             }
             catch (OperationCanceledException)

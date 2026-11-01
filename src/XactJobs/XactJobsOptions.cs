@@ -21,13 +21,6 @@ namespace XactJobs
     public class XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
     {
         /// <summary>
-        /// The most jobs to claim at a time. Default is 100.
-        /// Jobs are only claimed for free slots, so a worker never has more jobs in flight than the lower of this
-        /// and <see cref="MaxDegreeOfParallelism"/>.
-        /// </summary>
-        public int BatchSize { get; set; } = 100;
-
-        /// <summary>
         /// Number of paraller workers running. Default 2.
         /// The workers will be started with initial delay, to distribute workers execution in time.
         /// By default, 2 workers will be started with 4 second polling interval. 
@@ -36,7 +29,8 @@ namespace XactJobs
         public int WorkerCount { get; set; } = 2;
 
         /// <summary>
-        /// Max degree of paralell jobs running per worker. Default -1 (means ProcessorCount)
+        /// The most jobs running at the same time per worker. Default -1 (means ProcessorCount).
+        /// A worker only claims jobs it can start immediately, so this is also the most jobs it claims at a time.
         /// </summary>
         public int MaxDegreeOfParallelism { get; set; } = -1;
 

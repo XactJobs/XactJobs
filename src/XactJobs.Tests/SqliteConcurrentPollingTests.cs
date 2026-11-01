@@ -356,9 +356,8 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
             options
                 .WithWorkerCount(1)
                 .WithPollingInterval(pollingInterval)
-                .WithShutdownTimeout(shutdownTimeout);
-
-            options.Options.MaxDegreeOfParallelism = capacity;
+                .WithShutdownTimeout(shutdownTimeout)
+                .WithMaxDegreeOfParallelism(capacity);
         });
 
         builder.Services.AddSingleton(_state);

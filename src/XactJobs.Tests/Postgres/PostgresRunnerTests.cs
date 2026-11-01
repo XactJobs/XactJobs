@@ -339,8 +339,7 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
 
         CreateHost(options =>
         {
-            options.WithWorkerCount(4).WithBatchSize(20);
-            options.Options.MaxDegreeOfParallelism = 4;
+            options.WithWorkerCount(4).WithMaxDegreeOfParallelism(4);
         });
 
         await WithDbAsync(async db =>

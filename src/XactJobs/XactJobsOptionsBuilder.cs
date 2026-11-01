@@ -26,9 +26,11 @@ namespace XactJobs
     {
         public TOptions Options { get; private set; } = new();
 
-        public TBuilder WithBatchSize(int batchSize)
+        public TBuilder WithMaxDegreeOfParallelism(int maxDegreeOfParallelism)
         {
-            Options.BatchSize = batchSize;
+            ArgumentOutOfRangeException.ThrowIfLessThan(maxDegreeOfParallelism, 1);
+
+            Options.MaxDegreeOfParallelism = maxDegreeOfParallelism;
             return (this as TBuilder)!;
         }
 
