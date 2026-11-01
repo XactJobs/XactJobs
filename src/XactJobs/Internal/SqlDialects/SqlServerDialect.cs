@@ -75,17 +75,33 @@ INNER JOIN cte ON -- we need to join on the entire PK
     AND target.[{ColScheduledAt}] = cte.[{ColScheduledAt}]
 ";
 
-        public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE [{XactJobSchema}].[{XactJobTable}]
-SET [{ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
-WHERE [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
-";
+        public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaseDurationInSeconds, leaser];
 
-        public string GetClearLeaseSql(Guid leaser) => $@"
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, $"[{ColQueue}]", $"[{ColScheduledAt}]", $"[{ColId}]");
+
+            return ($@"
+UPDATE [{XactJobSchema}].[{XactJobTable}]
+SET [{ColLeasedUntil}] = DATEADD(SECOND, {{0}}, SYSUTCDATETIME())
+WHERE [{ColLeaser}] = {{1}}
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
+
+        public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs)
+        {
+            List<object> parameters = [leaser];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, $"[{ColQueue}]", $"[{ColScheduledAt}]", $"[{ColId}]");
+
+            return ($@"
 UPDATE [{XactJobSchema}].[{XactJobTable}]
 SET [{ColLeaser}] = NULL, [{ColLeasedUntil}] = NULL
-WHERE [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
-";
+WHERE [{ColLeaser}] = {{0}}
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {

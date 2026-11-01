@@ -67,9 +67,17 @@ namespace XactJobs.Internal
 
         string GetFetchJobsSql(string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds);
 
-        string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds);
+        /// <summary>
+        /// Extends the lease of the given jobs, by primary key, if they are still leased by <paramref name="leaser"/>.
+        /// The SQL uses {n} placeholders, as expected by ExecuteSqlRaw.
+        /// </summary>
+        (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds);
 
-        string GetClearLeaseSql(Guid leaser);
+        /// <summary>
+        /// Clears the lease of the given jobs, by primary key, if they are still leased by <paramref name="leaser"/>.
+        /// The SQL uses {n} placeholders, as expected by ExecuteSqlRaw.
+        /// </summary>
+        (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs);
 
         Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken);
 
@@ -94,6 +102,27 @@ namespace XactJobs.Internal
 
                 throw new NotSupportedException($"XactJobs does not support provider '{key}'.");
             });
+        }
+
+        /// <summary>
+        /// Builds "(queue = {n} AND scheduled_at = {n+1} AND id = {n+2}) OR ..." and appends the values to <paramref name="parameters"/>.
+        /// </summary>
+        public static string BuildJobKeysPredicate(IReadOnlyCollection<XactJob> jobs, List<object> parameters, string colQueue, string colScheduledAt, string colId)
+        {
+            var rows = new List<string>(jobs.Count);
+
+            foreach (var job in jobs)
+            {
+                var i = parameters.Count;
+
+                parameters.Add(job.Queue);
+                parameters.Add(job.ScheduledAt);
+                parameters.Add(job.Id);
+
+                rows.Add($"({colQueue} = {{{i}}} AND {colScheduledAt} = {{{i + 1}}} AND {colId} = {{{i + 2}}})");
+            }
+
+            return string.Join(" OR ", rows);
         }
 
         public static bool IsUniqueKeyViolation(this Exception ex)

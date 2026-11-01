@@ -16,11 +16,19 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace XactJobs.Internal
 {
     internal sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
+        // keeps a lease statement within the parameter limits of all dialects (SQL Server allows 2100, at 3 per job)
+        private const int MaxJobsPerLeaseStatement = 500;
+
+        // Jobs claimed by this runner and not finished yet, by job id.
+        // Jobs that were cancelled or never started because of a shutdown stay here, so their leases get cleared.
+        private readonly ConcurrentDictionary<long, XactJob> _inFlightJobs = new();
+
         private readonly string _queueName;
         private readonly QuickPollChannel _quickPollChannel;
         private readonly Guid _leaser = Guid.NewGuid();
@@ -172,16 +180,31 @@ namespace XactJobs.Internal
 
         private async Task ClearLeasesAsync()
         {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+            await ExecuteLeaseSqlForInFlightJobsAsync((dialect, jobs) => dialect.GetClearLeaseSql(_leaser, jobs), cts.Token)
+                .ConfigureAwait(false);
+        }
+
+        private async Task ExecuteLeaseSqlForInFlightJobsAsync(Func<ISqlDialect, XactJob[], (string Sql, object[] Parameters)> getLeaseSql, CancellationToken token)
+        {
+            var jobs = _inFlightJobs.Values; // this is a snapshot
+
+            if (jobs.Count == 0) return;
+
             using var scope = _scopeFactory.CreateScope();
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+            foreach (var chunk in jobs.Chunk(MaxJobsPerLeaseStatement))
+            {
+                var (sql, parameters) = getLeaseSql(dialect, chunk);
 
-            await dbContext.Database.ExecuteSqlRawAsync(dialect.GetClearLeaseSql(_leaser), cts.Token)
-                .ConfigureAwait(false);
+                await dbContext.Database.ExecuteSqlRawAsync(sql, parameters, token)
+                    .ConfigureAwait(false);
+            }
         }
 
         private async Task<int> RunJobsAsync(ParallelOptions parallelOptions, CancellationToken stoppingToken)
@@ -220,6 +243,11 @@ namespace XactJobs.Internal
                     .ConfigureAwait(false)
                 : [];
 
+            foreach (var job in jobs)
+            {
+                _inFlightJobs[job.Id] = job;
+            }
+
             await Parallel.ForEachAsync(jobs, parallelOptions, async (job, stoppingToken) =>
             {
                 XactJobPeriodic? periodicJob = null;
@@ -239,6 +267,8 @@ namespace XactJobs.Internal
 
                     await RecordFailureAsync(job, periodicJob, ex)
                         .ConfigureAwait(false);
+
+                    _inFlightJobs.TryRemove(job.Id, out _);
                 }
             })
                 .ConfigureAwait(false);
@@ -283,18 +313,9 @@ namespace XactJobs.Internal
             }
         }
 
-        private async Task ExtendLeaseAsync(CancellationToken token)
+        private Task ExtendLeaseAsync(CancellationToken token)
         {
-            using var scope = _scopeFactory.CreateScope();
-
-            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-
-            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
-
-            var extendLeaseSql = dialect.GetExtendLeaseSql(_leaser, _options.LeaseDurationInSeconds);
-
-            await dbContext.Database.ExecuteSqlRawAsync(extendLeaseSql, token)
-                .ConfigureAwait(false);
+            return ExecuteLeaseSqlForInFlightJobsAsync((dialect, jobs) => dialect.GetExtendLeaseSql(_leaser, jobs, _options.LeaseDurationInSeconds), token);
         }
 
         public async Task RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, CancellationToken stoppingToken)
@@ -336,6 +357,8 @@ namespace XactJobs.Internal
                     await dbContext.Database.CurrentTransaction.CommitAsync(stoppingToken)
                         .ConfigureAwait(false);
                 }
+
+                _inFlightJobs.TryRemove(job.Id, out _);
 
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {

@@ -79,8 +79,17 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
 
-            builder.HasIndex(x => x.Leaser)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColLeaser}");
+            if (_sqlDialect is PostgreSqlDialect)
+            {
+                // No index on the leaser, and free space on each page, so that lease updates can be HOT updates.
+                // This is the annotation behind Npgsql's HasFillFactor (this library doesn't reference Npgsql).
+                builder.HasAnnotation("Npgsql:StorageParameter:fillfactor", 70);
+            }
+            else
+            {
+                builder.HasIndex(x => x.Leaser)
+                    .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColLeaser}");
+            }
         }
     }
 }

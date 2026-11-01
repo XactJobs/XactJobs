@@ -71,17 +71,34 @@ WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
   AND ROWNUM <= {maxJobs}
 ";
 
-        public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + INTERVAL '{leaseDurationInSeconds}' SECOND
-WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-";
+        // the leaser is passed as a hex string, in the same format the claim writes it
+        public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaseDurationInSeconds, leaser.ToString("N")];
 
-        public string GetClearLeaseSql(Guid leaser) => $@"
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
+
+            return ($@"
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + NUMTODSINTERVAL({{0}}, 'SECOND')
+WHERE {ColLeaser} = HEXTORAW({{1}})
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
+
+        public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs)
+        {
+            List<object> parameters = [leaser.ToString("N")];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
+
+            return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
-WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-";
+WHERE {ColLeaser} = HEXTORAW({{0}})
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {

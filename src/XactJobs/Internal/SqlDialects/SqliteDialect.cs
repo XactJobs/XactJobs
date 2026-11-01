@@ -61,17 +61,48 @@ WHERE
 RETURNING *
 ";
 
-        public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeasedUntil} = datetime('now', '+{leaseDurationInSeconds} seconds')
-WHERE {ColLeaser} = '{leaser}'
-";
+        // The primary key is just the id on Sqlite (see XactJobEntityConfiguration).
+        // The leaser is passed as a string, because the provider would bind a Guid in uppercase, and the claim writes it in lowercase.
+        public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaseDurationInSeconds, leaser.ToString()];
 
-        public string GetClearLeaseSql(Guid leaser) => $@"
+            var jobIds = BuildJobIdList(jobs, parameters);
+
+            return ($@"
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeasedUntil} = datetime('now', '+' || {{0}} || ' seconds')
+WHERE {ColLeaser} = {{1}}
+  AND {ColId} IN ({jobIds})
+", parameters.ToArray());
+        }
+
+        public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs)
+        {
+            List<object> parameters = [leaser.ToString()];
+
+            var jobIds = BuildJobIdList(jobs, parameters);
+
+            return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
-WHERE {ColLeaser} = '{leaser}'
-";
+WHERE {ColLeaser} = {{0}}
+  AND {ColId} IN ({jobIds})
+", parameters.ToArray());
+        }
+
+        private static string BuildJobIdList(IReadOnlyCollection<XactJob> jobs, List<object> parameters)
+        {
+            var placeholders = new List<string>(jobs.Count);
+
+            foreach (var job in jobs)
+            {
+                placeholders.Add($"{{{parameters.Count}}}");
+                parameters.Add(job.Id);
+            }
+
+            return string.Join(", ", placeholders);
+        }
 
         public Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
