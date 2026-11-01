@@ -242,20 +242,50 @@ namespace XactJobs.Internal
                 {
                     _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
 
-                    dbContext.Attach(job);
-
-                    RecordFailedAttempt(dbContext, job, periodicJob, ex);
+                    await RecordFailureAsync(job, periodicJob, ex)
+                        .ConfigureAwait(false);
                 }
             })
-                .ConfigureAwait(false);
-
-            await dbContext.SaveChangesAsync(stoppingToken)
                 .ConfigureAwait(false);
 
             await extendLeaseTimer.StopAsync()
                 .ConfigureAwait(false);
 
             return jobs.Count;
+        }
+
+        /// <summary>
+        /// Records a failed attempt in its own scope, after the job's scope has been rolled back and disposed.
+        /// Never throws: if the record can't be saved, the lease expires and the job runs again.
+        /// The stopping token isn't used, so that a job failing during shutdown still gets its failure recorded.
+        /// </summary>
+        private async Task RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, Exception jobException)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+
+                var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+                dbContext.Attach(job);
+
+                RecordFailedAttempt(dbContext, job, periodicJob, jobException);
+
+                await dbContext.SaveChangesAsync(cts.Token)
+                    .ConfigureAwait(false);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "{Queue}: Job row is already gone, failure not recorded (lease expired and another worker may have processed it): {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Queue}: Failed recording job failure, the job will run again when its lease expires: {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+            }
         }
 
         private async Task ExtendLeaseAsync(CancellationToken token)
