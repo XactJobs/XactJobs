@@ -76,7 +76,9 @@ public class SqlitePeriodicReconciliationTests : IAsyncLifetime
 
         var job = await WithDbAsync(db => db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == "chain"));
 
-        Assert.Equal(1, job.PeriodicJobVersion);
+        var periodicJob = await WithDbAsync(db => db.PeriodicJobs.AsNoTracking().SingleAsync(p => p.Id == "chain"));
+
+        Assert.Equal(periodicJob.Version, job.PeriodicJobVersion);
         Assert.True(job.ScheduledAt > DateTime.UtcNow);
     }
 

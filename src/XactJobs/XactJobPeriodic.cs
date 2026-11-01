@@ -13,6 +13,8 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
+using System.Security.Cryptography;
+
 namespace XactJobs
 {
     public class XactJobPeriodic
@@ -65,7 +67,9 @@ namespace XactJobs
         public bool IsActive { get; private set; }
 
         /// <summary>
-        /// Version is increased every time the period job changes.
+        /// Identifies the definition of the periodic job. It's a new random value every time the periodic job is
+        /// created or changed, so only the job rows of the last definition saved are compatible with it, even if several
+        /// nodes change it at the same time. It says nothing about the order of the changes (see <see cref="UpdatedAt"/>).
         /// </summary>
         public int Version { get; private set; }
 
@@ -100,7 +104,22 @@ namespace XactJobs
             MethodArgs = job.MethodArgs;
             CronExpression = job.CronExpression;
             Queue = job.Queue;
-            Version = Version + 1;
+
+            var previousVersion = Version;
+
+            do
+            {
+                Version = NewVersion();
+            }
+            while (Version == previousVersion);
+        }
+
+        /// <summary>
+        /// Starts from 2, because job rows from before versions existed have no version, and count as version 1.
+        /// </summary>
+        internal static int NewVersion()
+        {
+            return RandomNumberGenerator.GetInt32(2, int.MaxValue);
         }
 
         internal bool IsCompatibleWith(XactJobPeriodic job)

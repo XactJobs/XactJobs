@@ -57,6 +57,53 @@ public class SqlitePeriodicDeleteTests : IAsyncLifetime
         await _memoryConnection.DisposeAsync();
     }
 
+    [Fact]
+    public async Task DeleteAndAddAgain_SkipsTheOldPendingRow_AndContinuesWithTheNewOne()
+    {
+        var (oldJobId, newJobId, version) = await WithDbAsync(async db =>
+        {
+            db.JobEnsurePeriodic<SelfDeletingJob>(x => x.Nothing(), JobId, Daily);
+
+            await db.SaveChangesAsync();
+
+            var oldJob = await db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == JobId);
+
+            Assert.True(await db.JobDeletePeriodicAsync(JobId, CancellationToken.None));
+
+            await db.SaveChangesAsync();
+
+            var periodicJob = db.JobEnsurePeriodic<SelfDeletingJob>(x => x.Nothing(), JobId, Daily);
+
+            await db.SaveChangesAsync();
+
+            var newJob = await db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == JobId && j.Id != oldJob.Id);
+
+            Assert.NotEqual(oldJob.PeriodicJobVersion, newJob.PeriodicJobVersion);
+            Assert.Equal(periodicJob.Version, newJob.PeriodicJobVersion);
+            Assert.True(periodicJob.Version > 1, "Version 1 is reserved for rows from before versions existed");
+
+            // make both of them due: the scheduled time isn't part of the key on Sqlite
+            await db.Jobs.Where(j => j.PeriodicJobId == JobId)
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.ScheduledAt, DateTime.UtcNow.AddMinutes(-1)));
+
+            return (oldJob.Id, newJob.Id, periodicJob.Version);
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(async db => await db.JobHistory.CountAsync(h => h.PeriodicJobId == JobId) >= 2), "both rows to be processed");
+
+        var history = await WithDbAsync(db => db.JobHistory.AsNoTracking().Where(h => h.PeriodicJobId == JobId).ToDictionaryAsync(h => h.Id));
+
+        Assert.Equal(XactJobStatus.Skipped, history[oldJobId].Status);
+        Assert.Equal(XactJobStatus.Completed, history[newJobId].Status);
+
+        // only the new chain continues
+        var pending = await WithDbAsync(db => db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == JobId));
+
+        Assert.Equal(version, pending.PeriodicJobVersion);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -110,6 +157,10 @@ public class SqlitePeriodicDeleteTests : IAsyncLifetime
 
     public sealed class SelfDeletingJob(TestDbContext db)
     {
+        public void Nothing()
+        {
+        }
+
         public async Task DeleteItselfAsync(bool saveInsideTheJob, CancellationToken cancellationToken)
         {
             await db.JobDeletePeriodicAsync(JobId, cancellationToken);

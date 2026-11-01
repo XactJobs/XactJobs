@@ -120,7 +120,7 @@ public class SqlitePeriodicJobTests : IDisposable
         Assert.Equal(jobId, periodicJob2.Id);
         Assert.Equal(cronExpression2, periodicJob2.CronExpression);
         Assert.Equal(nameof(TestService.DoWorkAsync), periodicJob2.MethodName);
-        Assert.True(periodicJob2.Version > version1);
+        Assert.NotEqual(version1, periodicJob2.Version);
 
         var count = await _context.PeriodicJobs.CountAsync();
         Assert.Equal(1, count); // Should only have one periodic job
