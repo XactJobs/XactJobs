@@ -83,7 +83,7 @@ Library (NuGet package) for reliable job scheduling and execution with full data
 
 ### Multi-Queue Support
 - Independent worker pools per queue
-- Configurable worker counts and batch sizes
+- Configurable worker counts and parallelism
 - Queue names: Default, Priority, LongRunning, custom
 
 ### Expression-Based Job Definition

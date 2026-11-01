@@ -42,6 +42,32 @@ dbContext.JobEnsurePeriodic(
 dbContext.SaveChanges();
 ```
 
+If the periodic jobs are known at startup, define them in the options instead:
+
+```csharp
+builder.Services.AddXactJobs<UserDbContext>(options =>
+{
+    options.WithPeriodicJob(
+        () => Console.WriteLine("Recurring!"),
+        "my_recurring_job",
+        Cron.Daily());
+});
+```
+
+This is the safe way to do it with several nodes starting at the same time, because the nodes take turns under a lock.
+`JobEnsurePeriodic` can't take that lock, since the changes are only saved later by your `SaveChanges`. If several nodes
+call it at the same time, it's still safe for an existing job (only the definition saved last runs), but for a new job all of them
+except the first get a duplicate key error from `SaveChanges`.
+
+Each run of a periodic job schedules the next one. Each node also checks every 5 minutes (`WithPeriodicJobReconciliationInterval`)
+for active periodic jobs without a pending run, and schedules their next run. So a periodic job recovers if its pending
+row gets lost, and rows added directly to the periodic job table are picked up. They need a valid cron expression, and the same
+type name, method name and arguments format that XactJobs writes. The run happens at the next time on the cron schedule,
+missed runs are not caught up.
+
+After a periodic job is deleted, or its definition changes, the pending run of the old definition stays in the table until its
+scheduled time. A worker then skips it, adding a `Skipped` row to the history.
+
 ### Batches
 Adding multiple jobs before saving changes will enqueue all jobs in a single transaction.
 
@@ -108,6 +134,9 @@ public class YourWorkerOrController
 ```
 This can only work if the workers are running in the same process where the jobs are enqueued (which is the default).
 
+A job enqueued this way is scheduled for the current time of the application. If that's still in the future for the database when
+the worker polls (the clocks differ, or on SQLite within the same millisecond), the job runs at the next regular poll.
+
 # Installation
 
 Install the XactJobs nuget package:  
@@ -140,12 +169,18 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 });
 ```
 
-Finally create the XactJobs tables in your database using the SQL scripts below:
-- [SQL Server](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql)
-- [PostgreSQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql)
-- [MySQL](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql)
-- [Oracle](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql)
-- [SQLite](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql)
+Finally create the XactJobs tables in your database, by running all the SQL scripts for your database in the [sql](https://github.com/XactJobs/XactJobs/tree/main/sql) folder, in version order:
+
+| Database | Scripts |
+|---|---|
+| SQL Server | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlserver-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlserver-v0.1.5.sql) |
+| PostgreSQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-postgresql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-postgresql-v0.1.5.sql) |
+| MySQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-mysql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-mysql-v0.1.5.sql) |
+| Oracle | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-oracle-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-oracle-v0.1.5.sql) |
+| SQLite | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlite-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlite-v0.1.5.sql) |
+
+When upgrading an existing installation, run only the scripts of the newer versions. For v0.1.5, upgrade all the workers first and then run
+the script, because it drops an index that older versions need.
 
 ## Using EF Migrations
 Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
@@ -265,6 +300,99 @@ will use `IServiceScopeFactory` to create a scope and then attempt to resolve ea
 
 This means the dependencies (`IEmailService` in the example) of the owning class must be registered in the DI service collection.
 The owning class itself (`EmailSender` in the example) does not have to be a registered service - it just has to have a public constructor.
+
+# Configuration
+
+```csharp
+builder.Services.AddXactJobs<UserDbContext>(options =>
+{
+    options
+        .WithWorkerCount(2)                         // workers polling the queue
+        .WithMaxDegreeOfParallelism(8)              // jobs running at the same time, per worker (default: processor count)
+        .WithPollingInterval(6)                     // seconds between polls, per worker
+        .WithLeaseDuration(120)                     // seconds, extended automatically while a job is running
+        .WithShutdownTimeout(10)                    // seconds running jobs get to finish on stop, before they are cancelled
+        .WithPeriodicJobReconciliationInterval(300) // seconds between the checks for periodic jobs without a pending run
+        .WithHistoryRetentionPeriodInDays(30);
+
+    // isolated queues have their own settings
+    options.WithLongRunningQueue(queue => queue.WithMaxDegreeOfParallelism(2));
+});
+```
+
+The values above are the defaults, except for `WithMaxDegreeOfParallelism`.
+
+# How Jobs Run
+
+## Polling
+A worker only claims jobs it can start immediately, up to `MaxDegreeOfParallelism` at a time, so claimed jobs never wait behind a slow job while another
+worker is free. A slow job only occupies its own slot, and the worker keeps claiming jobs for the other slots.
+
+If a poll fills all the free slots there is likely a backlog, so the worker polls again as soon as a slot frees up. Otherwise it waits for
+the polling interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own queue.
+
+## Stopping
+When the application stops, the workers stop polling and running jobs get `ShutdownTimeoutInSeconds` to finish. Then the cancellation token passed to the jobs is cancelled, and they get
+5 more seconds to react. Finally, the leases of the unfinished jobs are cleared so they can run again right away, which takes up to `ClearLeaseTimeoutInSeconds`.
+A cancelled job doesn't count as a failed attempt.
+
+With the default settings this fits in the default 30 second shutdown timeout of the .NET host. If you lower that timeout, lower these as well.
+`WithShutdownTimeout(0)` cancels the running jobs immediately.
+
+A job that ignores the cancellation token may still be running when its lease is cleared, so it can end up running on another worker at the same time, which the next section covers.
+
+## Exactly-Once Database Effects
+A lease can expire while a job is still running, for example if a node loses its database connection for a while. Another worker can then run the same job. For the database writes
+this is safe, as long as the job uses the scoped `TDbContext` injected into its class and does one of these two things:
+
+- **Doesn't save its changes.** The worker saves them when the job finishes:
+  ```csharp
+  public class InvoiceJob(UserDbContext db)
+  {
+      public void CreateInvoice(int orderId)
+      {
+          db.Invoices.Add(new Invoice(orderId));
+      }
+  }
+  ```
+- **Saves its changes inside a transaction it doesn't commit.** The worker commits it when the job finishes:
+  ```csharp
+  public async Task CreateInvoiceAsync(int orderId, CancellationToken cancellationToken)
+  {
+      await db.Database.BeginTransactionAsync(cancellationToken);
+
+      db.Invoices.Add(new Invoice(orderId));
+      await db.SaveChangesAsync(cancellationToken);
+
+      // ... more work that needs the saved invoice
+  }
+  ```
+
+Either way the job's writes, the removal of the job row and the new history row all commit in one transaction. If two workers run the same job, only one of them can commit:
+the other one's delete affects 0 rows, EF throws a concurrency exception, and its writes roll back. The same happens if the job fails.
+
+**This doesn't apply to** changes the job saves without a transaction, or commits itself, because they are already permanent when the job finishes.
+It also doesn't apply to other DbContext instances, or to external side effects like sending emails or calling HTTP APIs. These can happen more than once, so they should be idempotent.
+
+# Database Notes
+
+## PostgreSQL
+The job table is a high-churn queue: every job inserts, updates and deletes a row. Aggressive autovacuum settings for this table are recommended, for example:
+
+```sql
+ALTER TABLE xact_jobs.job SET (
+  autovacuum_vacuum_scale_factor = 0,
+  autovacuum_vacuum_threshold = 1000,
+  autovacuum_vacuum_cost_limit = 2000
+);
+```
+
+Long-running transactions **anywhere in the cluster** hold back the cleanup of dead rows, not just the ones using this table. Dead rows pile up meanwhile, which slows down fetching jobs.
+
+## Oracle
+Jobs are not claimed strictly oldest first, because Oracle doesn't allow `FOR UPDATE` together with an ordered subquery or `FETCH FIRST`.
+
+Oracle also reuses cached query plans. If the first claim runs while the table is nearly empty, it can get a full table scan, and may keep that plan for a while as the table grows, until the plan is refreshed. Gathering statistics on the table is the usual way to refresh it.
 
 # License
 

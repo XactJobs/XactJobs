@@ -21,10 +21,10 @@ namespace XactJobs
     public class XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
     {
         /// <summary>
-        /// Number of paraller workers running. Default 2.
-        /// The workers will be started with initial delay, to distribute workers execution in time.
-        /// By default, 2 workers will be started with 4 second polling interval. 
-        /// The initial delay between workers is (4 seconds / 2 workers) = 2 seconds.
+        /// Number of workers polling this queue. Default 2.
+        /// The workers are started with an initial delay, to distribute their polling in time.
+        /// By default, 2 workers are started with a 6 second polling interval, so the initial
+        /// delay between them is (6 seconds / 2 workers) = 3 seconds.
         /// </summary>
         public int WorkerCount { get; set; } = 2;
 
