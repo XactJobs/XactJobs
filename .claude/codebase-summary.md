@@ -131,7 +131,7 @@ dbContext.JobEnsurePeriodicAsync("daily-cleanup", "0 0 * * * *", () => Cleanup()
 
 ## Important Notes
 
-- Current version: 0.1.5
+- Current version: 0.1.6
 - Targets: net8.0, net9.0, net10.0
 - License: LGPL-3.0-or-later
 
