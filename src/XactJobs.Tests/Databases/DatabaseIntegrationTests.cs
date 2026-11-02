@@ -9,12 +9,44 @@ using XactJobs.Tests.Postgres;
 namespace XactJobs.Tests.Databases;
 
 [Collection(OfficialMySqlCollection.Name)]
-public sealed class OfficialMySqlIntegrationTests(OfficialMySqlFixture fixture) : DatabaseIntegrationTests(fixture);
+public sealed class OfficialMySqlIntegrationTests(OfficialMySqlFixture fixture) : MySqlIntegrationTests(fixture);
 
 #if !NET10_0_OR_GREATER // Pomelo doesn't support EF Core 10 yet
 [Collection(PomeloMySqlCollection.Name)]
-public sealed class PomeloMySqlIntegrationTests(PomeloMySqlFixture fixture) : DatabaseIntegrationTests(fixture);
+public sealed class PomeloMySqlIntegrationTests(PomeloMySqlFixture fixture) : MySqlIntegrationTests(fixture);
 #endif
+
+public abstract class MySqlIntegrationTests(MySqlFixtureBase fixture) : DatabaseIntegrationTests(fixture)
+{
+    /// <summary>
+    /// For the EF migrations route: the database decides if the schema from the model is valid.
+    /// The tables are renamed, because the database already has the ones from the SQL scripts.
+    /// </summary>
+    [DockerFact]
+    public async Task SchemaGeneratedFromTheModel_IsAcceptedByTheDatabase()
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>();
+
+        fixture.Configure(options, retryOnFailure: false);
+
+        await using var db = new TestDbContext(options.Options);
+
+        var script = db.Database.GenerateCreateScript().Replace("xact_jobs_", "model_check_");
+
+        Assert.Contains("model_check_job", script);
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(script);
+
+            await db.Database.ExecuteSqlRawAsync("INSERT INTO model_check_job (scheduled_at, queue, type_name, method_name, method_args, error_count) VALUES (UTC_TIMESTAMP(6), 'q', 'T', 'M', '[]', 0)");
+        }
+        finally
+        {
+            await db.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS model_check_job, model_check_job_history, model_check_job_periodic");
+        }
+    }
+}
 
 [Collection(SqlServerCollection.Name)]
 public sealed class SqlServerIntegrationTests(SqlServerFixture fixture) : DatabaseIntegrationTests(fixture);

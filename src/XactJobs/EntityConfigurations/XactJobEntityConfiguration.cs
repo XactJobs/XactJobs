@@ -24,10 +24,12 @@ namespace XactJobs.EntityConfigurations
     {
         private readonly ISqlDialect _sqlDialect;
         private readonly bool _excludeFromMigrations;
+        private readonly bool _isOfficialMySqlProvider;
 
         public XactJobEntityConfiguration(string? providerName, bool excludeFromMigrations = true)
         {
             _sqlDialect = providerName.ToSqlDialect();
+            _isOfficialMySqlProvider = providerName == "MySql.EntityFrameworkCore";
             _excludeFromMigrations = excludeFromMigrations;
         }
 
@@ -78,6 +80,13 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.PeriodicJobVersion).HasColumnName(_sqlDialect.ColPeriodicJobVersion);
 
             builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
+
+            if (_isOfficialMySqlProvider)
+            {
+                // MySQL requires a key starting with an auto increment column, and it's not the first one of the primary key.
+                // Pomelo adds this key on its own, and the SQL scripts have it too. It has to be part of CREATE TABLE, so it can't be an index.
+                builder.HasAlternateKey(x => x.Id).HasName(_sqlDialect.ColId);
+            }
 
             if (_sqlDialect is PostgreSqlDialect)
             {
