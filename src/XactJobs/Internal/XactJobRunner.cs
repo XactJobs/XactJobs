@@ -16,11 +16,31 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+using System.Threading.Channels;
 
 namespace XactJobs.Internal
 {
     internal sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
     {
+        // How long jobs get to react to the cancellation, after the shutdown timeout has passed
+        private static readonly TimeSpan JobCancellationTimeout = TimeSpan.FromSeconds(5);
+
+        // Jobs claimed by this runner and not finished yet, by primary key.
+        // Jobs that were cancelled because of a shutdown stay here, so their leases get cleared.
+        private readonly ConcurrentDictionary<(string Queue, DateTime ScheduledAt, long Id), XactJob> _inFlightJobs = new();
+
+        // Signals that a job task has finished. It doesn't count them: a reader has to check the state it's waiting for.
+        private readonly Channel<bool> _jobFinished = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
+        {
+            FullMode = BoundedChannelFullMode.DropWrite
+        });
+
+        // The most jobs in flight at the same time: never claim more than can start running immediately
+        private readonly int _capacity;
+
+        private int _runningJobCount;
+
         private readonly string _queueName;
         private readonly QuickPollChannel _quickPollChannel;
         private readonly Guid _leaser = Guid.NewGuid();
@@ -35,10 +55,12 @@ namespace XactJobs.Internal
             _options = options;
             _scopeFactory = scopeFactory;
             _logger = logger;
+
+            _capacity = options.MaxDegreeOfParallelism > 0 ? options.MaxDegreeOfParallelism : Environment.ProcessorCount;
         }
 
         /// <summary>
-        /// Executes the job runner loop, polling for jobs and processing them in batches.
+        /// Executes the job runner loop, polling for jobs to fill the free slots and starting each of them as its own task.
         /// Handles initial delay, polling intervals, error backoff, and graceful shutdown.
         /// </summary>
         /// <param name="stoppingToken">A <see cref="CancellationToken"/> to observe while waiting for the task to complete.</param>
@@ -49,59 +71,21 @@ namespace XactJobs.Internal
             await Task.Delay(TimeSpan.FromMilliseconds(initialDelayMs), stoppingToken)
                 .ConfigureAwait(false);
 
-            var parallelOptions = new ParallelOptions
-            {
-                CancellationToken = stoppingToken,
-                MaxDegreeOfParallelism = _options.MaxDegreeOfParallelism
-            };
+            // not disposed: a job ignoring the cancellation can still be using the token after this method returns
+            var jobsCts = new CancellationTokenSource();
 
-            var lastRunFailed = 0;
-            var lastRunJobCount = 0;
+            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLeaseAsync);
 
-            var nextRunTime = DateTime.UtcNow;
+            extendLeaseTimer.Start();
 
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                try
-                {
-                    var delaySec = lastRunFailed > 0
-                        ? _options.PollingIntervalInSeconds * Math.Min(lastRunFailed, 5)
-                        : lastRunJobCount == _options.BatchSize ? 0 : _options.PollingIntervalInSeconds;
+            await PollUntilStoppedAsync(jobsCts.Token, stoppingToken)
+                .ConfigureAwait(false);
 
-                    if (delaySec > 0)
-                    {
-                        var now = DateTime.UtcNow;
+            await WaitForRunningJobsOnShutdownAsync(jobsCts)
+                .ConfigureAwait(false);
 
-                        nextRunTime = AlignNextRun(nextRunTime, delaySec, now);
-
-                        var shouldPoll = await WaitForNextPollAsync(nextRunTime.Subtract(now), stoppingToken)
-                            .ConfigureAwait(false);
-
-                        if (!shouldPoll) continue;
-                    }
-                    else
-                    {
-                        // consume batch of notifications, since we're about to poll
-                        await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
-                            .ConfigureAwait(false);
-                    }
-
-                    lastRunJobCount = await RunJobsAsync(parallelOptions, stoppingToken)
-                        .ConfigureAwait(false);
-
-                    lastRunFailed = 0;
-                }
-                catch (Exception ex)
-                {
-                    lastRunFailed++;
-
-                    if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
-                    {
-                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds",
-                            GetQueueDisplayName(), _options.PollingIntervalInSeconds * Math.Min(lastRunFailed, 5));
-                    }
-                }
-            }
+            await extendLeaseTimer.StopAsync()
+                .ConfigureAwait(false);
 
             try
             {
@@ -111,6 +95,130 @@ namespace XactJobs.Internal
             catch (Exception ex)
             {
                 _logger.LogError(ex, "{Queue}: Failed clearing leases for leaser '{Leaser}' during shutdown", GetQueueDisplayName(), _leaser);
+            }
+        }
+
+        private async Task PollUntilStoppedAsync(CancellationToken jobsToken, CancellationToken stoppingToken)
+        {
+            var failedPolls = 0;
+            var lastPollFilledSlots = false;
+
+            var nextRunTime = DateTime.UtcNow;
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    if (failedPolls == 0 && lastPollFilledSlots)
+                    {
+                        // likely a backlog: no need to wait for the interval, just for a free slot
+                        await WaitForFreeSlotAsync(stoppingToken)
+                            .ConfigureAwait(false);
+
+                        // consume batch of notifications, since we're about to poll
+                        await _quickPollChannel.ConsumeBatchAsync(_capacity, stoppingToken)
+                            .ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        var delaySec = failedPolls > 0
+                            ? _options.PollingIntervalInSeconds * Math.Min(failedPolls, 5)
+                            : _options.PollingIntervalInSeconds;
+
+                        var now = DateTime.UtcNow;
+
+                        nextRunTime = AlignNextRun(nextRunTime, delaySec, now);
+
+                        var shouldPoll = await WaitForNextPollAsync(nextRunTime.Subtract(now), stoppingToken)
+                            .ConfigureAwait(false);
+
+                        if (!shouldPoll) continue;
+                    }
+
+                    var freeSlots = GetFreeSlots();
+
+                    if (freeSlots <= 0)
+                    {
+                        // skip the database, there's nothing to do until a slot frees up
+                        lastPollFilledSlots = true;
+                        continue;
+                    }
+
+                    var claimedCount = await ClaimAndStartJobsAsync(freeSlots, jobsToken, stoppingToken)
+                        .ConfigureAwait(false);
+
+                    lastPollFilledSlots = claimedCount == freeSlots;
+
+                    failedPolls = 0;
+                }
+                catch (Exception ex)
+                {
+                    failedPolls++;
+
+                    if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                    {
+                        _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds",
+                            GetQueueDisplayName(), _options.PollingIntervalInSeconds * Math.Min(failedPolls, 5));
+                    }
+                }
+            }
+        }
+
+        private int GetFreeSlots()
+        {
+            return _capacity - _inFlightJobs.Count;
+        }
+
+        private async Task WaitForFreeSlotAsync(CancellationToken stoppingToken)
+        {
+            while (GetFreeSlots() <= 0)
+            {
+                await _jobFinished.Reader.ReadAsync(stoppingToken)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Gives the running jobs the time to finish, then cancels the ones that didn't.
+        /// The leases keep being extended meanwhile.
+        /// </summary>
+        private async Task WaitForRunningJobsOnShutdownAsync(CancellationTokenSource jobsCts)
+        {
+            var finished = await WaitForNoRunningJobsAsync(TimeSpan.FromSeconds(_options.ShutdownTimeoutInSeconds))
+                .ConfigureAwait(false);
+
+            if (finished) return;
+
+            await jobsCts.CancelAsync()
+                .ConfigureAwait(false);
+
+            finished = await WaitForNoRunningJobsAsync(JobCancellationTimeout)
+                .ConfigureAwait(false);
+
+            if (!finished)
+            {
+                _logger.LogWarning("{Queue}: {Count} jobs did not stop after being cancelled. Their leases will be cleared, so they can run again on another worker",
+                    GetQueueDisplayName(), Volatile.Read(ref _runningJobCount));
+            }
+        }
+
+        private async Task<bool> WaitForNoRunningJobsAsync(TimeSpan timeout)
+        {
+            using var cts = new CancellationTokenSource(timeout);
+
+            try
+            {
+                while (Volatile.Read(ref _runningJobCount) > 0)
+                {
+                    await _jobFinished.Reader.ReadAsync(cts.Token)
+                        .ConfigureAwait(false);
+                }
+
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return Volatile.Read(ref _runningJobCount) == 0;
             }
         }
 
@@ -152,8 +260,8 @@ namespace XactJobs.Internal
                 await _quickPollChannel.WaitToReadAsync(cts.Token)
                     .ConfigureAwait(false);
 
-                // drain the channel, up to the batch size (we're about to poll)
-                consumedCount = await _quickPollChannel.ConsumeBatchAsync(_options.BatchSize, stoppingToken)
+                // drain the channel, up to the capacity (we're about to poll)
+                consumedCount = await _quickPollChannel.ConsumeBatchAsync(_capacity, stoppingToken)
                     .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
@@ -172,19 +280,37 @@ namespace XactJobs.Internal
 
         private async Task ClearLeasesAsync()
         {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+            await ExecuteLeaseSqlForInFlightJobsAsync((dialect, jobs) => dialect.GetClearLeaseSql(_leaser, jobs), cts.Token)
+                .ConfigureAwait(false);
+        }
+
+        private async Task ExecuteLeaseSqlForInFlightJobsAsync(Func<ISqlDialect, XactJob[], (string Sql, object[] Parameters)> getLeaseSql, CancellationToken token)
+        {
+            var jobs = _inFlightJobs.Values; // this is a snapshot
+
+            if (jobs.Count == 0) return;
+
             using var scope = _scopeFactory.CreateScope();
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+            foreach (var chunk in jobs.Chunk(SqlDialectExtensions.MaxJobsPerStatement))
+            {
+                var (sql, parameters) = getLeaseSql(dialect, chunk);
 
-            await dbContext.Database.ExecuteSqlRawAsync(dialect.GetClearLeaseSql(_leaser), cts.Token)
-                .ConfigureAwait(false);
+                await dbContext.Database.ExecuteSqlRawAsync(sql, parameters, token)
+                    .ConfigureAwait(false);
+            }
         }
 
-        private async Task<int> RunJobsAsync(ParallelOptions parallelOptions, CancellationToken stoppingToken)
+        /// <summary>
+        /// The scope is used only for the claim: each job runs, and records a failure, in its own scope.
+        /// </summary>
+        private async Task<int> ClaimAndStartJobsAsync(int maxJobs, CancellationToken jobsToken, CancellationToken stoppingToken)
         {
             using var scope = _scopeFactory.CreateScope();
 
@@ -192,84 +318,138 @@ namespace XactJobs.Internal
 
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            var acquireLeaseSql = dialect.GetAcquireLeaseSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
-            var fetchJobsSql = dialect.GetFetchJobsSql(_queueName, _options.BatchSize, _leaser, _options.LeaseDurationInSeconds);
+            var jobs = await dialect.ClaimJobsAsync(dbContext, _queueName, maxJobs, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
+                .ConfigureAwait(false);
 
-            using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLeaseAsync);
-
-            extendLeaseTimer.Start();
-
-            if (acquireLeaseSql != null)
+            foreach (var job in jobs)
             {
-                await dbContext.Database.ExecuteSqlRawAsync(acquireLeaseSql, stoppingToken)
-                    .ConfigureAwait(false);
+                _inFlightJobs[GetKey(job)] = job;
             }
 
-            var jobs = await dbContext.Set<XactJob>().FromSqlRaw(fetchJobsSql)
-                .AsNoTracking()
-                .ToListAsync(stoppingToken)
-                .ConfigureAwait(false);
+            Dictionary<string, XactJobPeriodic> periodicJobs;
 
-            var periodicJobIds = jobs.Select(job => job.PeriodicJobId).ToList();
+            try
+            {
+                periodicJobs = await LoadPeriodicJobsAsync(dbContext, jobs, stoppingToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception) when (!stoppingToken.IsCancellationRequested)
+            {
+                // these jobs won't run, so the slots are free and the leases shouldn't be extended: they will expire
+                foreach (var job in jobs)
+                {
+                    _inFlightJobs.TryRemove(GetKey(job), out _);
+                }
 
-            var periodicJobs = periodicJobIds.Count > 0
-                ? await dbContext.Set<XactJobPeriodic>()
-                    .Where(x => periodicJobIds.Contains(x.Id))
-                    .AsNoTracking()
-                    .ToDictionaryAsync(x => x.Id, stoppingToken)
-                    .ConfigureAwait(false)
-                : [];
+                throw;
+            }
 
-            await Parallel.ForEachAsync(jobs, parallelOptions, async (job, stoppingToken) =>
+            foreach (var job in jobs)
             {
                 XactJobPeriodic? periodicJob = null;
-                try
+
+                if (job.PeriodicJobId != null)
                 {
-                    if (job.PeriodicJobId != null)
-                    {
-                        periodicJobs.TryGetValue(job.PeriodicJobId, out periodicJob);
-                    }
-                    
-                    await RunJobAsync(job, periodicJob, stoppingToken)
-                        .ConfigureAwait(false);
-
-                    if (_logger.IsEnabled(LogLevel.Debug))
-                    {
-                        _logger.LogDebug("{Queue}: Job completed - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
-                    }
+                    periodicJobs.TryGetValue(job.PeriodicJobId, out periodicJob);
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
 
-                    dbContext.Attach(job);
+                Interlocked.Increment(ref _runningJobCount);
 
-                    RecordFailedAttempt(dbContext, job, periodicJob, ex);
-                }
-            })
-                .ConfigureAwait(false);
-
-            await dbContext.SaveChangesAsync(stoppingToken)
-                .ConfigureAwait(false);
-
-            await extendLeaseTimer.StopAsync()
-                .ConfigureAwait(false);
+                // Task.Run, because a job can block for a long time before its first await, and this is the polling loop
+                _ = Task.Run(() => RunClaimedJobAsync(job, periodicJob, jobsToken), CancellationToken.None);
+            }
 
             return jobs.Count;
         }
 
-        private async Task ExtendLeaseAsync(CancellationToken token)
+        private static async Task<Dictionary<string, XactJobPeriodic>> LoadPeriodicJobsAsync(TDbContext dbContext, List<XactJob> jobs, CancellationToken cancellationToken)
         {
-            using var scope = _scopeFactory.CreateScope();
+            var periodicJobIds = jobs
+                .Where(job => job.PeriodicJobId != null)
+                .Select(job => job.PeriodicJobId!)
+                .Distinct()
+                .ToList();
 
-            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+            if (periodicJobIds.Count == 0) return [];
 
-            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
-
-            var extendLeaseSql = dialect.GetExtendLeaseSql(_leaser, _options.LeaseDurationInSeconds);
-
-            await dbContext.Database.ExecuteSqlRawAsync(extendLeaseSql, token)
+            return await dbContext.Set<XactJobPeriodic>()
+                .Where(x => periodicJobIds.Contains(x.Id))
+                .AsNoTracking()
+                .ToDictionaryAsync(x => x.Id, cancellationToken)
                 .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Nothing observes this task, so it must not throw.
+        /// </summary>
+        private async Task RunClaimedJobAsync(XactJob job, XactJobPeriodic? periodicJob, CancellationToken jobsToken)
+        {
+            try
+            {
+                await RunJobAsync(job, periodicJob, jobsToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+
+                await RecordFailureAsync(job, periodicJob, ex)
+                    .ConfigureAwait(false);
+
+                _inFlightJobs.TryRemove(GetKey(job), out _);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _runningJobCount);
+
+                _jobFinished.Writer.TryWrite(true);
+            }
+        }
+
+        private static (string Queue, DateTime ScheduledAt, long Id) GetKey(XactJob job)
+        {
+            return (job.Queue, job.ScheduledAt, job.Id);
+        }
+
+        /// <summary>
+        /// Records a failed attempt in its own scope, after the job's scope has been rolled back and disposed.
+        /// Never throws: if the record can't be saved, the lease expires and the job runs again.
+        /// The stopping token isn't used, so that a job failing during shutdown still gets its failure recorded.
+        /// </summary>
+        private async Task RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, Exception jobException)
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+
+                var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+                RequireTransactionForSaveChanges(dbContext);
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+                dbContext.Attach(job);
+
+                RecordFailedAttempt(dbContext, job, periodicJob, jobException);
+
+                await dbContext.SaveChangesAsync(cts.Token)
+                    .ConfigureAwait(false);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "{Queue}: Job row is already gone, failure not recorded (lease expired and another worker may have processed it): {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Queue}: Failed recording job failure, the job will run again when its lease expires: {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+            }
+        }
+
+        private Task ExtendLeaseAsync(CancellationToken token)
+        {
+            return ExecuteLeaseSqlForInFlightJobsAsync((dialect, jobs) => dialect.GetExtendLeaseSql(_leaser, jobs, _options.LeaseDurationInSeconds), token);
         }
 
         public async Task RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, CancellationToken stoppingToken)
@@ -278,11 +458,15 @@ namespace XactJobs.Internal
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
+            RequireTransactionForSaveChanges(dbContext);
+
             try
             {
                 dbContext.Attach(job);
 
-                if (job.PeriodicJobId != null && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job)))
+                var isSkipped = job.PeriodicJobId != null && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job));
+
+                if (isSkipped)
                 {
                     // periodic job is inactive or deleted
                     RecordSkipped(dbContext, job, periodicJob);
@@ -298,7 +482,10 @@ namespace XactJobs.Internal
                     await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
                         .ConfigureAwait(false);
 
-                    RecordSuccess(dbContext, job, periodicJob);
+                    // detached means the job deleted its own periodic job and saved that, so there's no next run to schedule
+                    var isPeriodicJobDeleted = periodicJob != null && dbContext.Entry(periodicJob).State == EntityState.Detached;
+
+                    RecordSuccess(dbContext, job, isPeriodicJobDeleted ? null : periodicJob);
                 }
 
                 await dbContext.SaveChangesAsync(stoppingToken)
@@ -308,6 +495,13 @@ namespace XactJobs.Internal
                 {
                     await dbContext.Database.CurrentTransaction.CommitAsync(stoppingToken)
                         .ConfigureAwait(false);
+                }
+
+                _inFlightJobs.TryRemove(GetKey(job), out _);
+
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug("{Queue}: Job {Outcome} - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), isSkipped ? "skipped" : "completed", job.TypeName, job.MethodName, job.Id);
                 }
             }
             catch (Exception ex)
@@ -323,6 +517,8 @@ namespace XactJobs.Internal
                 {
                     throw;
                 }
+
+                _logger.LogDebug("{Queue}: Job cancelled by shutdown, it will run again - {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
             }
             finally
             {
@@ -334,6 +530,16 @@ namespace XactJobs.Internal
             }
         }
 
+
+        /// <summary>
+        /// The job row, the history row and the writes of the job must commit together, or not at all.
+        /// EF doesn't always start a transaction for a single batch of statements and leaves it to the provider, and with
+        /// MySql.EntityFrameworkCore the statements before a failed one stay committed.
+        /// </summary>
+        private static void RequireTransactionForSaveChanges(TDbContext dbContext)
+        {
+            dbContext.Database.AutoTransactionBehavior = AutoTransactionBehavior.Always;
+        }
 
         private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {

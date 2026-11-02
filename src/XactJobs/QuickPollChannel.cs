@@ -44,11 +44,11 @@ namespace XactJobs
         {
             int consumedCount = 0;
 
+            await _batchLock.WaitAsync(cancellationToken)
+                .ConfigureAwait(false);
+
             try
             {
-                await _batchLock.WaitAsync(cancellationToken)
-                    .ConfigureAwait(false);
-
                 while (consumedCount < batchSize && _notificationChannel.Reader.TryRead(out _))
                 {
                     consumedCount++;

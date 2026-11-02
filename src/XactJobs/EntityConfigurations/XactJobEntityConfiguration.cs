@@ -24,10 +24,12 @@ namespace XactJobs.EntityConfigurations
     {
         private readonly ISqlDialect _sqlDialect;
         private readonly bool _excludeFromMigrations;
+        private readonly bool _isOfficialMySqlProvider;
 
         public XactJobEntityConfiguration(string? providerName, bool excludeFromMigrations = true)
         {
             _sqlDialect = providerName.ToSqlDialect();
+            _isOfficialMySqlProvider = providerName == "MySql.EntityFrameworkCore";
             _excludeFromMigrations = excludeFromMigrations;
         }
 
@@ -79,8 +81,19 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
 
-            builder.HasIndex(x => x.Leaser)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColLeaser}");
+            if (_isOfficialMySqlProvider)
+            {
+                // MySQL requires a key starting with an auto increment column, and it's not the first one of the primary key.
+                // Pomelo adds this key on its own, and the SQL scripts have it too. It has to be part of CREATE TABLE, so it can't be an index.
+                builder.HasAlternateKey(x => x.Id).HasName(_sqlDialect.ColId);
+            }
+
+            if (_sqlDialect is PostgreSqlDialect)
+            {
+                // Free space on each page, so that lease updates can be HOT updates.
+                // This is the annotation behind Npgsql's HasFillFactor (this library doesn't reference Npgsql).
+                builder.HasAnnotation("Npgsql:StorageParameter:fillfactor", 70);
+            }
         }
     }
 }

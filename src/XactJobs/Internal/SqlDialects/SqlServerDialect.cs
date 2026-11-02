@@ -53,39 +53,58 @@ namespace XactJobs.Internal.SqlDialects
 
         public string DateTimeColumnType { get; } = "datetime2";
 
-        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
+        public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        {
+            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchJobsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
+        }
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public (string Sql, object[] Parameters) GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
 WITH cte AS (
-    SELECT TOP ({maxJobs}) [{ColId}], [{ColQueue}], [{ColScheduledAt}]
+    SELECT TOP ({{0}}) [{ColId}], [{ColQueue}], [{ColScheduledAt}]
     FROM [{XactJobSchema}].[{XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
     WHERE [{ColScheduledAt}] <= SYSUTCDATETIME()
-      AND [{ColQueue}] = '{queueName ?? QueueNames.Default}'
+      AND [{ColQueue}] = {{1}}
       AND ([{ColLeasedUntil}] IS NULL OR [{ColLeasedUntil}] < SYSUTCDATETIME())
     ORDER BY [{ColScheduledAt}]
 )
 UPDATE target
-SET [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER),
-    [{ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
+SET [{ColLeaser}] = {{2}},
+    [{ColLeasedUntil}] = DATEADD(SECOND, {{3}}, SYSUTCDATETIME())
 OUTPUT inserted.*
 FROM [{XactJobSchema}].[{XactJobTable}] AS target
 INNER JOIN cte ON -- we need to join on the entire PK
     target.[{ColId}] = cte.[{ColId}]
     AND target.[{ColQueue}] = cte.[{ColQueue}]
     AND target.[{ColScheduledAt}] = cte.[{ColScheduledAt}]
-";
+", [maxJobs, queueName ?? QueueNames.Default, leaser, leaseDurationInSeconds]);
 
-        public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
+        public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaseDurationInSeconds, leaser];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, $"[{ColQueue}]", $"[{ColScheduledAt}]", $"[{ColId}]");
+
+            return ($@"
 UPDATE [{XactJobSchema}].[{XactJobTable}]
-SET [{ColLeasedUntil}] = DATEADD(SECOND, {leaseDurationInSeconds}, SYSUTCDATETIME())
-WHERE [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
-";
+SET [{ColLeasedUntil}] = DATEADD(SECOND, {{0}}, SYSUTCDATETIME())
+WHERE [{ColLeaser}] = {{1}}
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
 
-        public string GetClearLeaseSql(Guid leaser) => $@"
+        public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs)
+        {
+            List<object> parameters = [leaser];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, $"[{ColQueue}]", $"[{ColScheduledAt}]", $"[{ColId}]");
+
+            return ($@"
 UPDATE [{XactJobSchema}].[{XactJobTable}]
 SET [{ColLeaser}] = NULL, [{ColLeasedUntil}] = NULL
-WHERE [{ColLeaser}] = CAST('{leaser}' AS UNIQUEIDENTIFIER)
-";
+WHERE [{ColLeaser}] = {{0}}
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {

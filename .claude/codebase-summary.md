@@ -27,10 +27,9 @@ Library (NuGet package) for reliable job scheduling and execution with full data
 /workspace/
 ├── src/
 │   ├── XactJobs/                 # Core library (main NuGet package)
-│   ├── XactJobs.TestWorker/      # Test worker application
 │   ├── XactJobs.TestWeb/         # Test web application
 │   └── XactJobs.sln              # Solution file
-├── sql/                          # Database schema scripts (v0.1.0, v0.1.4)
+├── sql/                          # Database schema scripts (v0.1.0, v0.1.4, v0.1.5)
 ├── docker/                       # Docker compose files (mysql, oracle, postgresql)
 └── .claude/                      # Claude reference files
 
@@ -83,7 +82,7 @@ Library (NuGet package) for reliable job scheduling and execution with full data
 
 ### Multi-Queue Support
 - Independent worker pools per queue
-- Configurable worker counts and batch sizes
+- Configurable worker counts and parallelism
 - Queue names: Default, Priority, LongRunning, custom
 
 ### Expression-Based Job Definition
@@ -122,7 +121,6 @@ dbContext.JobEnsurePeriodicAsync("daily-cleanup", "0 0 * * * *", () => Cleanup()
 
 ## Test Projects
 
-- **XactJobs.TestWorker** - Worker service demonstrating background job usage
 - **XactJobs.TestWeb** - ASP.NET Core web application demonstrating job enqueueing
 
 ## Configuration Files
@@ -133,8 +131,8 @@ dbContext.JobEnsurePeriodicAsync("daily-cleanup", "0 0 * * * *", () => Cleanup()
 
 ## Important Notes
 
-- Current version: 0.1.4
-- Targets: net8.0, net9.0
+- Current version: 0.1.5
+- Targets: net8.0, net9.0, net10.0
 - License: LGPL-3.0-or-later
 
 ## Design Patterns Used

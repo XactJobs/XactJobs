@@ -30,6 +30,8 @@ namespace XactJobs.DependencyInjection
             _options = options;
         }
 
+        protected override TimeSpan ReconciliationInterval => TimeSpan.FromSeconds(_options.PeriodicJobReconciliationIntervalInSeconds);
+
         protected override async Task EnsurePeriodicJobsAsync(TDbContext db, CancellationToken stoppingToken)
         {
             await EnsurePeriodicJobsForQueueAsync(db, null, _options, stoppingToken)

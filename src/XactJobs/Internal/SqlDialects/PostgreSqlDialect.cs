@@ -53,40 +53,62 @@ namespace XactJobs.Internal.SqlDialects
 
         public string DateTimeColumnType { get; } = "timestamptz";
 
-        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => null;
+        public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        {
+            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchJobsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
+        }
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        public (string Sql, object[] Parameters) GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
 WITH cte AS (
   SELECT {ColId}, {ColQueue}, {ColScheduledAt}
   FROM {XactJobSchema}.{XactJobTable}
   WHERE {ColScheduledAt} <= current_timestamp
-    AND {ColQueue} = '{queueName ?? QueueNames.Default}'
+    AND {ColQueue} = {{0}}
     AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < current_timestamp)
   ORDER BY {ColScheduledAt}
   FOR UPDATE SKIP LOCKED
-  LIMIT {maxJobs}
+  LIMIT {{1}}
 )
 UPDATE {XactJobSchema}.{XactJobTable}
-SET {ColLeaser} = '{leaser}'::uuid, {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
+SET {ColLeaser} = {{2}}, {ColLeasedUntil} = current_timestamp + make_interval(secs => {{3}}::double precision)
 FROM cte
 WHERE -- we need to join on all these, since these are the PK
     {XactJobSchema}.{XactJobTable}.{ColId} = cte.{ColId}
     AND {XactJobSchema}.{XactJobTable}.{ColQueue} = cte.{ColQueue}
     AND {XactJobSchema}.{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
 RETURNING {XactJobSchema}.{XactJobTable}.*
-";
+", [queueName ?? QueueNames.Default, maxJobs, leaser, leaseDurationInSeconds]);
 
-        public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}.{XactJobTable}
-SET {ColLeasedUntil} = current_timestamp + interval '{leaseDurationInSeconds} seconds'
-WHERE {ColLeaser} = '{leaser}'::uuid
-";
+        public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds) => ($@"
+UPDATE {XactJobSchema}.{XactJobTable} AS j
+SET {ColLeasedUntil} = current_timestamp + make_interval(secs => {{0}}::double precision)
+FROM unnest({{1}}::text[], {{2}}::timestamptz[], {{3}}::bigint[]) AS k(queue, scheduled_at, id)
+WHERE j.{ColQueue} = k.queue
+  AND j.{ColScheduledAt} = k.scheduled_at
+  AND j.{ColId} = k.id
+  AND j.{ColLeaser} = {{4}}
+", [
+            leaseDurationInSeconds,
+            jobs.Select(x => x.Queue).ToArray(),
+            jobs.Select(x => x.ScheduledAt).ToArray(),
+            jobs.Select(x => x.Id).ToArray(),
+            leaser
+        ]);
 
-        public string GetClearLeaseSql(Guid leaser) => $@"
-UPDATE {XactJobSchema}.{XactJobTable}
+        public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs) => ($@"
+UPDATE {XactJobSchema}.{XactJobTable} AS j
 SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
-WHERE {ColLeaser} = '{leaser}'::uuid
-";
+FROM unnest({{0}}::text[], {{1}}::timestamptz[], {{2}}::bigint[]) AS k(queue, scheduled_at, id)
+WHERE j.{ColQueue} = k.queue
+  AND j.{ColScheduledAt} = k.scheduled_at
+  AND j.{ColId} = k.id
+  AND j.{ColLeaser} = {{3}}
+", [
+            jobs.Select(x => x.Queue).ToArray(),
+            jobs.Select(x => x.ScheduledAt).ToArray(),
+            jobs.Select(x => x.Id).ToArray(),
+            leaser
+        ]);
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {

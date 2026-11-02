@@ -53,35 +53,68 @@ namespace XactJobs.Internal.SqlDialects
 
         public string DateTimeColumnType { get; } = "TIMESTAMP";
 
-        public string? GetAcquireLeaseSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
-UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeaser} = HEXTORAW('{leaser:N}'),
-    {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + INTERVAL '{leaseDurationInSeconds}' SECOND
-WHERE {ColScheduledAt} <= SYS_EXTRACT_UTC(systimestamp)
-  AND {ColQueue} = '{queueName ?? QueueNames.Default}'
-  AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
-  AND ROWNUM <= {maxJobs}
-";
+        public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        {
+            return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               GetLockJobsSql(queueName, maxJobs),
+                                                               jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
+                                                               cancellationToken);
+        }
 
-        public string GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => $@"
+        // Oracle doesn't allow FOR UPDATE with an ordered subquery or FETCH FIRST, so jobs aren't claimed oldest first.
+        // ROWNUM is applied before locked rows are skipped, so this can return fewer rows than maxJobs.
+        public (string Sql, object[] Parameters) GetLockJobsSql(string? queueName, int maxJobs) => ($@"
 SELECT *
 FROM {XactJobSchema}_{XactJobTable}
-WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-  AND {ColLeasedUntil} >= SYS_EXTRACT_UTC(systimestamp)
-  AND ROWNUM <= {maxJobs}
-";
+WHERE {ColScheduledAt} <= SYS_EXTRACT_UTC(systimestamp)
+  AND {ColQueue} = {{0}}
+  AND ({ColLeasedUntil} IS NULL OR {ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
+  AND ROWNUM <= {{1}}
+FOR UPDATE SKIP LOCKED
+", [queueName ?? QueueNames.Default, maxJobs]);
 
-        public string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds) => $@"
+        // the leaser is passed as a hex string, for HEXTORAW
+        public (string Sql, object[] Parameters) GetLeaseJobsSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaser.ToString("N"), leaseDurationInSeconds];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
+
+            return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
-SET {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + INTERVAL '{leaseDurationInSeconds}' SECOND
-WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-";
+SET {ColLeaser} = HEXTORAW({{0}}),
+    {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + NUMTODSINTERVAL({{1}}, 'SECOND')
+WHERE {jobKeys}
+", parameters.ToArray());
+        }
 
-        public string GetClearLeaseSql(Guid leaser) => $@"
+        public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        {
+            List<object> parameters = [leaseDurationInSeconds, leaser.ToString("N")];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
+
+            return ($@"
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + NUMTODSINTERVAL({{0}}, 'SECOND')
+WHERE {ColLeaser} = HEXTORAW({{1}})
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
+
+        public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs)
+        {
+            List<object> parameters = [leaser.ToString("N")];
+
+            var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
+
+            return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = NULL, {ColLeasedUntil} = NULL
-WHERE {ColLeaser} = HEXTORAW('{leaser:N}')
-";
+WHERE {ColLeaser} = HEXTORAW({{0}})
+  AND ({jobKeys})
+", parameters.ToArray());
+        }
 
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {

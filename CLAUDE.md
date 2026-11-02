@@ -11,12 +11,13 @@ dotnet build src/XactJobs.sln
 # Build specific framework
 dotnet build -f net8.0 src/XactJobs.sln
 dotnet build -f net9.0 src/XactJobs.sln
+dotnet build -f net10.0 src/XactJobs.sln
 
 # Release build
 dotnet build -c Release src/XactJobs.sln
 
-# Pack NuGet package
-dotnet pack -c Release src/XactJobs/XactJobs.csproj
+# Build and create the NuGet package (GeneratePackageOnBuild is on, and dotnet pack would not build)
+dotnet build -c Release src/XactJobs/XactJobs.csproj
 ```
 
 ## Test Commands
@@ -24,6 +25,9 @@ dotnet pack -c Release src/XactJobs/XactJobs.csproj
 ```bash
 # Run all tests
 dotnet test src/XactJobs.sln
+
+# Run on one target framework
+dotnet test -f net10.0 src/XactJobs.Tests/XactJobs.Tests.csproj
 
 # Run single test class
 dotnet test --filter "FullyQualifiedName~SqliteDatabaseIntegrationTests" src/XactJobs.Tests/XactJobs.Tests.csproj
@@ -34,6 +38,8 @@ dotnet test --verbosity=detailed src/XactJobs.Tests/XactJobs.Tests.csproj
 # Run with code coverage
 dotnet test --collect:"XPlat Code Coverage" src/XactJobs.Tests/XactJobs.Tests.csproj
 ```
+
+The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. The first run downloads the images.
 
 ## Code Quality
 
@@ -88,18 +94,8 @@ XactJobs is a .NET library for background job processing with full database tran
 
 ## Target Frameworks
 
-- net8.0, net9.0 (library)
-- net10.0 (tests only)
-
-## EF Migrations
-
-```bash
-# Restore tools first
-dotnet tool restore
-
-# Create migration (from TestWorker project)
-dotnet ef migrations add MigrationName -p src/XactJobs.TestWorker/
-```
+- net8.0, net9.0, net10.0 (library): EF Core 9 on net8.0 and net9.0, EF Core 10 on net10.0, because EF Core 10 only targets net10.0
+- net9.0, net10.0 (tests), to cover both EF Core versions. MySQL runs with the official provider on both, and with Pomelo only on net9.0, because it doesn't support EF Core 10 yet
 
 ## Third-Party Code
 

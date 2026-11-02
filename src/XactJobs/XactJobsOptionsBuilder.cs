@@ -26,9 +26,11 @@ namespace XactJobs
     {
         public TOptions Options { get; private set; } = new();
 
-        public TBuilder WithBatchSize(int batchSize)
+        public TBuilder WithMaxDegreeOfParallelism(int maxDegreeOfParallelism)
         {
-            Options.BatchSize = batchSize;
+            ArgumentOutOfRangeException.ThrowIfLessThan(maxDegreeOfParallelism, 1);
+
+            Options.MaxDegreeOfParallelism = maxDegreeOfParallelism;
             return (this as TBuilder)!;
         }
 
@@ -49,6 +51,14 @@ namespace XactJobs
             ArgumentOutOfRangeException.ThrowIfLessThan(durationInSeconds, 1);
 
             Options.LeaseDurationInSeconds = durationInSeconds;
+            return (this as TBuilder)!;
+        }
+
+        public TBuilder WithShutdownTimeout(int timeoutInSeconds)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(timeoutInSeconds);
+
+            Options.ShutdownTimeoutInSeconds = timeoutInSeconds;
             return (this as TBuilder)!;
         }
 
@@ -96,6 +106,14 @@ namespace XactJobs
             ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);
 
             Options.HistoryRetentionPeriodInDays = days;
+            return this;
+        }
+
+        public XactJobsOptionsBuilder<TDbContext> WithPeriodicJobReconciliationInterval(int intervalInSeconds)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(intervalInSeconds, 1);
+
+            Options.PeriodicJobReconciliationIntervalInSeconds = intervalInSeconds;
             return this;
         }
 

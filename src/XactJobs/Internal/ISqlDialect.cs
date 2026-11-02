@@ -57,19 +57,21 @@ namespace XactJobs.Internal
         string DateTimeColumnType { get; }
 
         /// <summary>
-        /// Optional, if a database does not support update returning (MySQL).
-        /// If a database supports update returning, it should return null here
+        /// Leases up to <paramref name="maxJobs"/> due jobs from the queue and returns them.
         /// </summary>
-        /// <param name="leaser"></param>
-        /// <param name="maxJobs"></param>
-        /// <returns></returns>
-        string? GetAcquireLeaseSql(string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds);
+        Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken);
 
-        string GetFetchJobsSql(string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds);
+        /// <summary>
+        /// Extends the lease of the given jobs, by primary key, if they are still leased by <paramref name="leaser"/>.
+        /// The SQL uses {n} placeholders, as expected by ExecuteSqlRaw.
+        /// </summary>
+        (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds);
 
-        string GetExtendLeaseSql(Guid leaser, int leaseDurationInSeconds);
-
-        string GetClearLeaseSql(Guid leaser);
+        /// <summary>
+        /// Clears the lease of the given jobs, by primary key, if they are still leased by <paramref name="leaser"/>.
+        /// The SQL uses {n} placeholders, as expected by ExecuteSqlRaw.
+        /// </summary>
+        (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs);
 
         Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken);
 
@@ -78,7 +80,55 @@ namespace XactJobs.Internal
 
     internal static class SqlDialectExtensions
     {
+        // keeps a statement within the parameter limits of all dialects (SQL Server allows 2100, at 3 per job)
+        public const int MaxJobsPerStatement = 500;
+
         private static readonly ConcurrentDictionary<string, ISqlDialect> _cachedDialects = new();
+
+        /// <summary>
+        /// For databases that can update rows and return them in one statement.
+        /// </summary>
+        public static Task<List<XactJob>> ClaimJobsInOneStatementAsync(DbContext db, (string Sql, object[] Parameters) claimJobs, CancellationToken cancellationToken)
+        {
+            return db.Set<XactJob>().FromSqlRaw(claimJobs.Sql, claimJobs.Parameters)
+                .AsNoTracking()
+                .ToListAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// For databases that can't return updated rows (MySQL, Oracle): locks the rows with a select,
+        /// then leases them by primary key, in one transaction.
+        /// </summary>
+        public static Task<List<XactJob>> ClaimJobsWithLockAsync(DbContext db,
+                                                                 (string Sql, object[] Parameters) lockJobs,
+                                                                 Func<XactJob[], (string Sql, object[] Parameters)> getLeaseJobsSql,
+                                                                 CancellationToken cancellationToken)
+        {
+            // a retrying execution strategy, if the app enabled one, only allows explicit transactions inside of it
+            return db.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
+            {
+                using var transaction = await db.Database.BeginTransactionAsync(token)
+                    .ConfigureAwait(false);
+
+                var jobs = await db.Set<XactJob>().FromSqlRaw(lockJobs.Sql, lockJobs.Parameters)
+                    .AsNoTracking()
+                    .ToListAsync(token)
+                    .ConfigureAwait(false);
+
+                foreach (var chunk in jobs.Chunk(MaxJobsPerStatement))
+                {
+                    var (sql, parameters) = getLeaseJobsSql(chunk);
+
+                    await db.Database.ExecuteSqlRawAsync(sql, parameters, token)
+                        .ConfigureAwait(false);
+                }
+
+                await transaction.CommitAsync(token)
+                    .ConfigureAwait(false);
+
+                return jobs;
+            }, cancellationToken);
+        }
 
         public static ISqlDialect ToSqlDialect(this string? providerName)
         {
@@ -88,12 +138,34 @@ namespace XactJobs.Internal
 
                 if (key.EndsWith(".sqlserver")) return new SqlServerDialect();
                 if (key.EndsWith(".postgresql")) return new PostgreSqlDialect();
-                if (key.EndsWith(".mysql")) return new MySqlDialect();
+                if (key.EndsWith(".mysql")) return new MySqlDialect(); // Pomelo.EntityFrameworkCore.MySql
+                if (key.StartsWith("mysql.")) return new MySqlDialect(); // MySql.EntityFrameworkCore
                 if (key.StartsWith("oracle.")) return new OracleDialect();
                 if (key.EndsWith(".sqlite")) return new SqliteDialect();
 
                 throw new NotSupportedException($"XactJobs does not support provider '{key}'.");
             });
+        }
+
+        /// <summary>
+        /// Builds "(queue = {n} AND scheduled_at = {n+1} AND id = {n+2}) OR ..." and appends the values to <paramref name="parameters"/>.
+        /// </summary>
+        public static string BuildJobKeysPredicate(IReadOnlyCollection<XactJob> jobs, List<object> parameters, string colQueue, string colScheduledAt, string colId)
+        {
+            var rows = new List<string>(jobs.Count);
+
+            foreach (var job in jobs)
+            {
+                var i = parameters.Count;
+
+                parameters.Add(job.Queue);
+                parameters.Add(job.ScheduledAt);
+                parameters.Add(job.Id);
+
+                rows.Add($"({colQueue} = {{{i}}} AND {colScheduledAt} = {{{i + 1}}} AND {colId} = {{{i + 2}}})");
+            }
+
+            return string.Join(" OR ", rows);
         }
 
         public static bool IsUniqueKeyViolation(this Exception ex)

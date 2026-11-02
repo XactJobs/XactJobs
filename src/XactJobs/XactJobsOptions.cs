@@ -21,25 +21,21 @@ namespace XactJobs
     public class XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
     {
         /// <summary>
-        /// How many jobs to fetch and executee at a time. Default is 100.
-        /// </summary>
-        public int BatchSize { get; set; } = 100;
-
-        /// <summary>
-        /// Number of paraller workers running. Default 2.
-        /// The workers will be started with initial delay, to distribute workers execution in time.
-        /// By default, 2 workers will be started with 4 second polling interval. 
-        /// The initial delay between workers is (4 seconds / 2 workers) = 2 seconds.
+        /// Number of workers polling this queue. Default 2.
+        /// The workers are started with an initial delay, to distribute their polling in time.
+        /// By default, 2 workers are started with a 6 second polling interval, so the initial
+        /// delay between them is (6 seconds / 2 workers) = 3 seconds.
         /// </summary>
         public int WorkerCount { get; set; } = 2;
 
         /// <summary>
-        /// Max degree of paralell jobs running per worker. Default -1 (means ProcessorCount)
+        /// The most jobs running at the same time per worker. Default -1 (means ProcessorCount).
+        /// A worker only claims jobs it can start immediately, so this is also the most jobs it claims at a time.
         /// </summary>
         public int MaxDegreeOfParallelism { get; set; } = -1;
 
         /// <summary>
-        /// Default 120 (jobs runner will prolong the lease every 1/2 of this time)
+        /// Default 120 (jobs runner will prolong the lease every 3/4 of this time)
         /// </summary>
         public int LeaseDurationInSeconds { get; set; } = 120;
 
@@ -51,6 +47,13 @@ namespace XactJobs
         /// It means these workers will take turns every 3 seconds.
         /// </summary>
         public int PollingIntervalInSeconds { get; set; } = 6;
+
+        /// <summary>
+        /// On worker stop, how long running jobs get to finish before they are cancelled. (Default 10 seconds)
+        /// Make sure this fits in the shutdown timeout of the host, along with <see cref="ClearLeaseTimeoutInSeconds"/>
+        /// and 5 seconds for the jobs to react to the cancellation.
+        /// </summary>
+        public int ShutdownTimeoutInSeconds { get; set; } = 10;
 
         /// <summary>
         /// Time the workers will wait for to clear pending leases, on worker stop. (Default 10 seconds)
@@ -79,7 +82,13 @@ namespace XactJobs
         /// <remarks>Adjust this value to control how long historical data is kept. Setting a lower value
         /// may reduce storage usage,  while a higher value retains data for longer periods.</remarks>
         public int HistoryRetentionPeriodInDays { get; set; } = 30;
-        
+
+        /// <summary>
+        /// How often each node looks for active periodic jobs without a pending run, and schedules their next run.
+        /// Default 300 seconds.
+        /// </summary>
+        public int PeriodicJobReconciliationIntervalInSeconds { get; set; } = 300;
+
         /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>
