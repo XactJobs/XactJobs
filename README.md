@@ -412,6 +412,24 @@ ALTER TABLE xact_jobs.job SET (
 
 Long-running transactions **anywhere in the cluster** hold back the cleanup of dead rows, not just the ones using this table. Dead rows pile up meanwhile, which slows down fetching jobs.
 
+## MySQL
+**With the official provider (`MySql.EntityFrameworkCore`), `SaveChanges` doesn't start a transaction on its own.** If a statement fails, the ones before it stay committed. This
+can break the main promise of XactJobs in your own code: for example, a job can be saved without the business data it belongs to.
+
+To make your saves all-or-nothing, either use a transaction, as in [Transactions](#transactions), or set this on your `DbContext`:
+
+```csharp
+public class UserDbContext : DbContext
+{
+    public UserDbContext(DbContextOptions<UserDbContext> options) : base(options)
+    {
+        Database.AutoTransactionBehavior = AutoTransactionBehavior.Always;
+    }
+}
+```
+
+The workers already do this for their own saves, so running jobs are not affected. Pomelo starts a transaction when a save has more than one statement.
+
 ## Oracle
 Jobs are not claimed strictly oldest first, because Oracle doesn't allow `FOR UPDATE` together with an ordered subquery or `FETCH FIRST`.
 
