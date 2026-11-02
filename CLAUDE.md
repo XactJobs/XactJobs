@@ -16,8 +16,8 @@ dotnet build -f net10.0 src/XactJobs.sln
 # Release build
 dotnet build -c Release src/XactJobs.sln
 
-# Pack NuGet package
-dotnet pack -c Release src/XactJobs/XactJobs.csproj
+# Build and create the NuGet package (GeneratePackageOnBuild is on, and dotnet pack would not build)
+dotnet build -c Release src/XactJobs/XactJobs.csproj
 ```
 
 ## Test Commands
