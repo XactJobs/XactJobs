@@ -3,7 +3,16 @@ XactJobs lets you schedule and run background jobs **with full database transact
 Jobs are saved alongside your business data and only execute if your transaction commits - no more “ghost” jobs on rollback.
 
 Targets .NET 8, 9 and 10, using EF Core 9 on .NET 8 and 9, and EF Core 10 on .NET 10. On .NET 10 your database provider has to support EF Core 10.
-MySQL support uses the Pomelo provider, which doesn't support EF Core 10 yet, so MySQL requires .NET 8 or 9 for now.
+
+For MySQL, the provider depends on the version of .NET:
+
+| .NET | MySQL provider |
+|---|---|
+| .NET 8 | `Pomelo.EntityFrameworkCore.MySql` |
+| .NET 9 | `Pomelo.EntityFrameworkCore.MySql` or `MySql.EntityFrameworkCore` |
+| .NET 10 | `MySql.EntityFrameworkCore` |
+
+Pomelo doesn't support EF Core 10 yet, and on .NET 8 the official provider only supports EF Core 8. These combinations build, but fail at runtime.
 
 Supports SQL Server, PostgreSQL, MySQL, Oracle, and SQLite. 
 

@@ -6,10 +6,8 @@ using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
 using Testcontainers.Oracle;
 using XactJobs.Internal.SqlDialects;
-#if !NET10_0_OR_GREATER
-using MySqlConnector;
+using MySql.Data.MySqlClient;
 using Testcontainers.MySql;
-#endif
 
 namespace XactJobs.Tests.Databases;
 
@@ -152,10 +150,11 @@ public sealed class DockerFactAttribute : FactAttribute
     }
 }
 
-#if !NET10_0_OR_GREATER // Pomelo doesn't support EF Core 10 yet
-public sealed class MySqlFixture : DatabaseFixture
+public abstract class MySqlFixtureBase : DatabaseFixture
 {
     private readonly MySqlContainer _container = new MySqlBuilder("mysql:8").Build();
+
+    protected string ConnectionString => _container.GetConnectionString();
 
     public override dynamic Dialect { get; } = new MySqlDialect();
 
@@ -163,24 +162,13 @@ public sealed class MySqlFixture : DatabaseFixture
 
     public override string CountLeaserIndexesSql => "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'xact_jobs_job' AND column_name = 'leaser'";
 
-    public override void Configure(DbContextOptionsBuilder options, bool retryOnFailure)
-    {
-        options.UseMySql(_container.GetConnectionString(), new MySqlServerVersion(new Version(8, 0, 36)), mySql =>
-        {
-            if (retryOnFailure)
-            {
-                mySql.EnableRetryOnFailure();
-            }
-        });
-    }
-
     protected override Task StartContainerAsync() => _container.StartAsync();
 
     protected override Task StopContainerAsync() => _container.DisposeAsync().AsTask();
 
     protected override async Task CreateSchemaAsync()
     {
-        await using var connection = new MySqlConnection(_container.GetConnectionString());
+        await using var connection = new MySqlConnection(ConnectionString);
 
         await connection.OpenAsync();
 
@@ -188,6 +176,38 @@ public sealed class MySqlFixture : DatabaseFixture
         {
             await ExecuteAsync(connection, await File.ReadAllTextAsync(script));
         }
+    }
+}
+
+/// <summary>
+/// The official provider, MySql.EntityFrameworkCore.
+/// </summary>
+public sealed class OfficialMySqlFixture : MySqlFixtureBase
+{
+    public override void Configure(DbContextOptionsBuilder options, bool retryOnFailure)
+    {
+        options.UseMySQL(ConnectionString, mySql =>
+        {
+            if (retryOnFailure)
+            {
+                mySql.EnableRetryOnFailure();
+            }
+        });
+    }
+}
+
+#if !NET10_0_OR_GREATER // Pomelo doesn't support EF Core 10 yet
+public sealed class PomeloMySqlFixture : MySqlFixtureBase
+{
+    public override void Configure(DbContextOptionsBuilder options, bool retryOnFailure)
+    {
+        options.UseMySql(ConnectionString, new MySqlServerVersion(new Version(8, 0, 36)), mySql =>
+        {
+            if (retryOnFailure)
+            {
+                mySql.EnableRetryOnFailure();
+            }
+        });
     }
 }
 #endif
@@ -301,11 +321,17 @@ public sealed class OracleFixture : DatabaseFixture
     }
 }
 
+[CollectionDefinition(Name)]
+public sealed class OfficialMySqlCollection : ICollectionFixture<OfficialMySqlFixture>
+{
+    public const string Name = "OfficialMySql";
+}
+
 #if !NET10_0_OR_GREATER
 [CollectionDefinition(Name)]
-public sealed class MySqlCollection : ICollectionFixture<MySqlFixture>
+public sealed class PomeloMySqlCollection : ICollectionFixture<PomeloMySqlFixture>
 {
-    public const string Name = "MySql";
+    public const string Name = "PomeloMySql";
 }
 #endif
 

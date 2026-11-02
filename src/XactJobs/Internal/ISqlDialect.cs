@@ -138,7 +138,8 @@ namespace XactJobs.Internal
 
                 if (key.EndsWith(".sqlserver")) return new SqlServerDialect();
                 if (key.EndsWith(".postgresql")) return new PostgreSqlDialect();
-                if (key.EndsWith(".mysql")) return new MySqlDialect();
+                if (key.EndsWith(".mysql")) return new MySqlDialect(); // Pomelo.EntityFrameworkCore.MySql
+                if (key.StartsWith("mysql.")) return new MySqlDialect(); // MySql.EntityFrameworkCore
                 if (key.StartsWith("oracle.")) return new OracleDialect();
                 if (key.EndsWith(".sqlite")) return new SqliteDialect();
 

@@ -424,6 +424,8 @@ namespace XactJobs.Internal
 
                 var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
+                RequireTransactionForSaveChanges(dbContext);
+
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
 
                 dbContext.Attach(job);
@@ -455,6 +457,8 @@ namespace XactJobs.Internal
             using var scope = _scopeFactory.CreateScope();
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+            RequireTransactionForSaveChanges(dbContext);
 
             try
             {
@@ -526,6 +530,16 @@ namespace XactJobs.Internal
             }
         }
 
+
+        /// <summary>
+        /// The job row, the history row and the writes of the job must commit together, or not at all.
+        /// EF doesn't always start a transaction for a single batch of statements and leaves it to the provider, and with
+        /// MySql.EntityFrameworkCore the statements before a failed one stay committed.
+        /// </summary>
+        private static void RequireTransactionForSaveChanges(TDbContext dbContext)
+        {
+            dbContext.Database.AutoTransactionBehavior = AutoTransactionBehavior.Always;
+        }
 
         private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {
