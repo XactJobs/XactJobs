@@ -8,8 +8,10 @@ using XactJobs.Tests.Postgres;
 
 namespace XactJobs.Tests.Databases;
 
+#if !NET10_0_OR_GREATER // Pomelo doesn't support EF Core 10 yet
 [Collection(MySqlCollection.Name)]
 public sealed class MySqlIntegrationTests(MySqlFixture fixture) : DatabaseIntegrationTests(fixture);
+#endif
 
 [Collection(SqlServerCollection.Name)]
 public sealed class SqlServerIntegrationTests(SqlServerFixture fixture) : DatabaseIntegrationTests(fixture);

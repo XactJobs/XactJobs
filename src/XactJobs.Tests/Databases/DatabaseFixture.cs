@@ -1,13 +1,15 @@
 using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
-using MySqlConnector;
 using Oracle.ManagedDataAccess.Client;
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
-using Testcontainers.MySql;
 using Testcontainers.Oracle;
 using XactJobs.Internal.SqlDialects;
+#if !NET10_0_OR_GREATER
+using MySqlConnector;
+using Testcontainers.MySql;
+#endif
 
 namespace XactJobs.Tests.Databases;
 
@@ -150,6 +152,7 @@ public sealed class DockerFactAttribute : FactAttribute
     }
 }
 
+#if !NET10_0_OR_GREATER // Pomelo doesn't support EF Core 10 yet
 public sealed class MySqlFixture : DatabaseFixture
 {
     private readonly MySqlContainer _container = new MySqlBuilder("mysql:8").Build();
@@ -187,6 +190,7 @@ public sealed class MySqlFixture : DatabaseFixture
         }
     }
 }
+#endif
 
 public sealed class SqlServerFixture : DatabaseFixture
 {
@@ -297,11 +301,13 @@ public sealed class OracleFixture : DatabaseFixture
     }
 }
 
+#if !NET10_0_OR_GREATER
 [CollectionDefinition(Name)]
 public sealed class MySqlCollection : ICollectionFixture<MySqlFixture>
 {
     public const string Name = "MySql";
 }
+#endif
 
 [CollectionDefinition(Name)]
 public sealed class SqlServerCollection : ICollectionFixture<SqlServerFixture>

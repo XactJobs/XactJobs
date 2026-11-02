@@ -11,6 +11,7 @@ dotnet build src/XactJobs.sln
 # Build specific framework
 dotnet build -f net8.0 src/XactJobs.sln
 dotnet build -f net9.0 src/XactJobs.sln
+dotnet build -f net10.0 src/XactJobs.sln
 
 # Release build
 dotnet build -c Release src/XactJobs.sln
@@ -24,6 +25,9 @@ dotnet pack -c Release src/XactJobs/XactJobs.csproj
 ```bash
 # Run all tests
 dotnet test src/XactJobs.sln
+
+# Run on one target framework
+dotnet test -f net10.0 src/XactJobs.Tests/XactJobs.Tests.csproj
 
 # Run single test class
 dotnet test --filter "FullyQualifiedName~SqliteDatabaseIntegrationTests" src/XactJobs.Tests/XactJobs.Tests.csproj
@@ -90,8 +94,8 @@ XactJobs is a .NET library for background job processing with full database tran
 
 ## Target Frameworks
 
-- net8.0, net9.0 (library)
-- net10.0 (tests only)
+- net8.0, net9.0, net10.0 (library): EF Core 9 on net8.0 and net9.0, EF Core 10 on net10.0, because EF Core 10 only targets net10.0
+- net9.0, net10.0 (tests), to cover both EF Core versions. MySQL only runs on net9.0, because Pomelo doesn't support EF Core 10 yet
 
 ## Third-Party Code
 
