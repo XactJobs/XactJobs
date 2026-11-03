@@ -335,6 +335,83 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 
 The values above are the defaults, except for `WithMaxDegreeOfParallelism`.
 
+# Dashboard
+
+The `XactJobs.UI` package adds a web dashboard and a REST API to see and manage the jobs.
+
+```csharp
+builder.Services.AddXactJobsUI<UserDbContext>(options =>
+{
+    options
+        .RequireAuthorizationPolicy("JobAdmins") // who can use it, see below
+        .WithBasePath("/XactJobs")               // the default
+        .WithApiBasePath("/api/XactJobs");       // the default
+});
+
+var app = builder.Build();
+
+app.UseStaticFiles();      // the dashboard's scripts and styles
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapXactJobsUI();       // maps the pages (Razor Pages) and the API
+```
+
+The dashboard serves its scripts and styles itself (Bootstrap, Bootstrap Icons, Chart.js and htmx), so it works without internet access.
+
+## Access
+
+By default the dashboard only accepts requests from the local machine. Choose who can use it:
+
+- `RequireAuthorization()` - any signed-in user (the default authorization policy)
+- `RequireAuthorizationPolicy("name")` - users that satisfy the policy
+- `AllowAnonymous()` - anyone. Only for development, or when the access is restricted in another way
+- `AllowLocalRequestsOnly()` - the default. Behind a reverse proxy on the same machine, every request looks local, unless the forwarded headers middleware is configured
+
+The API endpoints that change data require an antiforgery token, which the dashboard sends. If the API is called by clients that don't authenticate with cookies, `DisableAntiforgery()` turns the check off.
+
+## Pages and Actions
+
+- **Dashboard** - due, scheduled and running jobs, succeeded and failed jobs in the last 24 hours, and a chart per hour
+- **Scheduled** - the pending and running jobs
+  - *Run now* makes a pending job due now
+  - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead
+- **History** - succeeded, failed (out of retries), cancelled, retried attempts and skipped runs
+  - *Retry* enqueues a failed or cancelled job again, as a new job. A run of a periodic job is enqueued as a one-off job
+- **Periodic** - the periodic jobs, with their next run
+  - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts again, even if `JobEnsurePeriodic` or `WithPeriodicJob` defines it
+  - *Resume* schedules the next run
+  - *Trigger* makes the pending run due now, so the job keeps a single schedule
+  - *Delete* deletes the definition. A periodic job defined in code is added again when the application starts
+
+A job that is running can't be changed: the dashboard never touches a job a worker has leased.
+
+Pausing and resuming are also available in code, with `dbContext.JobSetPeriodicActiveAsync(id, isActive, cancellationToken)` followed by `SaveChanges`.
+
+## API
+
+All under the API base path (`/api/XactJobs` by default):
+
+| Method | Path | |
+|---|---|---|
+| GET | `/stats` | Dashboard counts |
+| GET | `/chart-data?from=&to=&intervalMinutes=` | Counts per interval (default: the last 24 hours) |
+| GET | `/jobs?page=&pageSize=&queue=` | Pending and running jobs |
+| GET | `/jobs/{id}` | A pending or running job |
+| POST | `/jobs/{id}/run-now` | Make a pending job due now |
+| POST | `/jobs/{id}/cancel` | Cancel a pending job |
+| GET | `/history?category=&page=&pageSize=&queue=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped` |
+| GET | `/history/{id}` | A history row |
+| POST | `/history/{id}/retry` | Enqueue a failed or cancelled job again |
+| GET | `/periodic?page=&pageSize=` | Periodic jobs |
+| GET | `/periodic/{id}` | A periodic job |
+| POST | `/periodic/{id}/pause` | Pause a periodic job |
+| POST | `/periodic/{id}/resume` | Resume a periodic job |
+| POST | `/periodic/{id}/trigger` | Run a periodic job now |
+| DELETE | `/periodic/{id}` | Delete a periodic job |
+
+The actions answer `200` with a message, `404` if the job doesn't exist, or `409` if its state doesn't allow the action (e.g. it's running).
+
 # How Jobs Run
 
 ## Polling
@@ -451,6 +528,10 @@ Oracle also reuses cached query plans. If the first claim runs while the table i
   licensed under the **Apache License 2.0**.  
   Copyright © .NET Foundation.  
   See [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0).
+
+- The dashboard (`XactJobs.UI`) includes [Bootstrap](https://getbootstrap.com) 5.3.3, [Bootstrap Icons](https://icons.getbootstrap.com) 1.11.3,
+  [Chart.js](https://www.chartjs.org) 4.4.1 and [htmx](https://htmx.org) 1.9.10, each licensed under the **MIT License**.
+  Their license texts are next to them, in [wwwroot/lib](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.UI/wwwroot/lib).
 
 ## License Texts
 
