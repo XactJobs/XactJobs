@@ -14,6 +14,8 @@ public record JobHistoryDto
     public string? ErrorStackTrace { get; init; }
     public string? PeriodicJobId { get; init; }
 
-    public TimeSpan Duration => ProcessedAt - ScheduledAt;
-    public string DisplayTypeName => TypeName.Split(',')[0].Split('.').LastOrDefault() ?? TypeName;
+    /// <summary>Failed and cancelled jobs can be run again.</summary>
+    public bool CanRetry => Status == XactJobStatus.Cancelled;
+    public string DisplayTypeName => DisplayNames.Type(TypeName);
+    public string DisplayQueue => DisplayNames.Queue(Queue);
 }

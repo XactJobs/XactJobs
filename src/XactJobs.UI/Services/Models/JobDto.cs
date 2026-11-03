@@ -13,5 +13,8 @@ public record JobDto
     public string? PeriodicJobId { get; init; }
 
     public bool IsProcessing => LeasedUntil.HasValue && LeasedUntil > DateTime.UtcNow;
-    public string DisplayTypeName => TypeName.Split(',')[0].Split('.').LastOrDefault() ?? TypeName;
+    public bool IsPeriodic => PeriodicJobId != null;
+    public bool IsDue => ScheduledAt <= DateTime.UtcNow;
+    public string DisplayTypeName => DisplayNames.Type(TypeName);
+    public string DisplayQueue => DisplayNames.Queue(Queue);
 }

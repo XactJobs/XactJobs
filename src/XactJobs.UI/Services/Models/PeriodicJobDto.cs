@@ -11,7 +11,11 @@ public record PeriodicJobDto
     public string Queue { get; init; } = "";
     public bool IsActive { get; init; }
     public int Version { get; init; }
+    /// <summary>The scheduled time of the pending run of the current version, if any.</summary>
     public DateTime? NextRunAt { get; init; }
+    /// <summary>A run of the current version is leased by a worker.</summary>
+    public bool IsRunning { get; init; }
 
-    public string DisplayTypeName => TypeName.Split(',')[0].Split('.').LastOrDefault() ?? TypeName;
+    public string DisplayTypeName => DisplayNames.Type(TypeName);
+    public string DisplayQueue => DisplayNames.Queue(Queue);
 }

@@ -1,0 +1,34 @@
+@page "{category?}"
+@model XactJobs.UI.Pages.History.IndexModel
+@{
+    ViewData["Title"] = Model.Current.Title + " Jobs";
+}
+
+<div class="row mb-3">
+    <div class="col">
+        <h1><i class="bi @Model.Current.Icon me-2"></i>@Model.Current.Title</h1>
+        <p class="text-muted">@Model.Current.Description</p>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" onclick="htmx.trigger(document.body, 'xactjobs-changed')">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3">
+    @foreach (var category in XactJobs.UI.Pages.History.IndexModel.Categories)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(category.Category == Model.Category ? "active" : "")" href="@Model.CategoryUrl(category.Category)">
+                <i class="bi @category.Icon me-1"></i>@category.Title
+            </a>
+        </li>
+    }
+</ul>
+
+<div hx-get="@Model.TableUrl"
+     hx-trigger="every @(Model.Options.RefreshIntervalSeconds)s [!xactJobsIsBusy()], xactjobs-changed from:body"
+     hx-swap="innerHTML">
+    <partial name="_Table" model="Model" />
+</div>

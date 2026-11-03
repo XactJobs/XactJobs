@@ -28,7 +28,8 @@ builder.Services.AddXactJobs<AppDbContext>(options =>
         Cron.MinuteInterval(1));
 });
 
-// Add XactJobs UI dashboard
+// Add XactJobs UI dashboard. By default it only accepts local requests:
+// use RequireAuthorization / RequireAuthorizationPolicy to open it to signed-in users.
 builder.Services.AddXactJobsUI<AppDbContext>();
 
 var app = builder.Build();
