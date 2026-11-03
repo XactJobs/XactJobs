@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -512,6 +512,91 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         Assert.Equal(XactJobStatus.Completed, (await WithDbAsync(host, db => db.JobHistory.AsNoTracking().SingleAsync(h => h.Id == jobId))).Status);
         Assert.False(await WithDbAsync(host, db => db.PeriodicJobs.AnyAsync(p => p.Id == "self")));
         Assert.Equal(0, await CountRowsAsync(host, "self"));
+    }
+
+    [DockerFact]
+    public async Task PausedJob_HasNoPendingRun_StaysPausedWhenEnsuredAgain_AndResumesWithOneRun()
+    {
+        var host = CreateHost();
+
+        await WithDbAsync(host, async db =>
+        {
+            db.JobEnsurePeriodic<IntegrationJob>(x => x.Run(), "pausable", Daily);
+
+            await db.SaveChangesAsync();
+
+            Assert.True(await db.JobSetPeriodicActiveAsync("pausable", false, CancellationToken.None));
+
+            return await db.SaveChangesAsync();
+        });
+
+        Assert.Equal(0, await CountRowsAsync(host, "pausable"));
+
+        var periodicJob = await WithDbAsync(host, async db =>
+        {
+            var periodicJob = db.JobEnsurePeriodic<IntegrationJob>(x => x.Run(), "pausable", "0 0 * * * *");
+
+            await db.SaveChangesAsync();
+
+            return periodicJob;
+        });
+
+        Assert.False((await WithDbAsync(host, db => db.PeriodicJobs.AsNoTracking().SingleAsync(p => p.Id == "pausable"))).IsActive);
+        Assert.Equal(0, await CountRowsAsync(host, "pausable"));
+
+        await WithDbAsync(host, async db =>
+        {
+            Assert.True(await db.JobSetPeriodicActiveAsync("pausable", true, CancellationToken.None));
+
+            return await db.SaveChangesAsync();
+        });
+
+        var run = await WithDbAsync(host, db => db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == "pausable"));
+
+        Assert.Equal(periodicJob.Version, run.PeriodicJobVersion);
+        Assert.True((await WithDbAsync(host, db => db.PeriodicJobs.AsNoTracking().SingleAsync(p => p.Id == "pausable"))).IsActive);
+    }
+
+    [DockerFact]
+    public async Task JobPausedWhileRunning_Completes_AndDoesNotScheduleTheNextRun()
+    {
+        var host = CreateHost();
+
+        var jobId = await WithDbAsync(host, async db =>
+        {
+            db.JobEnsurePeriodic<IntegrationJob>(x => x.BlockUntilReleasedAsync(), "paused-running", Daily);
+
+            await db.SaveChangesAsync();
+
+            var pending = await db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == "paused-running");
+
+            await db.Jobs.Where(j => j.Id == pending.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.ScheduledAt, DateTime.UtcNow.AddMinutes(-1)));
+
+            return pending.Id;
+        });
+
+        await host.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 1), "the job to start");
+
+        await WithDbAsync(host, async db =>
+        {
+            Assert.True(await db.JobSetPeriodicActiveAsync("paused-running", false, CancellationToken.None));
+
+            return await db.SaveChangesAsync();
+        });
+
+        // the running row is leased, so pausing keeps it
+        Assert.Equal(1, await CountRowsAsync(host, "paused-running"));
+
+        _state.Release();
+
+        await WaitForAsync(() => WithDbAsync(host, db => db.JobHistory.AnyAsync(h => h.Id == jobId)), "the history row");
+
+        Assert.Equal(XactJobStatus.Completed, (await WithDbAsync(host, db => db.JobHistory.AsNoTracking().SingleAsync(h => h.Id == jobId))).Status);
+        Assert.Equal(0, await CountRowsAsync(host, "paused-running"));
+        Assert.False(_logs.HasErrors, _logs.ToString());
     }
 
     [DockerFact]
