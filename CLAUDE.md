@@ -39,6 +39,8 @@ dotnet test --verbosity=detailed src/XactJobs.Tests/XactJobs.Tests.csproj
 dotnet test --collect:"XPlat Code Coverage" src/XactJobs.Tests/XactJobs.Tests.csproj
 ```
 
+The dashboard is tested in `src/XactJobs.UI.Tests/` (SQLite and an in-memory test server).
+
 The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. The first run downloads the images.
 
 ## Code Quality
@@ -71,6 +73,12 @@ XactJobs is a .NET library for background job processing with full database tran
 
 **EntityConfigurations/**
 - EF Core entity configurations for XactJob, XactJobPeriodic, XactJobHistory tables
+
+**XactJobs.UI** (`src/XactJobs.UI/`, Razor Class Library)
+- Dashboard pages (`Areas/XactJobs/Pages/`) with htmx: each list page serves its table on its own (`?handler=Table`), and reloads it when an API action answers with the `xactjobs-changed` event (`HX-Trigger` header)
+- `Services/XactJobsUIService.cs` - queries and actions. Actions must follow the core's rules: never update a job row in place (the scheduled time is part of the primary key) nor touch a leased row, and never add a second pending run to a periodic job
+- `Api/XactJobsApiEndpoints.cs` - REST API, access (local requests only by default, or an authorization policy) and antiforgery checks
+- History categories: `Failed` in the history is an attempt the runner already rescheduled ("Retried"); a job that ran out of retries is `Cancelled` with a stack trace ("Failed"); a job cancelled from the dashboard is `Cancelled` without one
 
 ### Database Entities
 

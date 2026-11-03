@@ -32,8 +32,9 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-subtitle mb-2">Pending</h6>
-                        <h2 class="card-title mb-0" id="stat-pending">@Model.Stats.PendingJobs</h2>
+                        <h6 class="card-subtitle mb-2">Due</h6>
+                        <h2 class="card-title mb-0" id="stat-due">@Model.Stats.DueJobs</h2>
+                        <small class="opacity-75"><span id="stat-scheduled">@Model.Stats.ScheduledJobs</span> scheduled for later</small>
                     </div>
                     <i class="bi bi-clock fs-1 opacity-50"></i>
                 </div>
@@ -73,6 +74,7 @@
                     <div>
                         <h6 class="card-subtitle mb-2">Failed (24h)</h6>
                         <h2 class="card-title mb-0" id="stat-failed">@Model.Stats.FailedLast24h</h2>
+                        <small class="opacity-75"><span id="stat-retried">@Model.Stats.RetriedLast24h</span> failed attempts retried</small>
                     </div>
                     <i class="bi bi-x-circle fs-1 opacity-50"></i>
                 </div>
@@ -136,7 +138,7 @@
 
 @section Scripts {
 <script>
-    const apiBasePath = '@Model.Options.ApiBasePath';
+    const apiBasePath = @Json.Serialize(Url.Content("~" + Model.Options.ApiBasePath));
     const defaultRefreshInterval = @Model.Options.RefreshIntervalSeconds * 1000;
     let refreshTimerId = null;
 
@@ -170,7 +172,7 @@
     function initCharts() {
         // Fetch chart data and initialize
         fetch(`${apiBasePath}/chart-data?intervalMinutes=60`)
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
             .then(data => {
                 const ctx = document.getElementById('jobsChart').getContext('2d');
                 window.jobsChart = new Chart(ctx, {
@@ -192,6 +194,14 @@
                                 borderColor: '#dc3545',
                                 backgroundColor: 'rgba(220, 53, 69, 0.1)',
                                 fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Retried attempts',
+                                data: data.map(d => d.retried),
+                                borderColor: '#fd7e14',
+                                backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                                fill: false,
                                 tension: 0.4
                             }
                         ]
@@ -236,9 +246,11 @@
 
     function refreshStats() {
         fetch(`${apiBasePath}/stats`)
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
             .then(data => {
-                document.getElementById('stat-pending').textContent = data.pendingJobs;
+                document.getElementById('stat-due').textContent = data.dueJobs;
+                document.getElementById('stat-scheduled').textContent = data.scheduledJobs;
+                document.getElementById('stat-retried').textContent = data.retriedLast24h;
                 document.getElementById('stat-processing').textContent = data.processingJobs;
                 document.getElementById('stat-succeeded').textContent = data.succeededLast24h;
                 document.getElementById('stat-failed').textContent = data.failedLast24h;
@@ -256,12 +268,13 @@
 
     function refreshChartData() {
         fetch(`${apiBasePath}/chart-data?intervalMinutes=60`)
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
             .then(data => {
                 if (window.jobsChart) {
                     window.jobsChart.data.labels = data.map(d => new Date(d.timestamp).toLocaleTimeString());
                     window.jobsChart.data.datasets[0].data = data.map(d => d.succeeded);
                     window.jobsChart.data.datasets[1].data = data.map(d => d.failed);
+                    window.jobsChart.data.datasets[2].data = data.map(d => d.retried);
                     window.jobsChart.update();
                 }
             });

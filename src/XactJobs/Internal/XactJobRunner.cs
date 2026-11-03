@@ -430,7 +430,10 @@ namespace XactJobs.Internal
 
                 dbContext.Attach(job);
 
-                RecordFailedAttempt(dbContext, job, periodicJob, jobException);
+                var activePeriodicJob = await GetIfStillActiveAsync(dbContext, periodicJob, cts.Token)
+                    .ConfigureAwait(false);
+
+                RecordFailedAttempt(dbContext, job, activePeriodicJob, jobException);
 
                 await dbContext.SaveChangesAsync(cts.Token)
                     .ConfigureAwait(false);
@@ -485,7 +488,11 @@ namespace XactJobs.Internal
                     // detached means the job deleted its own periodic job and saved that, so there's no next run to schedule
                     var isPeriodicJobDeleted = periodicJob != null && dbContext.Entry(periodicJob).State == EntityState.Detached;
 
-                    RecordSuccess(dbContext, job, isPeriodicJobDeleted ? null : periodicJob);
+                    var activePeriodicJob = isPeriodicJobDeleted
+                        ? null
+                        : await GetIfStillActiveAsync(dbContext, periodicJob, stoppingToken).ConfigureAwait(false);
+
+                    RecordSuccess(dbContext, job, activePeriodicJob);
                 }
 
                 await dbContext.SaveChangesAsync(stoppingToken)
@@ -541,6 +548,30 @@ namespace XactJobs.Internal
             dbContext.Database.AutoTransactionBehavior = AutoTransactionBehavior.Always;
         }
 
+        /// <summary>
+        /// The periodic job was loaded when the run was claimed, and it may have been paused or deleted while the job was running.
+        /// Returns null if it's not active anymore, so that no next run is scheduled for it.
+        /// </summary>
+        private static async Task<XactJobPeriodic?> GetIfStillActiveAsync(TDbContext dbContext, XactJobPeriodic? periodicJob, CancellationToken cancellationToken)
+        {
+            if (periodicJob == null || !periodicJob.IsActive) return null;
+
+            var state = dbContext.Entry(periodicJob).State;
+
+            // changed by the job itself, and saved together with the run
+            if (state == EntityState.Modified) return periodicJob;
+            if (state == EntityState.Deleted) return null;
+
+            // a list, because the Oracle provider can't translate IsActive (it has a value converter) in other ways
+            var isActive = await dbContext.Set<XactJobPeriodic>()
+                .Where(p => p.Id == periodicJob.Id)
+                .Select(p => p.IsActive)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            return isActive.Count == 1 && isActive[0] ? periodicJob : null;
+        }
+
         private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
         {
             RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Completed, null);
@@ -586,6 +617,7 @@ namespace XactJobs.Internal
             dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, ex));
 
             if (periodicJob != null 
+                && periodicJob.IsActive // a paused job has no pending run, the next one is scheduled when it's resumed
                 && status != XactJobStatus.Failed // only failed jobs are not re-scheduled to prevent overlap (they are re-scheduled above)
                 && periodicJob.IsCompatibleWith(job) 
                 && dbContext.Entry(periodicJob).State != EntityState.Deleted)
