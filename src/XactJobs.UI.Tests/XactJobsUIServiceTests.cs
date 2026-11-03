@@ -298,6 +298,55 @@ public class XactJobsUIServiceTests : IDisposable
         Assert.Single(result.Items);
     }
 
+    [Fact]
+    public async Task Chart_CountsEachIntervalInTheDatabase()
+    {
+        var from = new DateTime(2026, 1, 1, 10, 0, 0, DateTimeKind.Utc);
+
+        await AddHistoryAsync(1, XactJobStatus.Completed, processedAt: from.AddMinutes(5));
+        await AddHistoryAsync(2, XactJobStatus.Completed, processedAt: from.AddMinutes(65));
+        await AddHistoryAsync(3, XactJobStatus.Cancelled, stackTrace: "at Somewhere()", processedAt: from.AddMinutes(70));
+        await AddHistoryAsync(4, XactJobStatus.Cancelled, processedAt: from.AddMinutes(75));
+        await AddHistoryAsync(5, XactJobStatus.Failed, stackTrace: "at Somewhere()", processedAt: from.AddMinutes(80));
+        await AddHistoryAsync(6, XactJobStatus.Completed, processedAt: from.AddHours(3)); // outside the range
+
+        var counts = await WithServiceAsync(s => s.GetJobCountsOverTimeAsync(from, from.AddHours(2), TimeSpan.FromHours(1)));
+
+        Assert.Equal(2, counts.Count);
+
+        Assert.Equal(from, counts[0].Timestamp);
+        Assert.Equal((1, 0, 0, 0), (counts[0].Succeeded, counts[0].Failed, counts[0].Cancelled, counts[0].Retried));
+
+        Assert.Equal(from.AddHours(1), counts[1].Timestamp);
+        Assert.Equal((1, 1, 1, 1), (counts[1].Succeeded, counts[1].Failed, counts[1].Cancelled, counts[1].Retried));
+    }
+
+    [Fact]
+    public async Task Chart_LimitsTheNumberOfIntervals()
+    {
+        var to = DateTime.UtcNow;
+
+        var counts = await WithServiceAsync(s => s.GetJobCountsOverTimeAsync(to.AddDays(-31), to, TimeSpan.FromMinutes(1)));
+
+        Assert.InRange(counts.Count, 1, XactJobsUIService<UiTestDbContext>.MaxChartIntervals);
+    }
+
+    [Fact]
+    public async Task Queues_StartWithTheDefault_AndIncludeConfiguredAndUsedQueues()
+    {
+        await AddJobAsync(DateTime.UtcNow, queue: "emails");
+        await AddJobAsync(DateTime.UtcNow, queue: QueueNames.Priority);
+
+        var options = new XactJobsOptions<UiTestDbContext>();
+        options.IsolatedQueues["reports"] = new XactJobsOptionsBase<UiTestDbContext>();
+
+        await using var db = CreateDb();
+
+        var queues = await new XactJobsUIService<UiTestDbContext>(db, jobsOptions: options).GetQueuesAsync();
+
+        Assert.Equal([QueueNames.Default, "emails", QueueNames.Priority, "reports"], queues);
+    }
+
     private UiTestDbContext CreateDb()
     {
         return new UiTestDbContext(new DbContextOptionsBuilder<UiTestDbContext>().UseSqlite(_connection).Options);
@@ -310,11 +359,11 @@ public class XactJobsUIServiceTests : IDisposable
         return await action(new XactJobsUIService<UiTestDbContext>(db));
     }
 
-    private async Task<long> AddJobAsync(DateTime scheduledAt, int errorCount = 0, DateTime? leasedUntil = null)
+    private async Task<long> AddJobAsync(DateTime scheduledAt, int errorCount = 0, DateTime? leasedUntil = null, string queue = QueueNames.Default)
     {
         await using var db = CreateDb();
 
-        var job = new XactJob(0, scheduledAt, typeof(SampleJobs).AssemblyQualifiedName!, nameof(SampleJobs.Run), "[]", QueueNames.Default,
+        var job = new XactJob(0, scheduledAt, typeof(SampleJobs).AssemblyQualifiedName!, nameof(SampleJobs.Run), "[]", queue,
                               errorCount: errorCount, leaser: leasedUntil.HasValue ? Guid.NewGuid() : null, leasedUntil: leasedUntil);
 
         db.Jobs.Add(job);
@@ -324,11 +373,11 @@ public class XactJobsUIServiceTests : IDisposable
         return job.Id;
     }
 
-    private async Task AddHistoryAsync(long id, XactJobStatus status, string? stackTrace = null, string? periodicJobId = null)
+    private async Task AddHistoryAsync(long id, XactJobStatus status, string? stackTrace = null, string? periodicJobId = null, DateTime? processedAt = null)
     {
         await using var db = CreateDb();
 
-        db.JobHistory.Add(new XactJobHistory(id, DateTime.UtcNow.AddMinutes(-5), status, DateTime.UtcNow.AddMinutes(-6),
+        db.JobHistory.Add(new XactJobHistory(id, processedAt ?? DateTime.UtcNow.AddMinutes(-5), status, DateTime.UtcNow.AddMinutes(-6),
                                              typeof(SampleJobs).AssemblyQualifiedName!, nameof(SampleJobs.Run), "[]", QueueNames.Default,
                                              periodicJobId, periodicJobId != null ? Daily : null, periodicJobId != null ? 5 : null,
                                              errorCount: stackTrace != null ? 3 : 0,

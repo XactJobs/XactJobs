@@ -64,6 +64,17 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 });
 
+// The server renders UTC times; show them in the browser's time zone, with the UTC time as the tooltip
+function xactJobsLocalizeTimes(root) {
+    root.querySelectorAll('time[datetime]').forEach(function (el) {
+        const date = new Date(el.getAttribute('datetime'));
+        if (!isNaN(date)) el.textContent = date.toLocaleString();
+    });
+}
+
+// runs for the page and for every piece of content htmx swaps in
+htmx.onLoad(xactJobsLocalizeTimes);
+
 // True while the user is looking at something an automatic refresh would disturb
 function xactJobsIsBusy() {
     return !!document.querySelector('.modal.show');

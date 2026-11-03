@@ -9,6 +9,11 @@ public interface IXactJobsUIService
     Task<IReadOnlyList<JobCountsOverTimeDto>> GetJobCountsOverTimeAsync(
         DateTime from, DateTime to, TimeSpan interval, CancellationToken ct = default);
 
+    /// <summary>
+    /// The queues of the workers configured in this process, and of the pending jobs and the periodic jobs.
+    /// </summary>
+    Task<IReadOnlyList<string>> GetQueuesAsync(CancellationToken ct = default);
+
     // Pending/Scheduled Jobs
     Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
         int page, int pageSize, string? queue = null, CancellationToken ct = default);

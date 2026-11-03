@@ -17,8 +17,8 @@ else
                         <th>Type</th>
                         <th>Method</th>
                         <th>Queue</th>
-                        <th>Scheduled At (UTC)</th>
-                        <th>Processed At (UTC)</th>
+                        <th>Scheduled At</th>
+                        <th>Processed At</th>
                         @if (Model.ShowsErrors)
                         {
                             <th>Failed Attempts</th>
@@ -46,8 +46,8 @@ else
                                 }
                             </td>
                             <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
-                            <td>@XactJobsPageModel.FormatTime(job.ScheduledAt)</td>
-                            <td>@XactJobsPageModel.FormatTime(job.ProcessedAt)</td>
+                            <td>@XactJobsPageModel.Time(job.ScheduledAt)</td>
+                            <td>@XactJobsPageModel.Time(job.ProcessedAt)</td>
                             @if (Model.ShowsErrors)
                             {
                                 <td>

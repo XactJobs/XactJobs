@@ -13,15 +13,23 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public const int MaxPageSize = 500;
 
+    /// <summary>
+    /// The most intervals of the chart: each is a query.
+    /// </summary>
+    public const int MaxChartIntervals = 200;
+
     private readonly TDbContext db;
     private readonly QuickPollChannels? quickPollChannels;
+    private readonly XactJobsOptions<TDbContext>? jobsOptions;
 
     /// <param name="quickPollChannels">Registered by AddXactJobs. Without it (no workers in this process),
     /// a job made due by the dashboard starts on the next poll.</param>
-    public XactJobsUIService(TDbContext dbContext, QuickPollChannels? quickPollChannels = null)
+    /// <param name="jobsOptions">Registered by AddXactJobs, for the configured queues.</param>
+    public XactJobsUIService(TDbContext dbContext, QuickPollChannels? quickPollChannels = null, XactJobsOptions<TDbContext>? jobsOptions = null)
     {
         db = dbContext;
         this.quickPollChannels = quickPollChannels;
+        this.jobsOptions = jobsOptions;
     }
 
     public async Task<DashboardStatsDto> GetDashboardStatsAsync(CancellationToken ct = default)
@@ -72,38 +80,71 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         };
     }
 
+    /// <summary>
+    /// One grouped count per interval, so that only the counts leave the database (the history can be large).
+    /// A portable query can't group by interval, the date functions differ between the databases.
+    /// </summary>
     public async Task<IReadOnlyList<JobCountsOverTimeDto>> GetJobCountsOverTimeAsync(
         DateTime from, DateTime to, TimeSpan interval, CancellationToken ct = default)
     {
         if (interval < TimeSpan.FromMinutes(1)) interval = TimeSpan.FromMinutes(1);
 
-        var history = await db.Set<XactJobHistory>()
-            .Where(h => h.ProcessedAt >= from && h.ProcessedAt <= to)
-            .Select(h => new { h.ProcessedAt, h.Status, HasStackTrace = h.ErrorStackTrace != null })
+        if ((to - from).Ticks / interval.Ticks > MaxChartIntervals)
+        {
+            interval = TimeSpan.FromTicks((to - from).Ticks / MaxChartIntervals + 1);
+        }
+
+        // usually few, so they are counted here
+        var cancelledFromDashboard = await ApplyCategory(db.Set<XactJobHistory>(), HistoryCategory.Cancelled)
+            .Where(h => h.ProcessedAt >= from && h.ProcessedAt < to)
+            .Select(h => h.ProcessedAt)
             .ToListAsync(ct);
 
         var results = new List<JobCountsOverTimeDto>();
-        var current = from;
 
-        while (current < to)
+        for (var current = from; current < to; current += interval)
         {
-            var next = current + interval;
-            var bucket = history.Where(h => h.ProcessedAt >= current && h.ProcessedAt < next).ToList();
+            var start = current;
+            var end = current + interval < to ? current + interval : to;
+
+            var counts = await db.Set<XactJobHistory>()
+                .Where(h => h.ProcessedAt >= start && h.ProcessedAt < end)
+                .GroupBy(h => h.Status)
+                .Select(g => new { Status = g.Key, Count = g.Count() })
+                .ToListAsync(ct);
+
+            int CountOf(XactJobStatus status) => counts.FirstOrDefault(c => c.Status == status)?.Count ?? 0;
+
+            var cancelled = cancelledFromDashboard.Count(t => t >= start && t < end);
 
             results.Add(new JobCountsOverTimeDto
             {
-                Timestamp = current,
-                Succeeded = bucket.Count(h => h.Status == XactJobStatus.Completed),
-                Failed = bucket.Count(h => h.Status == XactJobStatus.Cancelled && h.HasStackTrace),
-                Retried = bucket.Count(h => h.Status == XactJobStatus.Failed),
-                Cancelled = bucket.Count(h => h.Status == XactJobStatus.Cancelled && !h.HasStackTrace),
-                Skipped = bucket.Count(h => h.Status == XactJobStatus.Skipped)
+                Timestamp = DateTime.SpecifyKind(start, DateTimeKind.Utc),
+                Succeeded = CountOf(XactJobStatus.Completed),
+                Failed = CountOf(XactJobStatus.Cancelled) - cancelled,
+                Retried = CountOf(XactJobStatus.Failed),
+                Cancelled = cancelled,
+                Skipped = CountOf(XactJobStatus.Skipped)
             });
-
-            current = next;
         }
 
         return results;
+    }
+
+    public async Task<IReadOnlyList<string>> GetQueuesAsync(CancellationToken ct = default)
+    {
+        var queues = new SortedSet<string>(StringComparer.Ordinal) { QueueNames.Default };
+
+        if (jobsOptions != null)
+        {
+            queues.UnionWith(jobsOptions.IsolatedQueues.Keys);
+        }
+
+        queues.UnionWith(await db.Set<XactJob>().Select(j => j.Queue).Distinct().ToListAsync(ct));
+        queues.UnionWith(await db.Set<XactJobPeriodic>().Select(p => p.Queue).Distinct().ToListAsync(ct));
+
+        // the default queue first
+        return [QueueNames.Default, .. queues.Where(q => q != QueueNames.Default)];
     }
 
     public async Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(

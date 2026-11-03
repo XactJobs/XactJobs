@@ -5,13 +5,12 @@ namespace XactJobs.UI.Pages.Periodic;
 
 public class IndexModel : XactJobsPageModel
 {
-    private readonly IXactJobsUIService _service;
-
     public IndexModel(IXactJobsUIService service, XactJobsUIOptions options)
-        : base(options)
+        : base(service, options)
     {
-        _service = service;
     }
+
+    protected override bool HasQueueFilter => false;
 
     public PagedResultDto<PeriodicJobDto> Jobs { get; private set; } = new();
 
@@ -20,6 +19,6 @@ public class IndexModel : XactJobsPageModel
 
     protected override async Task LoadAsync(CancellationToken ct)
     {
-        Jobs = await _service.GetPeriodicJobsAsync(PageNumber, Options.DefaultPageSize, ct);
+        Jobs = await Service.GetPeriodicJobsAsync(PageNumber, Options.DefaultPageSize, ct);
     }
 }

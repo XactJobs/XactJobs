@@ -65,6 +65,45 @@ public partial class DashboardWebTests : IAsyncDisposable
         Assert.Equal(!url.Contains("handler=Table") && !url.StartsWith("/api/"), body.Contains("<html"));
     }
 
+    [Fact]
+    public async Task Pages_LoadNothingFromOtherSites_AndShowTimesForTheBrowser()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedAsync();
+
+        var html = await client.GetStringAsync("/XactJobs/scheduled");
+
+        Assert.DoesNotContain("https://", html);
+        Assert.Contains("/_content/XactJobs.UI/lib/htmx/htmx.min.js", html);
+        Assert.Matches(@"<time class=""text-nowrap"" datetime=""\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z""", html);
+    }
+
+    [Fact]
+    public async Task QueueFilter_ShowsOnlyTheJobsOfTheQueue()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedAsync();
+
+        await WithDbAsync(async db =>
+        {
+            db.JobEnqueue<SampleJobs>(x => x.Run(), "emails");
+            return await db.SaveChangesAsync();
+        });
+
+        var all = await client.GetStringAsync("/XactJobs/scheduled");
+        var emails = await client.GetStringAsync("/XactJobs/scheduled?queue=emails");
+
+        Assert.Contains("<option value=\"emails\">", all);
+        Assert.Contains("<option value=\"emails\" selected=\"selected\">", emails);
+        Assert.Equal(3, Regex.Matches(all, "<code>\\d+</code>").Count);
+        Assert.Single(Regex.Matches(emails, "<code>\\d+</code>"));
+
+        // the table keeps the filter when it refreshes
+        Assert.Contains("?handler=Table&amp;p=1&amp;queue=emails", emails);
+    }
+
     [Theory]
     [InlineData("/XactJobs/scheduled")]
     [InlineData("/api/XactJobs/stats")]

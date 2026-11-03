@@ -79,15 +79,18 @@ internal static class XactJobsApiEndpoints
             [FromQuery] int? intervalMinutes,
             CancellationToken ct) =>
         {
-            var toDate = to ?? DateTime.UtcNow;
-            var fromDate = from ?? toDate.AddHours(-24);
+            var interval = TimeSpan.FromMinutes(Math.Max(intervalMinutes ?? 60, 1));
+            var toDate = to?.ToUniversalTime() ?? DateTime.UtcNow;
 
-            if (toDate - fromDate > TimeSpan.FromDays(31))
+            // by default the last 24 intervals, aligned to the interval (e.g. full hours), the last one up to now
+            var fromDate = from?.ToUniversalTime()
+                ?? new DateTime(toDate.Ticks - toDate.Ticks % interval.Ticks, DateTimeKind.Utc) - 23 * interval;
+
+            if (toDate - fromDate > TimeSpan.FromDays(31) || fromDate >= toDate)
             {
-                return Results.BadRequest(new { message = "The range can be at most 31 days." });
+                return Results.BadRequest(new { message = "The range must be positive, and at most 31 days." });
             }
 
-            var interval = TimeSpan.FromMinutes(Math.Max(intervalMinutes ?? 60, 1));
             return Results.Ok(await service.GetJobCountsOverTimeAsync(fromDate, toDate, interval, ct));
         }).WithName("XactJobsGetChartData");
 
