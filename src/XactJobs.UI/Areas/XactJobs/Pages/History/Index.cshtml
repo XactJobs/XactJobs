@@ -9,7 +9,8 @@
         <h1><i class="bi @Model.Current.Icon me-2"></i>@Model.Current.Title</h1>
         <p class="text-muted">@Model.Current.Description</p>
     </div>
-    <div class="col-auto">
+    <div class="col-auto d-flex align-items-center gap-3">
+        <partial name="~/Areas/XactJobs/Pages/Partials/_QueueFilter.cshtml" model="Model" />
         <button class="btn btn-outline-secondary" onclick="htmx.trigger(document.body, 'xactjobs-changed')">
             <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>

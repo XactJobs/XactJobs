@@ -19,7 +19,7 @@ else
                         <th>Queue</th>
                         <th>Cron Expression</th>
                         <th>Status</th>
-                        <th>Next Run (UTC)</th>
+                        <th>Next Run</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
@@ -53,7 +53,7 @@ else
                                 }
                                 else if (job.NextRunAt.HasValue)
                                 {
-                                    @XactJobsPageModel.FormatTime(job.NextRunAt)
+                                    @XactJobsPageModel.Time(job.NextRunAt)
                                 }
                                 else
                                 {

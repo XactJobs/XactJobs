@@ -78,6 +78,7 @@ XactJobs is a .NET library for background job processing with full database tran
 - Dashboard pages (`Areas/XactJobs/Pages/`) with htmx: each list page serves its table on its own (`?handler=Table`), and reloads it when an API action answers with the `xactjobs-changed` event (`HX-Trigger` header)
 - `Services/XactJobsUIService.cs` - queries and actions. Actions must follow the core's rules: never update a job row in place (the scheduled time is part of the primary key) nor touch a leased row, and never add a second pending run to a periodic job
 - `Api/XactJobsApiEndpoints.cs` - REST API, access (local requests only by default, or an authorization policy) and antiforgery checks
+- `wwwroot/lib/` - Bootstrap, Bootstrap Icons, Chart.js and htmx, copied from their npm packages (source map comments removed), so the dashboard needs no CDN. Times are rendered as UTC `<time>` elements and shown in the browser's time zone by `wwwroot/js/xactjobs.js`
 - History categories: `Failed` in the history is an attempt the runner already rescheduled ("Retried"); a job that ran out of retries is `Cancelled` with a stack trace ("Failed"); a job cancelled from the dashboard is `Cancelled` without one
 
 ### Database Entities
@@ -109,3 +110,4 @@ XactJobs is a .NET library for background job processing with full database tran
 
 - `Internal/XactJobSerializer.cs` - Adapted from Hangfire (LGPL-3.0)
 - `Internal/ExpressionUtil/` - Copied from ASP.NET MVC (Apache 2.0)
+- `XactJobs.UI/wwwroot/lib/` - Bootstrap, Bootstrap Icons, Chart.js, htmx (MIT, license files next to them)

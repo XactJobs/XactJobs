@@ -1,0 +1,16 @@
+@model XactJobsPageModel
+
+@if (Model.Queues != null)
+{
+    @* a GET form to the current page: the filter starts again at the first page *@
+    <form method="get" class="d-flex align-items-center gap-2">
+        <label for="xj-queue" class="text-muted small mb-0">Queue:</label>
+        <select id="xj-queue" name="queue" class="form-select form-select-sm" style="width: auto;" onchange="this.form.submit()">
+            <option value="">All</option>
+            @foreach (var queue in Model.Queues)
+            {
+                <option value="@queue" selected="@(queue == Model.Queue)">@XactJobsPageModel.DisplayQueue(queue)</option>
+            }
+        </select>
+    </form>
+}

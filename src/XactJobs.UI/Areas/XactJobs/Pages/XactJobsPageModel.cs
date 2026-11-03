@@ -1,6 +1,9 @@
 using System.Globalization;
+using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using XactJobs.UI.Services;
+using XactJobs.UI.Services.Models;
 
 namespace XactJobs.UI.Pages;
 
@@ -9,10 +12,13 @@ namespace XactJobs.UI.Pages;
 /// </summary>
 public abstract class XactJobsPageModel : PageModel
 {
-    protected XactJobsPageModel(XactJobsUIOptions options)
+    protected XactJobsPageModel(IXactJobsUIService service, XactJobsUIOptions options)
     {
+        Service = service;
         Options = options;
     }
+
+    protected IXactJobsUIService Service { get; }
 
     public XactJobsUIOptions Options { get; }
 
@@ -21,6 +27,13 @@ public abstract class XactJobsPageModel : PageModel
 
     [BindProperty(SupportsGet = true)]
     public string? Queue { get; set; }
+
+    /// <summary>
+    /// The queues to filter by, or null if the page has no queue filter.
+    /// </summary>
+    public IReadOnlyList<string>? Queues { get; private set; }
+
+    protected virtual bool HasQueueFilter => true;
 
     /// <summary>
     /// The table of the current page, relative to the current URL.
@@ -41,14 +54,30 @@ public abstract class XactJobsPageModel : PageModel
 
     public string PageUrl(string path) => Url.Content("~" + Options.BasePath + path);
 
-    public static string FormatTime(DateTime utc) => utc.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+    /// <summary>
+    /// A UTC time, which the browser shows in its own time zone.
+    /// </summary>
+    public static IHtmlContent Time(DateTime? utc)
+    {
+        if (!utc.HasValue) return HtmlString.Empty;
 
-    public static string FormatTime(DateTime? utc) => utc.HasValue ? FormatTime(utc.Value) : "";
+        var iso = utc.Value.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
+        var text = utc.Value.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC";
+
+        return new HtmlString($"<time class=\"text-nowrap\" datetime=\"{iso}\" title=\"{text}\">{text}</time>");
+    }
+
+    public static string DisplayQueue(string queue) => DisplayNames.Queue(queue);
 
     protected abstract Task LoadAsync(CancellationToken ct);
 
     public async Task OnGetAsync(CancellationToken ct)
     {
+        if (HasQueueFilter)
+        {
+            Queues = await Service.GetQueuesAsync(ct);
+        }
+
         await LoadAsync(ct);
     }
 

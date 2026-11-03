@@ -19,7 +19,7 @@
             <option value="300000">5m</option>
             <option value="600000">10m</option>
         </select>
-        <button class="btn btn-outline-secondary" onclick="refreshDashboard()">
+        <button class="btn btn-outline-secondary" onclick="refreshDashboard(true)">
             <i class="bi bi-arrow-clockwise"></i> Refresh
         </button>
     </div>
@@ -144,7 +144,7 @@
 
     function startAutoRefresh(intervalMs) {
         if (refreshTimerId) clearInterval(refreshTimerId);
-        refreshTimerId = setInterval(refreshDashboard, intervalMs);
+        refreshTimerId = setInterval(() => refreshDashboard(false), intervalMs);
     }
 
     // Initialize charts and auto-refresh
@@ -178,7 +178,7 @@
                 window.jobsChart = new Chart(ctx, {
                     type: 'line',
                     data: {
-                        labels: data.map(d => new Date(d.timestamp).toLocaleTimeString()),
+                        labels: data.map(d => new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
                         datasets: [
                             {
                                 label: 'Succeeded',
@@ -213,7 +213,7 @@
                             legend: { position: 'top' }
                         },
                         scales: {
-                            y: { beginAtZero: true }
+                            y: { beginAtZero: true, ticks: { precision: 0 } }
                         }
                     }
                 });
@@ -271,7 +271,7 @@
             .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
             .then(data => {
                 if (window.jobsChart) {
-                    window.jobsChart.data.labels = data.map(d => new Date(d.timestamp).toLocaleTimeString());
+                    window.jobsChart.data.labels = data.map(d => new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
                     window.jobsChart.data.datasets[0].data = data.map(d => d.succeeded);
                     window.jobsChart.data.datasets[1].data = data.map(d => d.failed);
                     window.jobsChart.data.datasets[2].data = data.map(d => d.retried);
@@ -280,9 +280,17 @@
             });
     }
 
-    function refreshDashboard() {
+    // the chart has hourly intervals and costs a query per interval, so it refreshes at most once a minute
+    const chartRefreshIntervalMs = 60000;
+    let lastChartRefresh = Date.now();
+
+    function refreshDashboard(force) {
         refreshStats();
-        refreshChartData();
+
+        if (force === true || Date.now() - lastChartRefresh >= chartRefreshIntervalMs) {
+            lastChartRefresh = Date.now();
+            refreshChartData();
+        }
     }
 </script>
 }

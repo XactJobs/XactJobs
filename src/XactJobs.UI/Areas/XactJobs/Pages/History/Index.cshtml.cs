@@ -6,12 +6,9 @@ namespace XactJobs.UI.Pages.History;
 
 public class IndexModel : XactJobsPageModel
 {
-    private readonly IXactJobsUIService _service;
-
     public IndexModel(IXactJobsUIService service, XactJobsUIOptions options)
-        : base(options)
+        : base(service, options)
     {
-        _service = service;
     }
 
     [BindProperty(SupportsGet = true, Name = "category")]
@@ -43,6 +40,6 @@ public class IndexModel : XactJobsPageModel
             ? category
             : HistoryCategory.Succeeded;
 
-        Jobs = await _service.GetHistoryAsync(Category, PageNumber, Options.DefaultPageSize, Queue, ct);
+        Jobs = await Service.GetHistoryAsync(Category, PageNumber, Options.DefaultPageSize, Queue, ct);
     }
 }
