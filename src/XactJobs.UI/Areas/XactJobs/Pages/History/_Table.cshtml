@@ -37,7 +37,7 @@ else
                             <td><code>@job.Id</code></td>
                             <td title="@job.TypeName">@job.DisplayTypeName</td>
                             <td>
-                                <code>@job.MethodName</code>
+                                <code title="@job.MethodName">@job.DisplayMethodName</code>
                                 @if (job.PeriodicJobId != null)
                                 {
                                     <span class="badge bg-light text-dark border" title="Run of the periodic job '@job.PeriodicJobId'">

@@ -19,8 +19,6 @@ public static class Greeter
 }
 ```
 
-Calling `Console.WriteLine` directly wouldn't work, because a job method can't have overloads with the same number of parameters (see [Jobs](#jobs)).
-
 ### Fire and Forget Jobs
 Fire-and-forget jobs are executed once by a background worker in the next polling interval (configurable, default 3s).
 
@@ -223,7 +221,6 @@ A job is simply a public method. It can be either a static or an instance method
 - it cannot have `out` or `ref` parameters,
 - it cannot have parameters that are anonymous functions, delegates, or lambda expressions,
 - if it is an async method, it cannot be `async void` (it must be `async Task`),
-- it cannot have an overload with **the same name and the same number of parameters** (this restriction may be removed in the future).
 
 Job method parameters are evaluated immediately and serialized using `System.Text.Json.JsonSerializer`.
 This means parameters can be both primitives or complex objects, although large objects should be avoided as they require more storage and take longer to serialize/deserialize.

@@ -104,6 +104,22 @@ public partial class DashboardWebTests : IAsyncDisposable
         Assert.Contains("?handler=Table&amp;p=1&amp;queue=emails", emails);
     }
 
+    [Fact]
+    public async Task MethodColumn_ShowsTheName_WithTheSignatureAsTooltip()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await WithDbAsync(async db =>
+        {
+            db.JobEnqueue<SampleJobs>(x => x.Send("a", 1));
+            return await db.SaveChangesAsync();
+        });
+
+        var table = await client.GetStringAsync("/XactJobs/scheduled?handler=Table&p=1");
+
+        Assert.Contains("<code title=\"Send(System.String, System.Int32)\">Send</code>", table);
+    }
+
     [Theory]
     [InlineData("/XactJobs/scheduled")]
     [InlineData("/api/XactJobs/stats")]

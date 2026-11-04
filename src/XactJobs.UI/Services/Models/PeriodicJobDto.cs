@@ -17,5 +17,7 @@ public record PeriodicJobDto
     public bool IsRunning { get; init; }
 
     public string DisplayTypeName => DisplayNames.Type(TypeName);
+
+    public string DisplayMethodName => DisplayNames.Method(MethodName);
     public string DisplayQueue => DisplayNames.Queue(Queue);
 }

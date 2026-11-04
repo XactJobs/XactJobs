@@ -24,4 +24,12 @@ public class SampleJobs
     public void Run()
     {
     }
+
+    public void Send(string to, int count)
+    {
+    }
+
+    public void Send(int id, int count)
+    {
+    }
 }

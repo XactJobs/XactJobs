@@ -80,7 +80,7 @@ XactJobs is a .NET library for background job processing with full database tran
 
 **Internal/**
 - `XactJobRunner.cs` - Core polling loop and job execution
-- `XactJobSerializer.cs` - Lambda expression serialization (adapted from Hangfire)
+- `XactJobSerializer.cs` - Lambda expression serialization (adapted from Hangfire). The method name is stored with its parameter types, e.g. `Send(System.String, System.Int32)`, so overloads can be jobs. To run a job, the runner looks for the overload with that signature, or, if there isn't one, the only method with that name and parameter count (jobs from before 0.1.7 have no signature)
 - `XactJobCompiler.cs` - Expression compilation to executable delegates
 - `SqlDialects/` - Database-specific SQL (SqlServer, PostgreSQL, MySQL, Oracle, SQLite)
 

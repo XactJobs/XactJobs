@@ -36,7 +36,7 @@ public class SqliteJobEnqueueTests : IDisposable
         // Assert
         Assert.NotNull(job);
         Assert.Contains(nameof(TestService), job.TypeName);
-        Assert.Equal(nameof(TestService.DoWork), job.MethodName);
+        Assert.Equal("DoWork()", job.MethodName);
         Assert.Equal(QueueNames.Default, job.Queue);
         Assert.True(job.ScheduledAt <= DateTime.UtcNow);
 
@@ -54,7 +54,7 @@ public class SqliteJobEnqueueTests : IDisposable
         // Assert
         Assert.NotNull(job);
         Assert.Contains(nameof(TestService), job.TypeName);
-        Assert.Equal(nameof(TestService.DoWork), job.MethodName);
+        Assert.Equal("DoWork()", job.MethodName);
         Assert.Equal(QueueNames.Default, job.Queue);
 
         var savedJob = _context.Jobs.First();
@@ -74,7 +74,7 @@ public class SqliteJobEnqueueTests : IDisposable
         // Assert
         Assert.NotNull(job);
         Assert.Contains(nameof(TestService), job.TypeName);
-        Assert.Equal(nameof(TestService.DoWorkAsync), job.MethodName);
+        Assert.Equal("DoWorkAsync()", job.MethodName);
 
         var savedJob = _context.Jobs.First();
         Assert.True(savedJob.Id > 0);
@@ -90,7 +90,7 @@ public class SqliteJobEnqueueTests : IDisposable
         // Assert
         Assert.NotNull(job);
         Assert.Contains(nameof(TestService), job.TypeName);
-        Assert.Equal(nameof(TestService.DoWorkAsync), job.MethodName);
+        Assert.Equal("DoWorkAsync()", job.MethodName);
 
         var savedJob = _context.Jobs.First();
         Assert.True(savedJob.Id > 0);

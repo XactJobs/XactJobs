@@ -55,7 +55,7 @@ public class SqliteJobScheduleTests : IDisposable
         // Assert
         Assert.Equal(scheduleTime, job.ScheduledAt);
         Assert.Contains(nameof(TestService), job.TypeName);
-        Assert.Equal(nameof(TestService.DoWork), job.MethodName);
+        Assert.Equal("DoWork()", job.MethodName);
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class SqliteJobScheduleTests : IDisposable
 
         // Assert
         Assert.Equal(scheduleTime, job.ScheduledAt);
-        Assert.Equal(nameof(TestService.DoWorkAsync), job.MethodName);
+        Assert.Equal("DoWorkAsync()", job.MethodName);
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public class SqliteJobScheduleTests : IDisposable
 
         // Assert
         Assert.NotNull(job);
-        Assert.Equal(nameof(TestService.DoWorkAsync), job.MethodName);
+        Assert.Equal("DoWorkAsync()", job.MethodName);
     }
 
     [Fact]
