@@ -336,6 +336,8 @@ The values above are the defaults, except for `WithMaxDegreeOfParallelism`.
 
 The `XactJobs.UI` package adds a web dashboard and a REST API to see and manage the jobs.
 
+![The dashboard: due, running, succeeded and failed jobs, and the jobs processed per hour](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/dashboard.png)
+
 ```csharp
 builder.Services.AddXactJobsUI<UserDbContext>(options =>
 {
@@ -380,6 +382,12 @@ The API endpoints that change data require an antiforgery token, which the dashb
   - *Resume* schedules the next run
   - *Trigger* makes the pending run due now, so the job keeps a single schedule
   - *Delete* deletes the definition. A periodic job defined in code is added again when the application starts
+
+![Scheduled jobs: running, scheduled and retrying jobs, with their queues](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/scheduled.png)
+
+![A failed job's error message and stack trace](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/failed-job.png)
+
+![Periodic jobs: their cron expressions and next runs, one of them paused](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/periodic.png)
 
 A job that is running can't be changed: the dashboard never touches a job a worker has leased.
 
