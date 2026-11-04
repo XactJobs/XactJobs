@@ -28,7 +28,7 @@ namespace XactJobs.Internal
     internal static class XactJobSerializer
     {
         private static readonly ConcurrentDictionary<MethodInfo, AsyncStateMachineAttribute?> _asyncStateMachineAttributeCache = new();
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, MethodInfo[]> _overloadsCache = new();
+        private static readonly ConcurrentDictionary<MethodInfo, string> _methodSignatureCache = new();
 
         internal static XactJob FromExpression(LambdaExpression lambdaExp, DateTime? scheduleAtUtc, string? queue)
         {
@@ -47,7 +47,7 @@ namespace XactJobs.Internal
 
             var typeName = GetSimpleTypeName(type);
 
-            var methodName = callExpression.Method.Name;
+            var methodName = GetMethodSignature(callExpression.Method);
 
             var args = GetExpressionValues(callExpression.Arguments);
 
@@ -72,7 +72,7 @@ namespace XactJobs.Internal
 
             var typeName = GetSimpleTypeName(type);
 
-            var methodName = callExpression.Method.Name;
+            var methodName = GetMethodSignature(callExpression.Method);
 
             var args = GetExpressionValues(callExpression.Arguments);
 
@@ -88,16 +88,95 @@ namespace XactJobs.Internal
             var type = Type.GetType(job.TypeName)
                 ?? throw new InvalidOperationException($"Type '{job.TypeName}' could not be loaded.");
 
-            var methods = _overloadsCache.GetOrAdd(GetMethodCacheKey(job.TypeName, job.MethodName, paramCount), _ =>
-            [
-                .. type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                    .Where(m => m.Name == job.MethodName && m.GetParameters().Length == paramCount)
-            ]);
+            // new jobs store the method's signature, e.g. "Send(System.String, System.Int32)",
+            // and jobs from before 0.1.7 only its name
+            var signatureStart = job.MethodName.IndexOf('(');
+            var methodName = signatureStart < 0 ? job.MethodName : job.MethodName[..signatureStart];
 
-            var method = methods.FirstOrDefault()
-                ?? throw new MissingMethodException($"Method '{job.MethodName}' with {paramCount} parameter(s) not found on type '{type.FullName}'.");
+            var candidates = type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
+                .Where(m => m.Name == methodName && m.GetParameters().Length == paramCount)
+                .ToArray();
 
-            return (type, method);
+            if (candidates.Length == 0)
+            {
+                throw new MissingMethodException($"Method '{methodName}' with {paramCount} parameter(s) not found on type '{type.FullName}'.");
+            }
+
+            if (signatureStart >= 0)
+            {
+                var matches = candidates.Where(m => GetMethodSignature(m) == job.MethodName).ToArray();
+
+                if (matches.Length > 0)
+                {
+                    return (type, MostDerived(matches));
+                }
+            }
+
+            // no signature, or the parameter types changed (e.g. a type was renamed): the method
+            // is still found by its name and parameter count, if it has no overloads
+            if (candidates.Select(GetMethodSignature).Distinct().Count() == 1)
+            {
+                return (type, MostDerived(candidates));
+            }
+
+            throw new AmbiguousMatchException(
+                $"Type '{type.FullName}' has several public methods named '{methodName}' with {paramCount} parameter(s), " +
+                $"and none of them matches the job's method '{job.MethodName}'.");
+        }
+
+        /// <summary>
+        /// A method hidden with <c>new</c> is returned along with the method that hides it: this picks the one that hides it.
+        /// </summary>
+        private static MethodInfo MostDerived(MethodInfo[] methods)
+        {
+            return methods.Length == 1
+                ? methods[0]
+                : methods.OrderByDescending(m => InheritanceDepth(m.DeclaringType)).First();
+        }
+
+        private static int InheritanceDepth(Type? type)
+        {
+            var depth = 0;
+
+            for (; type != null; type = type.BaseType)
+            {
+                depth++;
+            }
+
+            return depth;
+        }
+
+        /// <summary>
+        /// The method's name and parameter types, e.g. "Send(System.String, System.Int32)", which tells its overloads apart.
+        /// The types have no assembly names, so that pending jobs still run after a type moves to another assembly.
+        /// </summary>
+        internal static string GetMethodSignature(MethodInfo method)
+        {
+            return _methodSignatureCache.GetOrAdd(method, FormatMethodSignature);
+        }
+
+        private static string FormatMethodSignature(MethodInfo method)
+        {
+            var parameterTypes = method.GetParameters().Select(p => GetSignatureTypeName(p.ParameterType));
+
+            return $"{method.Name}({string.Join(", ", parameterTypes)})";
+        }
+
+        private static string GetSignatureTypeName(Type type)
+        {
+            if (type.IsArray)
+            {
+                return $"{GetSignatureTypeName(type.GetElementType()!)}[{new string(',', type.GetArrayRank() - 1)}]";
+            }
+
+            if (type.IsGenericType)
+            {
+                var genericArgs = type.GetGenericArguments().Select(GetSignatureTypeName); // recursive
+
+                return $"{type.GetGenericTypeDefinition().FullName}[{string.Join(", ", genericArgs)}]";
+            }
+
+            return type.FullName ?? type.Name;
         }
 
         private static string GetSimpleTypeName(Type type)
@@ -116,16 +195,6 @@ namespace XactJobs.Internal
             {
                 return string.Join(", ", type.FullName, type.Assembly.GetName().Name);
             }
-        }
-
-        private static XactJobDispatchKey GetMethodCacheKey(Type type, MethodInfo method)
-        {
-            return GetMethodCacheKey(GetSimpleTypeName(type), method.Name, method.GetParameters().Length);
-        }
-
-        private static XactJobDispatchKey GetMethodCacheKey(string typeName, string methodName, int paramCount)
-        {
-            return new XactJobDispatchKey(typeName, methodName, paramCount);
         }
 
         // The following method is adapted from Hangfire, Copyright © 2013-2014 Hangfire OÜ.
@@ -152,23 +221,6 @@ namespace XactJobs.Internal
             }
 
             var parameters = method.GetParameters();
-
-            // Check for overloads with same name and same param count
-            var type = callExpression.Object?.Type ?? method.DeclaringType
-                ?? throw new NotSupportedException("XactJobs does not support global methods.");
-
-            var overloads = _overloadsCache.GetOrAdd(GetMethodCacheKey(type, method), _ =>
-            [
-                .. type.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static)
-                    .Where(m => m.Name == method.Name && m.GetParameters().Length == parameters.Length)
-            ]);
-
-            if (overloads.Length > 1)
-            {
-                throw new NotSupportedException(
-                    $"Type '{type.FullName}' contains multiple public methods named '{method.Name}' with {parameters.Length} parameter(s). " +
-                    "This is not supported: job deserialization would be ambiguous.");
-            }
 
             if (parameters.Length != callExpression.Arguments.Count)
             {

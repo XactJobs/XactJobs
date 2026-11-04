@@ -206,7 +206,7 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
 
         await WaitForAsync(() => Task.FromResult(_state.QuickCount == 1), "the next job to run");
 
-        var failed = await WithDbAsync(db => db.JobHistory.AsNoTracking().SingleAsync(h => h.MethodName == nameof(PollingJob.Fail)));
+        var failed = await WithDbAsync(db => db.JobHistory.AsNoTracking().SingleAsync(h => h.MethodName == "Fail()"));
 
         Assert.Equal(XactJobStatus.Failed, failed.Status);
     }

@@ -17,5 +17,7 @@ public record JobHistoryDto
     /// <summary>Failed and cancelled jobs can be run again.</summary>
     public bool CanRetry => Status == XactJobStatus.Cancelled;
     public string DisplayTypeName => DisplayNames.Type(TypeName);
+
+    public string DisplayMethodName => DisplayNames.Method(MethodName);
     public string DisplayQueue => DisplayNames.Queue(Queue);
 }

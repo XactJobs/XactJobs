@@ -45,7 +45,7 @@ public class SqlitePeriodicJobTests : IDisposable
         Assert.Equal(QueueNames.Default, periodicJob.Queue);
         Assert.True(periodicJob.IsActive);
         Assert.Contains(nameof(TestService), periodicJob.TypeName);
-        Assert.Equal(nameof(TestService.DoWork), periodicJob.MethodName);
+        Assert.Equal("DoWork()", periodicJob.MethodName);
 
         var savedPeriodicJob = await _context.PeriodicJobs.FirstAsync();
         Assert.Equal(jobId, savedPeriodicJob.Id);
@@ -88,7 +88,7 @@ public class SqlitePeriodicJobTests : IDisposable
         await _context.SaveChangesAsync();
 
         // Assert
-        Assert.Equal(nameof(TestService.DoWorkAsync), periodicJob.MethodName);
+        Assert.Equal("DoWorkAsync()", periodicJob.MethodName);
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public class SqlitePeriodicJobTests : IDisposable
         // Assert
         Assert.Equal(jobId, periodicJob2.Id);
         Assert.Equal(cronExpression2, periodicJob2.CronExpression);
-        Assert.Equal(nameof(TestService.DoWorkAsync), periodicJob2.MethodName);
+        Assert.Equal("DoWorkAsync()", periodicJob2.MethodName);
         Assert.NotEqual(version1, periodicJob2.Version);
 
         var count = await _context.PeriodicJobs.CountAsync();
