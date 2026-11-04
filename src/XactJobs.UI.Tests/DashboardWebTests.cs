@@ -120,6 +120,22 @@ public partial class DashboardWebTests : IAsyncDisposable
         Assert.Contains("<code title=\"Send(System.String, System.Int32)\">Send</code>", table);
     }
 
+    [Fact]
+    public async Task TypeColumn_ShowsGenericTypes_WithTheirArguments()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await WithDbAsync(async db =>
+        {
+            db.JobEnqueue<GenericJobs<Dictionary<string, SampleJobs>>>(x => x.Run());
+            return await db.SaveChangesAsync();
+        });
+
+        var table = await client.GetStringAsync("/XactJobs/scheduled?handler=Table&p=1");
+
+        Assert.Contains(">GenericJobs&lt;Dictionary&lt;String, SampleJobs&gt;&gt;</td>", table);
+    }
+
     [Theory]
     [InlineData("/XactJobs/scheduled")]
     [InlineData("/api/XactJobs/stats")]

@@ -19,6 +19,13 @@ public class UiTestDbContext : DbContext
     }
 }
 
+public class GenericJobs<T>
+{
+    public void Run()
+    {
+    }
+}
+
 public class SampleJobs
 {
     public void Run()

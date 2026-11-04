@@ -27,11 +27,11 @@ else
                     @foreach (var job in Model.Jobs.Items)
                     {
                         <tr>
-                            <td><code>@job.Id</code></td>
+                            <td class="text-nowrap"><code>@job.Id</code></td>
                             <td title="@job.TypeName">@job.DisplayTypeName</td>
                             <td><code title="@job.MethodName">@job.DisplayMethodName</code></td>
                             <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
-                            <td><code>@job.CronExpression</code></td>
+                            <td class="text-nowrap"><code>@job.CronExpression</code></td>
                             <td>
                                 @if (job.IsActive)
                                 {
