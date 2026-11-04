@@ -1,0 +1,108 @@
+@model XactJobs.UI.Pages.History.IndexModel
+
+@if (Model.Jobs.Items.Count == 0)
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>No jobs found.
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Method</th>
+                        <th>Queue</th>
+                        <th>Scheduled At</th>
+                        <th>Processed At</th>
+                        @if (Model.ShowsErrors)
+                        {
+                            <th>Failed Attempts</th>
+                            <th>Error</th>
+                        }
+                        @if (Model.Category is HistoryCategory.Failed or HistoryCategory.Cancelled)
+                        {
+                            <th>Actions</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var job in Model.Jobs.Items)
+                    {
+                        <tr>
+                            <td><code>@job.Id</code></td>
+                            <td title="@job.TypeName">@job.DisplayTypeName</td>
+                            <td>
+                                <code>@job.MethodName</code>
+                                @if (job.PeriodicJobId != null)
+                                {
+                                    <span class="badge bg-light text-dark border" title="Run of the periodic job '@job.PeriodicJobId'">
+                                        <i class="bi bi-arrow-repeat"></i> @job.PeriodicJobId
+                                    </span>
+                                }
+                            </td>
+                            <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
+                            <td>@XactJobsPageModel.Time(job.ScheduledAt)</td>
+                            <td>@XactJobsPageModel.Time(job.ProcessedAt)</td>
+                            @if (Model.ShowsErrors)
+                            {
+                                <td>
+                                    @if (job.ErrorCount > 0)
+                                    {
+                                        <span class="badge bg-danger">@job.ErrorCount</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">0</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (!string.IsNullOrEmpty(job.ErrorMessage))
+                                    {
+                                        <button class="btn btn-sm btn-link text-danger p-0 text-start"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#xj-error-modal"
+                                                data-job-id="@job.Id"
+                                                data-error-message="@job.ErrorMessage"
+                                                data-error-stack="@job.ErrorStackTrace"
+                                                title="View error details">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            @(job.ErrorMessage.Length > 80 ? job.ErrorMessage[..80] + "..." : job.ErrorMessage)
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">No error message</span>
+                                    }
+                                </td>
+                            }
+                            @if (Model.Category is HistoryCategory.Failed or HistoryCategory.Cancelled)
+                            {
+                                <td>
+                                    @if (job.CanRetry)
+                                    {
+                                        <button class="btn btn-sm btn-outline-warning text-nowrap"
+                                                hx-post="@Model.ApiUrl($"/history/{job.Id}/retry")"
+                                                hx-confirm="@(job.PeriodicJobId != null
+                                                    ? $"Run job #{job.Id} again? It's enqueued as a one-off job, apart from the runs of the periodic job '{job.PeriodicJobId}'."
+                                                    : $"Run job #{job.Id} again, as a new job?")"
+                                                hx-swap="none"
+                                                title="Enqueue the job again, as a new job">
+                                            <i class="bi bi-arrow-counterclockwise"></i> Retry
+                                        </button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <partial name="~/Areas/XactJobs/Pages/Partials/_Pagination.cshtml" model="new PaginationModel(Model, Model.Jobs.Page, Model.Jobs.TotalPages, Model.Jobs.TotalCount)" />
+}

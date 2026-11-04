@@ -1,0 +1,296 @@
+@page
+@model XactJobs.UI.Pages.IndexModel
+@{
+    ViewData["Title"] = "Dashboard";
+}
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-speedometer2 me-2"></i>Dashboard</h1>
+    </div>
+    <div class="col-auto d-flex align-items-center gap-2">
+        <label class="text-muted small mb-0">Auto-refresh:</label>
+        <select id="refresh-interval" class="form-select form-select-sm" style="width: auto;">
+            <option value="5000">5s</option>
+            <option value="10000">10s</option>
+            <option value="15000">15s</option>
+            <option value="30000">30s</option>
+            <option value="60000">1m</option>
+            <option value="300000">5m</option>
+            <option value="600000">10m</option>
+        </select>
+        <button class="btn btn-outline-secondary" onclick="refreshDashboard(true)">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<!-- Stats Cards -->
+<div id="stats-cards" class="row g-4 mb-4">
+    <div class="col-md-3">
+        <div class="card text-bg-primary h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Due</h6>
+                        <h2 class="card-title mb-0" id="stat-due">@Model.Stats.DueJobs</h2>
+                        <small class="opacity-75"><span id="stat-scheduled">@Model.Stats.ScheduledJobs</span> scheduled for later</small>
+                    </div>
+                    <i class="bi bi-clock fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-warning h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Processing</h6>
+                        <h2 class="card-title mb-0" id="stat-processing">@Model.Stats.ProcessingJobs</h2>
+                    </div>
+                    <i class="bi bi-play-circle fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-success h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Succeeded (24h)</h6>
+                        <h2 class="card-title mb-0" id="stat-succeeded">@Model.Stats.SucceededLast24h</h2>
+                    </div>
+                    <i class="bi bi-check-circle fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-danger h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-subtitle mb-2">Failed (24h)</h6>
+                        <h2 class="card-title mb-0" id="stat-failed">@Model.Stats.FailedLast24h</h2>
+                        <small class="opacity-75"><span id="stat-retried">@Model.Stats.RetriedLast24h</span> failed attempts retried</small>
+                    </div>
+                    <i class="bi bi-x-circle fs-1 opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Charts -->
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Job Processing Over Time (Last 24h)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="jobsChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="row g-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-arrow-repeat me-2"></i>Periodic Jobs</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-around text-center">
+                            <div>
+                                <h3 class="text-success" id="stat-periodic-active">@Model.Stats.PeriodicJobsActive</h3>
+                                <p class="text-muted mb-0">Active</p>
+                            </div>
+                            <div>
+                                <h3 class="text-secondary" id="stat-periodic-inactive">@Model.Stats.PeriodicJobsInactive</h3>
+                                <p class="text-muted mb-0">Inactive</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Success Rate (24h)</h5>
+                    </div>
+                    <div class="card-body d-flex flex-column align-items-center justify-content-center gap-3" style="padding: 1rem;">
+                        <div style="max-height: 300px;">
+                            <canvas id="successChart"></canvas>
+                        </div>
+                        <div class="text-center">
+                            <h3 id="success-rate" class="mb-1">@Model.Stats.SuccessRateLast24h.ToString("F1")%</h3>
+                            <p class="text-muted mb-0 small">Success Rate</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+<script>
+    const apiBasePath = @Json.Serialize(Url.Content("~" + Model.Options.ApiBasePath));
+    const defaultRefreshInterval = @Model.Options.RefreshIntervalSeconds * 1000;
+    let refreshTimerId = null;
+
+    function startAutoRefresh(intervalMs) {
+        if (refreshTimerId) clearInterval(refreshTimerId);
+        refreshTimerId = setInterval(() => refreshDashboard(false), intervalMs);
+    }
+
+    // Initialize charts and auto-refresh
+    document.addEventListener('DOMContentLoaded', function() {
+        initCharts();
+
+        const dropdown = document.getElementById('refresh-interval');
+        const savedInterval = localStorage.getItem('xactjobs-refresh-interval');
+        const initialInterval = savedInterval ? parseInt(savedInterval) : defaultRefreshInterval;
+
+        // Set dropdown to saved/default value
+        dropdown.value = initialInterval;
+
+        // Start auto-refresh
+        startAutoRefresh(initialInterval);
+
+        // Handle dropdown changes
+        dropdown.addEventListener('change', function() {
+            const interval = parseInt(this.value);
+            startAutoRefresh(interval);
+            localStorage.setItem('xactjobs-refresh-interval', interval);
+        });
+    });
+
+    function initCharts() {
+        // Fetch chart data and initialize
+        fetch(`${apiBasePath}/chart-data?intervalMinutes=60`)
+            .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
+            .then(data => {
+                const ctx = document.getElementById('jobsChart').getContext('2d');
+                window.jobsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+                        datasets: [
+                            {
+                                label: 'Succeeded',
+                                data: data.map(d => d.succeeded),
+                                borderColor: '#198754',
+                                backgroundColor: 'rgba(25, 135, 84, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Failed',
+                                data: data.map(d => d.failed),
+                                borderColor: '#dc3545',
+                                backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                fill: true,
+                                tension: 0.4
+                            },
+                            {
+                                label: 'Retried attempts',
+                                data: data.map(d => d.retried),
+                                borderColor: '#fd7e14',
+                                backgroundColor: 'rgba(253, 126, 20, 0.1)',
+                                fill: false,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { position: 'top' }
+                        },
+                        scales: {
+                            y: { beginAtZero: true, ticks: { precision: 0 } }
+                        }
+                    }
+                });
+            });
+
+        // Success rate doughnut
+        const successCtx = document.getElementById('successChart').getContext('2d');
+        const succeeded = @Model.Stats.SucceededLast24h;
+        const failed = @Model.Stats.FailedLast24h;
+        window.successChart = new Chart(successCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Succeeded', 'Failed'],
+                datasets: [{
+                    data: [succeeded, failed],
+                    backgroundColor: ['#198754', '#dc3545'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'bottom' }
+                },
+                cutout: '70%'
+            }
+        });
+    }
+
+    function refreshStats() {
+        fetch(`${apiBasePath}/stats`)
+            .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
+            .then(data => {
+                document.getElementById('stat-due').textContent = data.dueJobs;
+                document.getElementById('stat-scheduled').textContent = data.scheduledJobs;
+                document.getElementById('stat-retried').textContent = data.retriedLast24h;
+                document.getElementById('stat-processing').textContent = data.processingJobs;
+                document.getElementById('stat-succeeded').textContent = data.succeededLast24h;
+                document.getElementById('stat-failed').textContent = data.failedLast24h;
+                document.getElementById('stat-periodic-active').textContent = data.periodicJobsActive;
+                document.getElementById('stat-periodic-inactive').textContent = data.periodicJobsInactive;
+                document.getElementById('success-rate').textContent = data.successRateLast24h.toFixed(1) + '%';
+
+                // Update success chart
+                if (window.successChart) {
+                    window.successChart.data.datasets[0].data = [data.succeededLast24h, data.failedLast24h];
+                    window.successChart.update();
+                }
+            });
+    }
+
+    function refreshChartData() {
+        fetch(`${apiBasePath}/chart-data?intervalMinutes=60`)
+            .then(r => r.ok ? r.json() : Promise.reject(new Error("HTTP " + r.status)))
+            .then(data => {
+                if (window.jobsChart) {
+                    window.jobsChart.data.labels = data.map(d => new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+                    window.jobsChart.data.datasets[0].data = data.map(d => d.succeeded);
+                    window.jobsChart.data.datasets[1].data = data.map(d => d.failed);
+                    window.jobsChart.data.datasets[2].data = data.map(d => d.retried);
+                    window.jobsChart.update();
+                }
+            });
+    }
+
+    // the chart has hourly intervals and costs a query per interval, so it refreshes at most once a minute
+    const chartRefreshIntervalMs = 60000;
+    let lastChartRefresh = Date.now();
+
+    function refreshDashboard(force) {
+        refreshStats();
+
+        if (force === true || Date.now() - lastChartRefresh >= chartRefreshIntervalMs) {
+            lastChartRefresh = Date.now();
+            refreshChartData();
+        }
+    }
+</script>
+}

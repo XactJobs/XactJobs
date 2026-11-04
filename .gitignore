@@ -485,3 +485,6 @@ $RECYCLE.BIN/
 
 # Claude Code local settings
 .claude/settings.local.json
+/src/XactJobs.TestWeb/xact_jobs.db
+/src/XactJobs.TestWeb/xact_jobs.db-shm
+/src/XactJobs.TestWeb/xact_jobs.db-wal

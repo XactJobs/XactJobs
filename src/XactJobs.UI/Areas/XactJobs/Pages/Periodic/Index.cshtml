@@ -1,0 +1,23 @@
+@page
+@model XactJobs.UI.Pages.Periodic.IndexModel
+@{
+    ViewData["Title"] = "Periodic Jobs";
+}
+
+<div class="row mb-4">
+    <div class="col">
+        <h1><i class="bi bi-arrow-repeat me-2"></i>Periodic Jobs</h1>
+        <p class="text-muted">Recurring job definitions. A paused job stays paused when the application starts again.</p>
+    </div>
+    <div class="col-auto">
+        <button class="btn btn-outline-secondary" onclick="htmx.trigger(document.body, 'xactjobs-changed')">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<div hx-get="@Model.TableUrl"
+     hx-trigger="every @(Model.Options.RefreshIntervalSeconds)s [!xactJobsIsBusy()], xactjobs-changed from:body"
+     hx-swap="innerHTML">
+    <partial name="_Table" model="Model" />
+</div>

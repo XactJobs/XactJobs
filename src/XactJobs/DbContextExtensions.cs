@@ -196,29 +196,7 @@ namespace XactJobs
                 .FirstOrDefaultAsync(j => j.Id == id, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (periodicJob == null)
-            {
-                periodicJob = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, cronExp, queue);
-
-                db.Set<XactJobPeriodic>().Add(periodicJob);
-
-                ScheduleNextRun(db, periodicJob);
-            }
-            else
-            {
-                var templateJob = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, cronExp, queue);
-
-                if (!periodicJob.IsCompatibleWith(templateJob))
-                {
-                    periodicJob.UpdateDefinition(templateJob);
-
-                    ScheduleNextRun(db, periodicJob);
-                }
-            }
-
-            periodicJob.Activate(true);
-
-            return periodicJob;
+            return AddOrUpdatePeriodic(db, periodicJob, lambdaExp, id, cronExp, queue);
         }
         
         internal static XactJobPeriodic JobAddOrUpdatePeriodic(this DbContext db,
@@ -230,6 +208,21 @@ namespace XactJobs
             var periodicJob = db.Set<XactJobPeriodic>()
                 .FirstOrDefault(j => j.Id == id);
 
+            return AddOrUpdatePeriodic(db, periodicJob, lambdaExp, id, cronExp, queue);
+        }
+
+        /// <summary>
+        /// A new periodic job starts active. An existing one keeps its active state, so a job paused with
+        /// <see cref="JobSetPeriodicActiveAsync"/> stays paused when the application starts again.
+        /// A paused job has no pending run: the next one is scheduled when it's resumed.
+        /// </summary>
+        private static XactJobPeriodic AddOrUpdatePeriodic(DbContext db,
+                                                           XactJobPeriodic? periodicJob,
+                                                           LambdaExpression lambdaExp,
+                                                           string id,
+                                                           string cronExp,
+                                                           string? queue)
+        {
             if (periodicJob == null)
             {
                 periodicJob = XactJobSerializer.FromExpressionPeriodic(lambdaExp, id, cronExp, queue);
@@ -246,13 +239,65 @@ namespace XactJobs
                 {
                     periodicJob.UpdateDefinition(templateJob);
 
-                    ScheduleNextRun(db, periodicJob);
+                    if (periodicJob.IsActive)
+                    {
+                        ScheduleNextRun(db, periodicJob);
+                    }
                 }
             }
 
-            periodicJob.Activate(true);
-
             return periodicJob;
+        }
+
+        /// <summary>
+        /// Pauses or resumes a periodic job. Like the other methods, it only changes the context: the changes are saved with SaveChanges.
+        /// <para>
+        /// Pausing removes the pending runs that are not running at the moment, so a paused job doesn't fill the history with skipped runs.
+        /// A run in progress finishes, and doesn't schedule the next one if the job is still paused by then.
+        /// Resuming schedules the next run, unless there already is one.
+        /// </para>
+        /// The active state is kept when the periodic job is ensured again, e.g. when the application starts.
+        /// </summary>
+        /// <returns>False if the periodic job doesn't exist.</returns>
+        public static async Task<bool> JobSetPeriodicActiveAsync(this DbContext dbContext, string id, bool isActive, CancellationToken cancellationToken)
+        {
+            var periodicJob = await dbContext.Set<XactJobPeriodic>()
+                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (periodicJob == null) return false;
+
+            if (periodicJob.IsActive == isActive) return true;
+
+            periodicJob.Activate(isActive);
+
+            var version = periodicJob.Version;
+
+            if (isActive)
+            {
+                var hasPendingRun = await dbContext.Set<XactJob>()
+                    .AnyAsync(j => j.PeriodicJobId == id && (j.PeriodicJobVersion ?? 1) == version, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (!hasPendingRun)
+                {
+                    ScheduleNextRun(dbContext, periodicJob);
+                }
+            }
+            else
+            {
+                var now = DateTime.UtcNow;
+
+                // a row claimed after this read gets deleted anyway: the runner then fails to save it, and rolls the run back
+                var pendingRuns = await dbContext.Set<XactJob>()
+                    .Where(j => j.PeriodicJobId == id && (j.LeasedUntil == null || j.LeasedUntil < now))
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                dbContext.Set<XactJob>().RemoveRange(pendingRuns);
+            }
+
+            return true;
         }
 
         internal static XactJob Reschedule(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount)

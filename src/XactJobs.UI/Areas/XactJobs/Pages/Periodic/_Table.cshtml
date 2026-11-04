@@ -1,0 +1,111 @@
+@model XactJobs.UI.Pages.Periodic.IndexModel
+
+@if (Model.Jobs.Items.Count == 0)
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>No periodic jobs configured.
+    </div>
+}
+else
+{
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>ID</th>
+                        <th>Type</th>
+                        <th>Method</th>
+                        <th>Queue</th>
+                        <th>Cron Expression</th>
+                        <th>Status</th>
+                        <th>Next Run</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var job in Model.Jobs.Items)
+                    {
+                        <tr>
+                            <td><code>@job.Id</code></td>
+                            <td title="@job.TypeName">@job.DisplayTypeName</td>
+                            <td><code>@job.MethodName</code></td>
+                            <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
+                            <td><code>@job.CronExpression</code></td>
+                            <td>
+                                @if (job.IsActive)
+                                {
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-secondary"><i class="bi bi-pause-circle"></i> Paused</span>
+                                }
+                                @if (job.IsRunning)
+                                {
+                                    <span class="badge bg-warning text-dark"><i class="bi bi-play-circle"></i> Running</span>
+                                }
+                            </td>
+                            <td>
+                                @if (job.IsRunning)
+                                {
+                                    <span class="text-muted">Running</span>
+                                }
+                                else if (job.NextRunAt.HasValue)
+                                {
+                                    @XactJobsPageModel.Time(job.NextRunAt)
+                                }
+                                else
+                                {
+                                    <span class="text-muted">-</span>
+                                }
+                            </td>
+                            <td class="text-nowrap">
+                                @if (job.IsActive)
+                                {
+                                    <button class="btn btn-sm btn-outline-warning me-1"
+                                            hx-post="@Model.PeriodicApiUrl(job, "/pause")"
+                                            hx-swap="none"
+                                            title="Pause: no more runs until it's resumed">
+                                        <i class="bi bi-pause-fill"></i>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm btn-outline-success me-1"
+                                            hx-post="@Model.PeriodicApiUrl(job, "/resume")"
+                                            hx-swap="none"
+                                            title="Resume">
+                                        <i class="bi bi-play-fill"></i>
+                                    </button>
+                                }
+                                @{
+                                    var triggerBlocked = !job.IsActive ? "The job is paused. Resume it to trigger it."
+                                        : job.IsRunning ? "The job is already running"
+                                        : null;
+                                }
+                                <span class="d-inline-block" tabindex="0" title="@(triggerBlocked ?? "Run now, instead of the next scheduled run")">
+                                    <button class="btn btn-sm btn-outline-primary me-1"
+                                            hx-post="@Model.PeriodicApiUrl(job, "/trigger")"
+                                            hx-swap="none"
+                                            disabled="@(triggerBlocked != null)">
+                                        <i class="bi bi-lightning"></i>
+                                    </button>
+                                </span>
+                                <button class="btn btn-sm btn-outline-danger"
+                                        hx-delete="@Model.PeriodicApiUrl(job, "")"
+                                        hx-confirm="Delete the periodic job '@job.Id'? If it's defined in code (WithPeriodicJob or JobEnsurePeriodic), it's added again when the application starts. Use Pause to stop it for good."
+                                        hx-swap="none"
+                                        title="Delete">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <partial name="~/Areas/XactJobs/Pages/Partials/_Pagination.cshtml" model="new PaginationModel(Model, Model.Jobs.Page, Model.Jobs.TotalPages, Model.Jobs.TotalCount)" />
+}
