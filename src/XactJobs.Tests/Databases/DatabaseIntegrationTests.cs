@@ -236,6 +236,30 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
     }
 
     [DockerFact]
+    public async Task CancelledJob_IsNotRetried_AndLosesItsWrites()
+    {
+        // a strategy that would retry
+        var host = CreateHost(options => options.WithRetryStrategy(new FixedRetryStrategy(DateTime.UtcNow.AddHours(1))));
+
+        var jobId = await EnqueueAsync(host, x => x.WriteAndCancelAsync());
+
+        await host.StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(host, db => db.JobHistory.AnyAsync(h => h.Id == jobId)), "the cancel to be recorded");
+
+        var history = await WithDbAsync(host, db => db.JobHistory.AsNoTracking().SingleAsync(h => h.Id == jobId));
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Equal(1, history.ErrorCount);
+        Assert.Equal(IntegrationJob.CancelReason, history.ErrorMessage);
+        Assert.NotNull(history.ErrorStackTrace);
+
+        Assert.False(await WithDbAsync(host, db => db.Jobs.AnyAsync(j => j.PeriodicJobId == null)));
+        Assert.Equal(0, await CountMarkersAsync(host));
+        Assert.False(_logs.HasErrors, _logs.ToString());
+    }
+
+    [DockerFact]
     public async Task Failure_WithLongErrorDetails_IsRecordedInFull()
     {
         const int messageLength = 5000;
@@ -880,6 +904,17 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
     public sealed class IntegrationJob(TestDbContext db, IntegrationJobState state)
     {
         public const string MarkerQueue = "marker";
+        public const string CancelReason = "The job can never succeed";
+
+        public async Task WriteAndCancelAsync()
+        {
+            // not saved: the runner saves it with the job's row, unless the job fails
+            db.JobEnqueue<IntegrationJob>(x => x.Run(), MarkerQueue);
+
+            await Task.Yield();
+
+            throw new XactJobCancelException(CancelReason);
+        }
 
         public void Run()
         {

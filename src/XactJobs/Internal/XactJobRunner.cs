@@ -391,7 +391,14 @@ namespace XactJobs.Internal
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+                if (XactJobCancelException.Find(ex) != null)
+                {
+                    _logger.LogWarning(ex, "{Queue}: Job cancelled itself, it won't be retried: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+                }
+                else
+                {
+                    _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+                }
 
                 await RecordFailureAsync(job, periodicJob, ex)
                     .ConfigureAwait(false);
@@ -598,11 +605,14 @@ namespace XactJobs.Internal
             };
 
             var errorCount = job.ErrorCount;
+            var cancel = XactJobCancelException.Find(ex);
 
             if (status == XactJobStatus.Failed)
             {
                 errorCount++;
-                var nextRunTimeUtc = _options.RetryStrategy.GetRetryTimeUtc(job, errorCount);
+
+                // the job said it can never succeed: no retries
+                var nextRunTimeUtc = cancel == null ? _options.RetryStrategy.GetRetryTimeUtc(job, errorCount) : null;
 
                 if (nextRunTimeUtc.HasValue)
                 {
@@ -614,7 +624,11 @@ namespace XactJobs.Internal
                 }
             }
 
-            dbContext.Set<XactJobHistory>().Add(XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, ex));
+            var history = cancel == null
+                ? XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, ex)
+                : CreateCancelledHistory(job, errorCount, cancel);
+
+            dbContext.Set<XactJobHistory>().Add(history);
 
             if (periodicJob != null 
                 && periodicJob.IsActive // a paused job has no pending run, the next one is scheduled when it's resumed
@@ -626,6 +640,27 @@ namespace XactJobs.Internal
             }
 
             dbContext.Set<XactJob>().Remove(job);
+        }
+
+        /// <summary>
+        /// The message is the one of the cancel exception, not of its innermost exception (the cause), which is in the details.
+        /// </summary>
+        private static XactJobHistory CreateCancelledHistory(XactJob job, int errorCount, XactJobCancelException cancel)
+        {
+            return new XactJobHistory(job.Id,
+                                      DateTime.UtcNow,
+                                      XactJobStatus.Cancelled,
+                                      job.ScheduledAt,
+                                      job.TypeName,
+                                      job.MethodName,
+                                      job.MethodArgs,
+                                      job.Queue,
+                                      job.PeriodicJobId,
+                                      job.CronExpression,
+                                      job.PeriodicJobVersion,
+                                      errorCount,
+                                      cancel.Message,
+                                      cancel.ToString());
         }
 
         private string GetQueueDisplayName()

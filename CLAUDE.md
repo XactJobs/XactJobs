@@ -92,7 +92,7 @@ XactJobs is a .NET library for background job processing with full database tran
 - `Services/XactJobsUIService.cs` - queries and actions. Actions must follow the core's rules: never update a job row in place (the scheduled time is part of the primary key) nor touch a leased row, and never add a second pending run to a periodic job
 - `Api/XactJobsApiEndpoints.cs` - REST API, access (local requests only by default, or an authorization policy) and antiforgery checks
 - `wwwroot/lib/` - Bootstrap, Bootstrap Icons, Chart.js and htmx, copied from their npm packages (source map comments removed), so the dashboard needs no CDN. Times are rendered as UTC `<time>` elements and shown in the browser's time zone by `wwwroot/js/xactjobs.js`
-- History categories: `Failed` in the history is an attempt the runner already rescheduled ("Retried"); a job that ran out of retries is `Cancelled` with a stack trace ("Failed"); a job cancelled from the dashboard is `Cancelled` without one
+- History categories: `Failed` in the history is an attempt the runner already rescheduled ("Retried"); a job that ran out of retries, or threw `XactJobCancelException`, is `Cancelled` with a stack trace ("Failed"); a job cancelled from the dashboard is `Cancelled` without one
 
 ### Database Entities
 
