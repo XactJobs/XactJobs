@@ -7,7 +7,7 @@ public enum HistoryCategory
 {
     /// <summary>Completed.</summary>
     Succeeded,
-    /// <summary>Ran out of retries: recorded as cancelled, with the error of the last attempt.</summary>
+    /// <summary>Ran out of retries, or threw <see cref="XactJobCancelException"/>: recorded as cancelled, with the error and its stack trace.</summary>
     Failed,
     /// <summary>Cancelled from the dashboard: recorded as cancelled, without an error stack trace.</summary>
     Cancelled,

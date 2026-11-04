@@ -376,7 +376,7 @@ The API endpoints that change data require an antiforgery token, which the dashb
 - **Scheduled** - the pending and running jobs
   - *Run now* makes a pending job due now
   - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead
-- **History** - succeeded, failed (out of retries), cancelled, retried attempts and skipped runs
+- **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts and skipped runs
   - *Retry* enqueues a failed or cancelled job again, as a new job. A run of a periodic job is enqueued as a one-off job
 - **Periodic** - the periodic jobs, with their next run
   - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts again, even if `JobEnsurePeriodic` or `WithPeriodicJob` defines it
@@ -420,6 +420,26 @@ worker is free. A slow job only occupies its own slot, and the worker keeps clai
 
 If a poll fills all the free slots there is likely a backlog, so the worker polls again as soon as a slot frees up. Otherwise it waits for
 the polling interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own queue.
+
+## Failures and Retries
+
+When a job throws, its database writes are rolled back, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to an hour), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
+
+A job that finds it can never succeed, e.g. because the data it works on is gone, throws `XactJobCancelException` to stop without retries:
+
+```csharp
+public async Task SendInvoiceAsync(int orderId)
+{
+    var order = await db.Orders.FindAsync(orderId)
+        ?? throw new XactJobCancelException($"Order {orderId} doesn't exist anymore");
+
+    // ...
+}
+```
+
+The job moves to the history as cancelled right away, with the exception's message as the error. As with any failure, its database writes are rolled back. The exception is also found when it's wrapped in other exceptions. For a periodic job, only the current run is cancelled: the next one is scheduled as usual.
+
+A job that has nothing to do should just return: it's recorded as completed.
 
 ## Stopping
 When the application stops, the workers stop polling and running jobs get `ShutdownTimeoutInSeconds` to finish. Then the cancellation token passed to the jobs is cancelled, and they get
