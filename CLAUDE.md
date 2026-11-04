@@ -39,7 +39,7 @@ dotnet test --verbosity=detailed src/XactJobs.Tests/XactJobs.Tests.csproj
 dotnet test --collect:"XPlat Code Coverage" src/XactJobs.Tests/XactJobs.Tests.csproj
 ```
 
-The dashboard is tested in `src/XactJobs.UI.Tests/` (SQLite and an in-memory test server).
+The dashboard is tested in `src/XactJobs.UI.Tests/` (SQLite and an in-memory test server), and its queries and actions on every database in `src/XactJobs.Tests/Databases/DashboardIntegrationTests.cs`.
 
 The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. The first run downloads the images (about 5 GB).
 
@@ -49,9 +49,9 @@ On a small machine (e.g. 8 GB of RAM), run them one framework and one database a
 dotnet build src/XactJobs.Tests/XactJobs.Tests.csproj
 dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName!~XactJobs.Tests.Databases&FullyQualifiedName!~XactJobs.Tests.Postgres"
 dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Postgres."
-# then each class of Databases/: PostgresIntegrationTests, OfficialMySqlIntegrationTests,
-# PomeloMySqlIntegrationTests (net9.0 only), SqlServerIntegrationTests, OracleIntegrationTests
-dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Databases.OracleIntegrationTests"
+# then each database of Databases/: Postgres, OfficialMySql, PomeloMySql (net9.0 only), SqlServer, Oracle
+# (the prefix runs both suites of the database: its *IntegrationTests and *DashboardTests)
+dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Databases.Oracle"
 ```
 
 Then the same with `-f net10.0`.
