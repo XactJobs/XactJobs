@@ -28,6 +28,7 @@ namespace XactJobs.Internal
     internal static class XactJobSerializer
     {
         private static readonly ConcurrentDictionary<MethodInfo, AsyncStateMachineAttribute?> _asyncStateMachineAttributeCache = new();
+        private static readonly ConcurrentDictionary<MethodInfo, string> _methodSignatureCache = new();
 
         internal static XactJob FromExpression(LambdaExpression lambdaExp, DateTime? scheduleAtUtc, string? queue)
         {
@@ -150,6 +151,11 @@ namespace XactJobs.Internal
         /// The types have no assembly names, so that pending jobs still run after a type moves to another assembly.
         /// </summary>
         internal static string GetMethodSignature(MethodInfo method)
+        {
+            return _methodSignatureCache.GetOrAdd(method, FormatMethodSignature);
+        }
+
+        private static string FormatMethodSignature(MethodInfo method)
         {
             var parameterTypes = method.GetParameters().Select(p => GetSignatureTypeName(p.ParameterType));
 
