@@ -41,7 +41,20 @@ dotnet test --collect:"XPlat Code Coverage" src/XactJobs.Tests/XactJobs.Tests.cs
 
 The dashboard is tested in `src/XactJobs.UI.Tests/` (SQLite and an in-memory test server).
 
-The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. The first run downloads the images.
+The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. The first run downloads the images (about 5 GB).
+
+On a small machine (e.g. 8 GB of RAM), run them one framework and one database at a time: `dotnet test` runs both frameworks at once, and xUnit runs the database classes in parallel, which starts several SQL Server and Oracle containers together, and they fail to start or time out.
+
+```bash
+dotnet build src/XactJobs.Tests/XactJobs.Tests.csproj
+dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName!~XactJobs.Tests.Databases&FullyQualifiedName!~XactJobs.Tests.Postgres"
+dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Postgres."
+# then each class of Databases/: PostgresIntegrationTests, OfficialMySqlIntegrationTests,
+# PomeloMySqlIntegrationTests (net9.0 only), SqlServerIntegrationTests, OracleIntegrationTests
+dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Databases.OracleIntegrationTests"
+```
+
+Then the same with `-f net10.0`.
 
 ## Code Quality
 
