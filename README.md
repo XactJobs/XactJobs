@@ -467,6 +467,10 @@ The API endpoints that change data require an antiforgery token, which the dashb
 
 ![Periodic jobs: their cron expressions and next runs, one of them paused](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/periodic.png)
 
+![Active batches: their progress, failed jobs and waiting continuations](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/batches.png)
+
+![A batch: its jobs left, the continuations that wait for it, and its history](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/batch.png)
+
 A job that is running can't be changed: the dashboard never touches a job a worker has leased.
 
 Pausing and resuming are also available in code, with `dbContext.JobSetPeriodicActiveAsync(id, isActive, cancellationToken)` followed by `SaveChanges`.
