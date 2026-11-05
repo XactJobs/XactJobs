@@ -347,6 +347,194 @@ public class XactJobsUIServiceTests : IDisposable
         Assert.Equal([QueueNames.Default, "emails", QueueNames.Priority, "reports"], queues);
     }
 
+    [Fact]
+    public async Task Scheduled_ShowsAwaitingContinuations_WithTheJobsLeftInTheirBatch()
+    {
+        var (batch, continuation) = await AddBatchAsync();
+
+        var jobs = (await WithServiceAsync(s => s.GetScheduledJobsAsync(1, 20))).Items;
+
+        var waiting = Assert.Single(jobs, j => j.IsAwaitingBatch);
+
+        Assert.Equal(continuation, waiting.Id);
+        Assert.Equal(batch, waiting.AwaitsBatchId);
+        Assert.Equal(2, waiting.BatchJobsLeft);
+        Assert.Equal("on failure", waiting.DisplayCondition);
+        Assert.All(jobs.Where(j => !j.IsAwaitingBatch), j => Assert.Equal(batch, j.BatchId));
+
+        Assert.Equal(2, (await WithServiceAsync(s => s.GetJobByIdAsync(continuation)))!.BatchJobsLeft);
+    }
+
+    [Fact]
+    public async Task Stats_CountAwaitingContinuationsApartFromScheduledJobs()
+    {
+        await AddBatchAsync();
+
+        var stats = await WithServiceAsync(s => s.GetDashboardStatsAsync());
+
+        Assert.Equal(2, stats.ScheduledJobs);
+        Assert.Equal(1, stats.AwaitingContinuations);
+    }
+
+    [Fact]
+    public async Task AwaitingContinuation_CantRunNow_ButCanBeCancelled()
+    {
+        var (batch, continuation) = await AddBatchAsync();
+
+        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RunJobNowAsync(continuation))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.CancelJobAsync(continuation, null))).Status);
+
+        await using var db = CreateDb();
+
+        var history = await db.JobHistory.SingleAsync();
+
+        Assert.Equal(continuation, history.Id);
+        Assert.Equal(batch, history.AwaitsBatchId);
+        Assert.Equal(XactJobContinuation.OnFailure, history.ContinuationCondition);
+        Assert.True(history.ScheduledAt < DateTime.UtcNow.AddMinutes(1), "The history got the reserved scheduled time");
+    }
+
+    [Fact]
+    public async Task Batches_ListActiveAndFinishedBatches_WithTheirCounts()
+    {
+        var (active, _) = await AddBatchAsync();
+        var finished = Guid.NewGuid();
+
+        await AddBatchHistoryAsync(11, XactJobStatus.Completed, active);
+        await AddBatchHistoryAsync(12, XactJobStatus.Cancelled, active);
+        await AddBatchHistoryAsync(13, XactJobStatus.Failed, active); // a retried attempt: its job is still pending
+        await AddBatchHistoryAsync(21, XactJobStatus.Completed, finished, processedAt: DateTime.UtcNow.AddMinutes(-30));
+        await AddBatchHistoryAsync(22, XactJobStatus.Skipped, finished, processedAt: DateTime.UtcNow.AddMinutes(-20));
+
+        var activeBatch = Assert.Single((await WithServiceAsync(s => s.GetBatchesAsync(BatchState.Active, 1, 20))).Items);
+
+        Assert.Equal(active, activeBatch.Id);
+        Assert.Equal(2, activeBatch.PendingJobs);
+        Assert.Equal(1, activeBatch.SucceededJobs);
+        Assert.Equal(1, activeBatch.FailedJobs);
+        Assert.Equal(1, activeBatch.AwaitingContinuations);
+        Assert.Equal(4, activeBatch.TotalJobs);
+        Assert.NotNull(activeBatch.NextRunAt);
+        Assert.Equal("SampleJobs", activeBatch.DisplayTypeName);
+        Assert.False(activeBatch.IsFinished);
+
+        var finishedBatch = Assert.Single((await WithServiceAsync(s => s.GetBatchesAsync(BatchState.Finished, 1, 20))).Items);
+
+        Assert.Equal(finished, finishedBatch.Id);
+        Assert.Equal(1, finishedBatch.SucceededJobs);
+        Assert.Equal(1, finishedBatch.FailedJobs);
+        Assert.True(finishedBatch.IsFinished);
+        Assert.NotNull(finishedBatch.LastProcessedAt);
+        Assert.Equal("SampleJobs", finishedBatch.DisplayTypeName);
+    }
+
+    [Fact]
+    public async Task Batch_HasItsJobsHistoryAndContinuations()
+    {
+        var (batch, continuation) = await AddBatchAsync();
+
+        await AddBatchHistoryAsync(11, XactJobStatus.Completed, batch);
+        await AddBatchHistoryAsync(31, XactJobStatus.Skipped, batchId: null, awaitsBatchId: batch);
+
+        long next;
+        Guid continuationBatch;
+
+        await using (var db = CreateDb())
+        {
+            // a continuation of the continuation: the waiting continuation gets a batch of its own
+            var row = await db.Jobs.SingleAsync(j => j.Id == continuation);
+            continuationBatch = Guid.NewGuid();
+
+            db.Jobs.Remove(row);
+            db.Jobs.Add(new XactJob(0, row.ScheduledAt, row.TypeName, row.MethodName, row.MethodArgs, row.Queue)
+            {
+                BatchId = continuationBatch,
+                AwaitsBatchId = batch,
+                ContinuationCondition = XactJobContinuation.OnFailure
+            });
+
+            var nextJob = db.JobBatch(continuationBatch).ContinueWith<SampleJobs>(x => x.Run());
+
+            await db.SaveChangesAsync();
+
+            next = nextJob.Id;
+        }
+
+        var details = await WithServiceAsync(s => s.GetBatchAsync(batch));
+
+        Assert.NotNull(details);
+        Assert.Equal(2, details.Jobs.Count);
+        Assert.Equal(11, Assert.Single(details.History).Id);
+        Assert.Equal(continuationBatch, Assert.Single(details.PendingContinuations).BatchId);
+        Assert.Equal(31, Assert.Single(details.FinishedContinuations).Id);
+        Assert.Empty(details.ContinuesBatches);
+        Assert.Equal(2, details.Batch.PendingJobs);
+
+        var chained = await WithServiceAsync(s => s.GetBatchAsync(continuationBatch));
+
+        Assert.NotNull(chained);
+        Assert.Equal([batch], chained.ContinuesBatches);
+        Assert.Equal(next, Assert.Single(chained.PendingContinuations).Id);
+        Assert.Equal(1, Assert.Single(chained.PendingContinuations).BatchJobsLeft);
+
+        Assert.Null(await WithServiceAsync(s => s.GetBatchAsync(Guid.NewGuid())));
+    }
+
+    [Fact]
+    public async Task Retry_OfASkippedContinuation_EnqueuesANewJobOutsideOfAnyBatch()
+    {
+        var batch = Guid.NewGuid();
+
+        await AddBatchHistoryAsync(31, XactJobStatus.Skipped, batchId: Guid.NewGuid(), awaitsBatchId: batch);
+
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RetryJobAsync(31))).Status);
+
+        await using var db = CreateDb();
+
+        var job = await db.Jobs.SingleAsync();
+
+        Assert.Null(job.BatchId);
+        Assert.Null(job.AwaitsBatchId);
+        Assert.Null(job.ContinuationCondition);
+        Assert.True(job.ScheduledAt <= DateTime.UtcNow);
+    }
+
+    /// <summary>
+    /// A batch of two jobs scheduled in an hour, and a continuation on failure.
+    /// </summary>
+    private async Task<(Guid Batch, long Continuation)> AddBatchAsync()
+    {
+        await using var db = CreateDb();
+
+        var batch = db.JobBatch()
+            .ScheduleIn<SampleJobs>(x => x.Run(), TimeSpan.FromHours(1))
+            .ScheduleIn<SampleJobs>(x => x.Send("a", 1), TimeSpan.FromHours(1));
+
+        var continuation = batch.ContinueWith<SampleJobs>(x => x.Run(), XactJobContinuation.OnFailure);
+
+        await db.SaveChangesAsync();
+
+        return (batch.Id, continuation.Id);
+    }
+
+    private async Task AddBatchHistoryAsync(long id, XactJobStatus status, Guid? batchId, Guid? awaitsBatchId = null, DateTime? processedAt = null)
+    {
+        await using var db = CreateDb();
+
+        var at = processedAt ?? DateTime.UtcNow.AddMinutes(-5);
+
+        db.JobHistory.Add(new XactJobHistory(id, at, status, at.AddMinutes(-1), typeof(SampleJobs).AssemblyQualifiedName!, "Run()", "[]", QueueNames.Default,
+                                             errorMessage: status == XactJobStatus.Completed ? null : "Boom",
+                                             errorStackTrace: status == XactJobStatus.Completed ? null : "at Somewhere()")
+        {
+            BatchId = batchId,
+            AwaitsBatchId = awaitsBatchId,
+            ContinuationCondition = awaitsBatchId != null ? XactJobContinuation.OnSuccess : null
+        });
+
+        await db.SaveChangesAsync();
+    }
+
     private UiTestDbContext CreateDb()
     {
         return new UiTestDbContext(new DbContextOptionsBuilder<UiTestDbContext>().UseSqlite(_connection).Options);

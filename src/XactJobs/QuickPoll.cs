@@ -42,7 +42,11 @@ namespace XactJobs
             return true;
         }
 
-        internal bool TryNotifyContinuationsReady(string queue)
+        /// <summary>
+        /// Wakes up the workers of the queue to claim the continuations of finished batches, without waiting for their regular check.
+        /// The workers do this on their own when they finish a batch; the dashboard does it when it cancels the last job of one.
+        /// </summary>
+        public bool TryNotifyContinuationsReady(string queue)
         {
             if (!_channels.TryGetValue(queue, out var channel)) return false;
 

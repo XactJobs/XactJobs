@@ -65,6 +65,77 @@ public partial class DashboardWebTests : IAsyncDisposable
         Assert.Equal(!url.Contains("handler=Table") && !url.StartsWith("/api/"), body.Contains("<html"));
     }
 
+    private const string SeedBatch = "3f2a6c1e-8d4b-4c7a-9e0f-1b2c3d4e5f60";
+
+    [Theory]
+    [InlineData("/XactJobs/batches")]
+    [InlineData("/XactJobs/batches/finished")]
+    [InlineData("/XactJobs/batches/active?handler=Table&p=1")]
+    [InlineData("/XactJobs/batch/" + SeedBatch)]
+    [InlineData("/XactJobs/batch/" + SeedBatch + "?handler=Table&p=1")]
+    [InlineData("/XactJobs/batch/00000000-0000-0000-0000-000000000001")]
+    [InlineData("/XactJobs/history/skipped")]
+    [InlineData("/api/XactJobs/batches?state=finished")]
+    [InlineData("/api/XactJobs/batches/" + SeedBatch)]
+    public async Task BatchPages_RenderWithData(string url)
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedBatchAsync();
+
+        var response = await client.GetAsync(url);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.True(response.StatusCode == HttpStatusCode.OK, $"{response.StatusCode}: {body}");
+        Assert.Equal(!url.Contains("handler=Table") && !url.StartsWith("/api/"), body.Contains("<html"));
+    }
+
+    [Fact]
+    public async Task ScheduledPage_ShowsAwaitingContinuations_AndLinksToTheirBatch()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedBatchAsync();
+
+        var table = await client.GetStringAsync("/XactJobs/scheduled?handler=Table&p=1");
+
+        Assert.Contains("Awaiting batch", table);
+        Assert.Contains("1 left", table);
+        Assert.Contains("After its batch", table);
+        Assert.Contains("The continuation starts when its batch is finished", table);
+        Assert.Contains($"href=\"/XactJobs/batch/{SeedBatch}\"", table);
+        Assert.Contains("on failure", table);
+    }
+
+    [Fact]
+    public async Task BatchesPage_ShowsTheProgress_AndSkippedContinuationsCanBeRetried()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedBatchAsync();
+
+        var batches = await client.GetStringAsync("/XactJobs/batches?handler=Table&p=1");
+
+        Assert.Contains("<code>3f2a6c1e</code>", batches);
+        Assert.Contains("2 of 3 done", batches);
+        Assert.Contains("1 failed", batches);
+        Assert.Contains("1 waiting", batches);
+
+        var skipped = await client.GetStringAsync("/XactJobs/history/skipped?handler=Table&p=1");
+
+        Assert.Contains("/api/XactJobs/history/302/retry", skipped);
+        Assert.Contains("had no failed jobs", skipped);
+    }
+
+    [Fact]
+    public async Task BatchApi_RejectsAnUnknownState_AndAnUnknownBatchIsNotFound()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/batches?state=nope")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/XactJobs/batches/" + Guid.NewGuid())).StatusCode);
+    }
+
     [Fact]
     public async Task Pages_LoadNothingFromOtherSites_AndShowTimesForTheBrowser()
     {
@@ -284,6 +355,35 @@ public partial class DashboardWebTests : IAsyncDisposable
         if (roles != null) request.Headers.Add(TestAuthHandler.RolesHeader, roles);
 
         return client.SendAsync(request);
+    }
+
+    /// <summary>
+    /// A batch with a pending job, a job that succeeded and one that failed, a waiting continuation, and a skipped one.
+    /// </summary>
+    private async Task SeedBatchAsync()
+    {
+        var batchId = Guid.Parse(SeedBatch);
+        var typeName = typeof(SampleJobs).AssemblyQualifiedName!;
+
+        await WithDbAsync(async db =>
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(1), typeName, "Run()", "[]", QueueNames.Default) { BatchId = batchId });
+
+            db.JobBatch(batchId).ContinueWith<SampleJobs>(x => x.Run(), XactJobContinuation.OnFailure);
+
+            db.JobHistory.Add(new XactJobHistory(300, DateTime.UtcNow.AddMinutes(-5), XactJobStatus.Completed, DateTime.UtcNow.AddMinutes(-6),
+                                                 typeName, "Run()", "[]", QueueNames.Default) { BatchId = batchId });
+            db.JobHistory.Add(new XactJobHistory(301, DateTime.UtcNow.AddMinutes(-4), XactJobStatus.Cancelled, DateTime.UtcNow.AddMinutes(-6),
+                                                 typeName, "Run()", "[]", QueueNames.Default, errorCount: 3, errorMessage: "Boom", errorStackTrace: "at Somewhere()") { BatchId = batchId });
+            db.JobHistory.Add(new XactJobHistory(302, DateTime.UtcNow.AddMinutes(-3), XactJobStatus.Skipped, DateTime.UtcNow.AddMinutes(-3),
+                                                 typeName, "Run()", "[]", QueueNames.Default, errorMessage: "Skipped: the batch 1 had no failed jobs")
+            {
+                AwaitsBatchId = Guid.NewGuid(),
+                ContinuationCondition = XactJobContinuation.OnFailure
+            });
+
+            return await db.SaveChangesAsync();
+        });
     }
 
     private async Task SeedAsync()

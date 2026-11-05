@@ -24,11 +24,13 @@ public class IndexModel : XactJobsPageModel
         (HistoryCategory.Failed, "Failed", "bi-x-circle", "Jobs that ran out of retries, or cancelled themselves because they can never succeed. Retrying enqueues them again as new jobs."),
         (HistoryCategory.Cancelled, "Cancelled", "bi-slash-circle", "Jobs cancelled from the dashboard. Retrying enqueues them again as new jobs."),
         (HistoryCategory.Retried, "Retried attempts", "bi-arrow-repeat", "Failed attempts, after which the job was scheduled to run again automatically"),
-        (HistoryCategory.Skipped, "Skipped", "bi-skip-forward-circle", "Runs of periodic jobs that were paused, deleted or changed"),
+        (HistoryCategory.Skipped, "Skipped", "bi-skip-forward-circle", "Runs of periodic jobs that were paused, deleted or changed, and continuations whose condition wasn't met. Retrying a continuation enqueues it again as a new job."),
     ];
 
     public (HistoryCategory Category, string Title, string Icon, string Description) Current =>
         Categories.First(c => c.Category == Category);
+
+    public bool HasActions => Category is HistoryCategory.Failed or HistoryCategory.Cancelled or HistoryCategory.Skipped;
 
     public bool ShowsErrors => Category is HistoryCategory.Failed or HistoryCategory.Cancelled or HistoryCategory.Retried;
 

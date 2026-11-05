@@ -24,7 +24,11 @@ else
                             <th>Failed Attempts</th>
                             <th>Error</th>
                         }
-                        @if (Model.Category is HistoryCategory.Failed or HistoryCategory.Cancelled)
+                        @if (Model.Category is HistoryCategory.Skipped)
+                        {
+                            <th>Reason</th>
+                        }
+                        @if (Model.HasActions)
                         {
                             <th>Actions</th>
                         }
@@ -44,6 +48,8 @@ else
                                         <i class="bi bi-arrow-repeat"></i> @job.PeriodicJobId
                                     </span>
                                 }
+                                <partial name="~/Areas/XactJobs/Pages/Partials/_BatchBadges.cshtml"
+                                         model="new BatchBadgesModel(Model, job.BatchId, job.AwaitsBatchId, job.DisplayCondition)" />
                             </td>
                             <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
                             <td>@XactJobsPageModel.Time(job.ScheduledAt)</td>
@@ -80,21 +86,14 @@ else
                                     }
                                 </td>
                             }
-                            @if (Model.Category is HistoryCategory.Failed or HistoryCategory.Cancelled)
+                            @if (Model.Category is HistoryCategory.Skipped)
+                            {
+                                <td class="text-muted small">@job.ErrorMessage</td>
+                            }
+                            @if (Model.HasActions)
                             {
                                 <td>
-                                    @if (job.CanRetry)
-                                    {
-                                        <button class="btn btn-sm btn-outline-warning text-nowrap"
-                                                hx-post="@Model.ApiUrl($"/history/{job.Id}/retry")"
-                                                hx-confirm="@(job.PeriodicJobId != null
-                                                    ? $"Run job #{job.Id} again? It's enqueued as a one-off job, apart from the runs of the periodic job '{job.PeriodicJobId}'."
-                                                    : $"Run job #{job.Id} again, as a new job?")"
-                                                hx-swap="none"
-                                                title="Enqueue the job again, as a new job">
-                                            <i class="bi bi-arrow-counterclockwise"></i> Retry
-                                        </button>
-                                    }
+                                    <partial name="~/Areas/XactJobs/Pages/Partials/_RetryButton.cshtml" model="new RetryButtonModel(Model, job)" />
                                 </td>
                             }
                         </tr>

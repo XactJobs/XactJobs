@@ -1,0 +1,16 @@
+@model BatchDto
+@{
+    var total = Math.Max(Model.TotalJobs, 1);
+    string Percent(int count) => (100.0 * count / total).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}
+<div class="progress-stacked" style="height: 0.75rem;" title="@Model.SucceededJobs succeeded, @Model.FailedJobs failed, @Model.PendingJobs left">
+    <div class="progress" role="progressbar" style="width: @Percent(Model.SucceededJobs)"><div class="progress-bar bg-success"></div></div>
+    <div class="progress" role="progressbar" style="width: @Percent(Model.FailedJobs)"><div class="progress-bar bg-danger"></div></div>
+</div>
+<div class="small text-muted mt-1 text-nowrap">
+    @(Model.SucceededJobs + Model.FailedJobs) of @Model.TotalJobs done
+    @if (Model.FailedJobs > 0)
+    {
+        <span class="text-danger">· @Model.FailedJobs failed</span>
+    }
+</div>

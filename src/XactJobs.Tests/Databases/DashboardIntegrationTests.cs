@@ -239,6 +239,83 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         Assert.Equal("emails", Assert.Single(emails.Items).Queue);
     }
 
+    [DockerFact]
+    public async Task Batches_AreListedWithTheirCounts_AndShownWithTheirJobsAndContinuations()
+    {
+        var finished = Guid.NewGuid();
+        var typeName = typeof(DashboardIntegrationTests).AssemblyQualifiedName!;
+
+        var (active, continuation) = await WithDbAsync(async db =>
+        {
+            var batch = db.JobBatch()
+                .ScheduleIn<DashboardIntegrationTests>(x => x.GetHashCode(), TimeSpan.FromHours(1), "not-polled")
+                .ScheduleIn<DashboardIntegrationTests>(x => x.GetHashCode(), TimeSpan.FromHours(2), "not-polled");
+
+            var continuation = batch.ContinueWith<DashboardIntegrationTests>(x => x.GetHashCode(), XactJobContinuation.OnFailure, "not-polled");
+
+            XactJobHistory History(long id, XactJobStatus status, Guid? batchId, Guid? awaitsBatchId = null, int minutesAgo = 5) =>
+                new(id, DateTime.UtcNow.AddMinutes(-minutesAgo), status, DateTime.UtcNow.AddMinutes(-minutesAgo - 1), typeName, "Run()", "[]", QueueNames.Default)
+                {
+                    BatchId = batchId,
+                    AwaitsBatchId = awaitsBatchId
+                };
+
+            db.JobHistory.AddRange(
+                History(11, XactJobStatus.Completed, batch.Id),
+                History(12, XactJobStatus.Cancelled, batch.Id),
+                History(13, XactJobStatus.Failed, batch.Id),
+                History(21, XactJobStatus.Completed, finished, minutesAgo: 30),
+                History(22, XactJobStatus.Skipped, finished, minutesAgo: 20),
+                History(31, XactJobStatus.Skipped, null, awaitsBatchId: finished, minutesAgo: 10));
+
+            await db.SaveChangesAsync();
+
+            return (batch.Id, continuation.Id);
+        });
+
+        var activeBatch = Assert.Single((await WithServiceAsync(s => s.GetBatchesAsync(BatchState.Active, 1, 20))).Items);
+
+        Assert.Equal(active, activeBatch.Id);
+        Assert.Equal(2, activeBatch.PendingJobs);
+        Assert.Equal(1, activeBatch.SucceededJobs);
+        Assert.Equal(1, activeBatch.FailedJobs);
+        Assert.Equal(1, activeBatch.AwaitingContinuations);
+        Assert.NotNull(activeBatch.NextRunAt);
+        Assert.True(activeBatch.NextRunAt < DateTime.UtcNow.AddHours(1.5), "The next run is the earliest one");
+        Assert.NotNull(activeBatch.TypeName);
+
+        var finishedBatch = Assert.Single((await WithServiceAsync(s => s.GetBatchesAsync(BatchState.Finished, 1, 20))).Items);
+
+        Assert.Equal(finished, finishedBatch.Id);
+        Assert.Equal(1, finishedBatch.SucceededJobs);
+        Assert.Equal(1, finishedBatch.FailedJobs);
+        Assert.Equal(typeName, finishedBatch.TypeName);
+
+        var details = await WithServiceAsync(s => s.GetBatchAsync(active));
+
+        Assert.NotNull(details);
+        Assert.Equal(2, details.Jobs.Count);
+        Assert.Equal(3, details.History.Count);
+
+        var waiting = Assert.Single(details.PendingContinuations);
+
+        Assert.Equal(continuation, waiting.Id);
+        Assert.True(waiting.IsAwaitingBatch);
+        Assert.Equal(2, waiting.BatchJobsLeft);
+
+        var finishedDetails = await WithServiceAsync(s => s.GetBatchAsync(finished));
+
+        Assert.NotNull(finishedDetails);
+        Assert.Equal(31, Assert.Single(finishedDetails.FinishedContinuations).Id);
+
+        var stats = await WithServiceAsync(s => s.GetDashboardStatsAsync());
+
+        Assert.Equal(2, stats.ScheduledJobs);
+        Assert.Equal(1, stats.AwaitingContinuations);
+
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RetryJobAsync(31))).Status);
+    }
+
     private TestDbContext CreateDb()
     {
         var options = new DbContextOptionsBuilder<TestDbContext>();

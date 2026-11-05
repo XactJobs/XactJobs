@@ -3,6 +3,20 @@ namespace XactJobs.UI.Services.Models;
 internal static class DisplayNames
 {
     /// <summary>
+    /// The first 8 hex digits of a batch id, like a short git hash. The full id is in the tooltip and the link.
+    /// </summary>
+    public static string Batch(Guid batchId) => batchId.ToString("N")[..8];
+
+    public static string? Condition(XactJobContinuation? condition) => condition switch
+    {
+        null => null,
+        XactJobContinuation.OnSuccess => "on success",
+        XactJobContinuation.OnFailure => "on failure",
+        XactJobContinuation.OnFinish => "on finish",
+        _ => condition.ToString(),
+    };
+
+    /// <summary>
     /// The type's name without its namespace and assembly, e.g. "OrderJobs",
     /// and "Maintenance&lt;AppDbContext&gt;" for "Ns.Maintenance`1[[Ns.AppDbContext, App]], Lib".
     /// </summary>

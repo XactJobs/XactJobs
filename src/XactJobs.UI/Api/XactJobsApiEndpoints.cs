@@ -157,6 +157,31 @@ internal static class XactJobsApiEndpoints
             ToResult(httpContext, await service.RetryJobAsync(id, ct)))
             .WithName("XactJobsRetryJob");
 
+        // Batches
+        group.MapGet("/batches", async (
+            IXactJobsUIService service,
+            [FromQuery] string? state,
+            [FromQuery] int? page,
+            [FromQuery] int? pageSize,
+            CancellationToken ct) =>
+        {
+            var batchState = BatchState.Active;
+
+            if (!string.IsNullOrEmpty(state) && !(Enum.TryParse(state, ignoreCase: true, out batchState) && Enum.IsDefined(batchState)))
+            {
+                return Results.BadRequest(new { message = $"Unknown state, use one of: {string.Join(", ", Enum.GetNames<BatchState>())}." });
+            }
+
+            return Results.Ok(await service.GetBatchesAsync(batchState, page ?? 1, pageSize ?? options.DefaultPageSize, ct));
+        }).WithName("XactJobsGetBatches");
+
+        group.MapGet("/batches/{id:guid}", async (
+            IXactJobsUIService service, Guid id, CancellationToken ct) =>
+        {
+            var batch = await service.GetBatchAsync(id, ct);
+            return batch is not null ? Results.Ok(batch) : Results.NotFound();
+        }).WithName("XactJobsGetBatch");
+
         // Periodic job endpoints
         group.MapGet("/periodic", async (
             IXactJobsUIService service,
