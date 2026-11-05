@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using XactJobs.UI.Api;
 using XactJobs.UI.Security;
 using XactJobs.UI.Services;
 
@@ -29,6 +30,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(options);
         services.AddScoped<IXactJobsUIService, XactJobsUIService<TDbContext>>();
+        services.AddSingleton<XactJobsAssets>();
 
         // Add Razor Pages support for the UI with custom route prefix convention
         services.AddRazorPages(pages =>

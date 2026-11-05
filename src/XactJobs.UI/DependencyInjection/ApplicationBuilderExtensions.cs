@@ -24,6 +24,8 @@ public static class ApplicationBuilderExtensions
 
         endpoints.MapXactJobsApi(options);
 
+        endpoints.ServiceProvider.GetRequiredService<XactJobsAssets>().Map(endpoints);
+
         // the access to the pages is set by the conventions added in AddXactJobsUI
         endpoints.MapRazorPages();
 

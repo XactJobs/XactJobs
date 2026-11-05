@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Antiforgery
 @using Microsoft.Extensions.Options
 @inject XactJobsUIOptions Options
+@inject XactJobs.UI.Api.XactJobsAssets Assets
 @inject IAntiforgery Antiforgery
 @inject IOptions<AntiforgeryOptions> AntiforgeryOptions
 @{
@@ -15,10 +16,10 @@
     <meta name="xactjobs-antiforgery" content="@antiforgeryToken" data-header="@AntiforgeryOptions.Value.HeaderName" />
     <title>@ViewData["Title"] - @Options.DashboardTitle</title>
 
-    @* served from the package (wwwroot/lib), so the dashboard works without internet access and under a strict CSP *@
-    <link href="~/_content/XactJobs.UI/lib/bootstrap/bootstrap.min.css" rel="stylesheet" asp-append-version="true" />
-    <link href="~/_content/XactJobs.UI/lib/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet" asp-append-version="true" />
-    <link href="~/_content/XactJobs.UI/css/xactjobs.css" rel="stylesheet" asp-append-version="true" />
+    @* embedded in the package (Assets) and served by MapXactJobsUI, so the dashboard works without internet access and under a strict CSP *@
+    <link href="@Url.Content("~" + Assets.Path("lib/bootstrap/bootstrap.min.css"))" rel="stylesheet" />
+    <link href="@Url.Content("~" + Assets.Path("lib/bootstrap-icons/bootstrap-icons.min.css"))" rel="stylesheet" />
+    <link href="@Url.Content("~" + Assets.Path("css/xactjobs.css"))" rel="stylesheet" />
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -85,10 +86,10 @@
         </div>
     </div>
 
-    <script src="~/_content/XactJobs.UI/lib/bootstrap/bootstrap.bundle.min.js" asp-append-version="true"></script>
-    <script src="~/_content/XactJobs.UI/lib/chart.js/chart.umd.js" asp-append-version="true"></script>
-    <script src="~/_content/XactJobs.UI/lib/htmx/htmx.min.js" asp-append-version="true"></script>
-    <script src="~/_content/XactJobs.UI/js/xactjobs.js" asp-append-version="true"></script>
+    <script src="@Url.Content("~" + Assets.Path("lib/bootstrap/bootstrap.bundle.min.js"))"></script>
+    <script src="@Url.Content("~" + Assets.Path("lib/chart.js/chart.umd.js"))"></script>
+    <script src="@Url.Content("~" + Assets.Path("lib/htmx/htmx.min.js"))"></script>
+    <script src="@Url.Content("~" + Assets.Path("js/xactjobs.js"))"></script>
 
     @await RenderSectionAsync("Scripts", required: false)
 </body>
