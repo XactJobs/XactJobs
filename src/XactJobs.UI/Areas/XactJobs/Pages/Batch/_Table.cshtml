@@ -1,0 +1,128 @@
+@model XactJobs.UI.Pages.Batch.IndexModel
+
+@if (Model.Details == null)
+{
+    <div class="alert alert-info">
+        <i class="bi bi-info-circle me-2"></i>Nothing is left of this batch: its jobs are finished and their history was cleaned up, or it never existed.
+    </div>
+}
+else
+{
+    var details = Model.Details;
+    var batch = details.Batch;
+
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-4 align-items-center">
+                <div class="col-md-5">
+                    <partial name="~/Areas/XactJobs/Pages/Partials/_BatchProgress.cshtml" model="batch" />
+                </div>
+                <div class="col-md-7 d-flex flex-wrap gap-2">
+                    @if (batch.IsFinished)
+                    {
+                        <span class="badge bg-success-subtle text-success-emphasis border"><i class="bi bi-check2-all"></i> Finished</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-primary-subtle text-primary-emphasis border"><i class="bi bi-hourglass-split"></i> @batch.PendingJobs left</span>
+                    }
+                    @if (batch.RunningJobs > 0)
+                    {
+                        <span class="badge bg-warning text-dark"><i class="bi bi-play-circle"></i> @batch.RunningJobs running</span>
+                    }
+                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> @batch.SucceededJobs succeeded</span>
+                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> @batch.FailedJobs failed</span>
+                    @foreach (var continued in details.ContinuesBatches)
+                    {
+                        <a class="badge bg-light text-dark border text-decoration-none" href="@Model.BatchUrl(continued)" title="The jobs of this batch continue the batch @continued">
+                            <i class="bi bi-arrow-return-right"></i> continues @XactJobsPageModel.DisplayBatch(continued)
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h5>Jobs left <span class="text-muted">(@batch.PendingJobs)</span></h5>
+    @if (details.Jobs.Count == 0)
+    {
+        <p class="text-muted">None.</p>
+    }
+    else
+    {
+        <div class="card mb-4">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Type</th>
+                            <th>Method</th>
+                            <th>Queue</th>
+                            <th>Scheduled At</th>
+                            <th>Status</th>
+                            <th>Failed Attempts</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var job in details.Jobs)
+                        {
+                            <partial name="~/Areas/XactJobs/Pages/Partials/_JobRow.cshtml" model="new JobRowModel(Model, job, Model.Id)" />
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+    <h5>Continuations</h5>
+    @if (details.PendingContinuations.Count == 0 && details.FinishedContinuations.Count == 0)
+    {
+        <p class="text-muted">None.</p>
+    }
+    else
+    {
+        @if (details.PendingContinuations.Count > 0)
+        {
+            <div class="card mb-3">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Type</th>
+                                <th>Method</th>
+                                <th>Queue</th>
+                                <th>Scheduled At</th>
+                                <th>Status</th>
+                                <th>Failed Attempts</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var job in details.PendingContinuations)
+                            {
+                                <partial name="~/Areas/XactJobs/Pages/Partials/_JobRow.cshtml" model="new JobRowModel(Model, job, Model.Id)" />
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        @if (details.FinishedContinuations.Count > 0)
+        {
+            <partial name="~/Areas/XactJobs/Pages/Partials/_HistoryRows.cshtml" model="new HistoryRowsModel(Model, details.FinishedContinuations, Model.Id)" />
+        }
+    }
+
+    <h5 class="mt-4">History</h5>
+    @if (details.History.Count == 0)
+    {
+        <p class="text-muted">No job of the batch has run yet.</p>
+    }
+    else
+    {
+        <partial name="~/Areas/XactJobs/Pages/Partials/_HistoryRows.cshtml" model="new HistoryRowsModel(Model, details.History, Model.Id)" />
+    }
+}

@@ -26,72 +26,7 @@ else
                 <tbody>
                     @foreach (var job in Model.Jobs.Items)
                     {
-                        <tr>
-                            <td><code>@job.Id</code></td>
-                            <td title="@job.TypeName">@job.DisplayTypeName</td>
-                            <td><code title="@job.MethodName">@job.DisplayMethodName</code></td>
-                            <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
-                            <td>@XactJobsPageModel.Time(job.ScheduledAt)</td>
-                            <td>
-                                @if (job.IsProcessing)
-                                {
-                                    <span class="badge bg-warning text-dark"><i class="bi bi-play-circle"></i> Running</span>
-                                }
-                                else if (job.IsDue)
-                                {
-                                    <span class="badge bg-primary"><i class="bi bi-hourglass-split"></i> Due</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-info"><i class="bi bi-clock"></i> Scheduled</span>
-                                }
-                                @if (job.ErrorCount > 0)
-                                {
-                                    <span class="badge bg-danger-subtle text-danger-emphasis"><i class="bi bi-arrow-repeat"></i> Retry</span>
-                                }
-                                @if (job.IsPeriodic)
-                                {
-                                    <span class="badge bg-light text-dark border" title="Run of the periodic job '@job.PeriodicJobId'">
-                                        <i class="bi bi-arrow-repeat"></i> @job.PeriodicJobId
-                                    </span>
-                                }
-                            </td>
-                            <td>
-                                @if (job.ErrorCount > 0)
-                                {
-                                    <span class="badge bg-danger">@job.ErrorCount</span>
-                                }
-                                else
-                                {
-                                    <span class="text-muted">0</span>
-                                }
-                            </td>
-                            <td class="text-nowrap">
-                                @{
-                                    var runNowBlocked = job.IsProcessing ? "The job is running" : job.IsDue ? "The job is already due" : null;
-                                    var cancelBlocked = job.IsProcessing ? "A running job can't be cancelled"
-                                        : job.IsPeriodic ? "Runs of periodic jobs can't be cancelled. Pause the periodic job on the Periodic page instead."
-                                        : null;
-                                }
-                                <span class="d-inline-block" tabindex="0" title="@(runNowBlocked ?? "Run now")">
-                                    <button class="btn btn-sm btn-outline-primary me-1"
-                                            hx-post="@Model.ApiUrl($"/jobs/{job.Id}/run-now")"
-                                            hx-swap="none"
-                                            disabled="@(runNowBlocked != null)">
-                                        <i class="bi bi-play-fill"></i>
-                                    </button>
-                                </span>
-                                <span class="d-inline-block" tabindex="0" title="@(cancelBlocked ?? "Cancel: moves the job to the history as cancelled")">
-                                    <button class="btn btn-sm btn-outline-danger"
-                                            hx-post="@Model.ApiUrl($"/jobs/{job.Id}/cancel")"
-                                            hx-confirm="Cancel job #@job.Id? It moves to the history as cancelled, and can be retried from there."
-                                            hx-swap="none"
-                                            disabled="@(cancelBlocked != null)">
-                                        <i class="bi bi-x-lg"></i>
-                                    </button>
-                                </span>
-                            </td>
-                        </tr>
+                        <partial name="~/Areas/XactJobs/Pages/Partials/_JobRow.cshtml" model="new JobRowModel(Model, job)" />
                     }
                 </tbody>
             </table>

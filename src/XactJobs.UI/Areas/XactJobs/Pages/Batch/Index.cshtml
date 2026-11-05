@@ -1,0 +1,24 @@
+@page "{id:guid}"
+@model XactJobs.UI.Pages.Batch.IndexModel
+@{
+    ViewData["Title"] = "Batch " + XactJobsPageModel.DisplayBatch(Model.Id);
+}
+
+<div class="row mb-3">
+    <div class="col">
+        <h1><i class="bi bi-collection me-2"></i>Batch <code>@XactJobsPageModel.DisplayBatch(Model.Id)</code></h1>
+        <p class="text-muted mb-0"><code class="text-muted">@Model.Id</code></p>
+    </div>
+    <div class="col-auto d-flex align-items-center gap-3">
+        <a class="btn btn-outline-secondary" href="@Model.PageUrl("/batches")"><i class="bi bi-arrow-left"></i> Batches</a>
+        <button class="btn btn-outline-secondary" onclick="htmx.trigger(document.body, 'xactjobs-changed')">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+</div>
+
+<div hx-get="@Model.TableUrl"
+     hx-trigger="every @(Model.Options.RefreshIntervalSeconds)s [!xactJobsIsBusy()], xactjobs-changed from:body"
+     hx-swap="innerHTML">
+    <partial name="_Table" model="Model" />
+</div>

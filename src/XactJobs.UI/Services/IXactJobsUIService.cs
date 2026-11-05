@@ -26,7 +26,7 @@ public interface IXactJobsUIService
     Task<ActionResultDto> CancelJobAsync(long id, string? cancelledBy, CancellationToken ct = default);
 
     /// <summary>
-    /// Makes a pending job due now. Not allowed for running jobs.
+    /// Makes a pending job due now. Not allowed for running jobs, nor for continuations that wait for their batch.
     /// </summary>
     Task<ActionResultDto> RunJobNowAsync(long id, CancellationToken ct = default);
 
@@ -36,10 +36,23 @@ public interface IXactJobsUIService
     Task<JobHistoryDto?> GetJobHistoryByIdAsync(long id, CancellationToken ct = default);
 
     /// <summary>
-    /// Enqueues a failed or cancelled job again, as a new job. A run of a periodic job is enqueued as a one-off job,
-    /// so that it doesn't add a second chain of runs to the periodic job.
+    /// Enqueues a failed or cancelled job, or a continuation that was skipped, again as a new job, outside of any batch.
+    /// A run of a periodic job is enqueued as a one-off job, so that it doesn't add a second chain of runs to the periodic job.
     /// </summary>
     Task<ActionResultDto> RetryJobAsync(long historyId, CancellationToken ct = default);
+
+    // Batches
+
+    /// <summary>
+    /// Active batches have jobs left, the earliest scheduled first. Finished batches have none, the latest finished first,
+    /// as long as their history is kept.
+    /// </summary>
+    Task<PagedResultDto<BatchDto>> GetBatchesAsync(BatchState state, int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>
+    /// The batch with its jobs, its history and its continuations, or null if nothing is left of it.
+    /// </summary>
+    Task<BatchDetailsDto?> GetBatchAsync(Guid id, CancellationToken ct = default);
 
     // Periodic Jobs
     Task<PagedResultDto<PeriodicJobDto>> GetPeriodicJobsAsync(

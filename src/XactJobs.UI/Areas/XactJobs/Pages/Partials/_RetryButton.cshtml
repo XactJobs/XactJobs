@@ -1,0 +1,19 @@
+@model RetryButtonModel
+@{
+    var job = Model.Job;
+    var confirm = job.PeriodicJobId != null
+        ? $"Run job #{job.Id} again? It's enqueued as a one-off job, apart from the runs of the periodic job '{job.PeriodicJobId}'."
+        : job.BatchId != null || job.AwaitsBatchId != null
+            ? $"Run job #{job.Id} again, as a new job? It runs now, outside of any batch, and doesn't start continuations."
+            : $"Run job #{job.Id} again, as a new job?";
+}
+@if (job.CanRetry)
+{
+    <button class="btn btn-sm btn-outline-warning text-nowrap"
+            hx-post="@Model.Owner.ApiUrl($"/history/{job.Id}/retry")"
+            hx-confirm="@confirm"
+            hx-swap="none"
+            title="Enqueue the job again, as a new job">
+        <i class="bi bi-arrow-counterclockwise"></i> Retry
+    </button>
+}

@@ -54,6 +54,10 @@ public abstract class XactJobsPageModel : PageModel
 
     public string PageUrl(string path) => Url.Content("~" + Options.BasePath + path);
 
+    public string BatchUrl(Guid batchId) => PageUrl("/batch/" + batchId.ToString("D"));
+
+    public static string DisplayBatch(Guid batchId) => DisplayNames.Batch(batchId);
+
     /// <summary>
     /// A UTC time, which the browser shows in its own time zone.
     /// </summary>

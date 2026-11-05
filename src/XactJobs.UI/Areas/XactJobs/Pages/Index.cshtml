@@ -34,7 +34,8 @@
                     <div>
                         <h6 class="card-subtitle mb-2">Due</h6>
                         <h2 class="card-title mb-0" id="stat-due">@Model.Stats.DueJobs</h2>
-                        <small class="opacity-75"><span id="stat-scheduled">@Model.Stats.ScheduledJobs</span> scheduled for later</small>
+                        <small class="opacity-75 d-block"><span id="stat-scheduled">@Model.Stats.ScheduledJobs</span> scheduled for later</small>
+                        <small class="opacity-75 d-block"><span id="stat-awaiting">@Model.Stats.AwaitingContinuations</span> continuations waiting</small>
                     </div>
                     <i class="bi bi-clock fs-1 opacity-50"></i>
                 </div>
@@ -250,6 +251,7 @@
             .then(data => {
                 document.getElementById('stat-due').textContent = data.dueJobs;
                 document.getElementById('stat-scheduled').textContent = data.scheduledJobs;
+                document.getElementById('stat-awaiting').textContent = data.awaitingContinuations;
                 document.getElementById('stat-retried').textContent = data.retriedLast24h;
                 document.getElementById('stat-processing').textContent = data.processingJobs;
                 document.getElementById('stat-succeeded').textContent = data.succeededLast24h;

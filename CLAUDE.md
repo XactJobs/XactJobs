@@ -104,6 +104,7 @@ XactJobs is a .NET library for background job processing with full database tran
 - The claimed continuation's worker counts the batch's failed jobs in the history (`Cancelled` or `Skipped`; `Failed` attempts were retried), and either runs the continuation or moves it to the history as `Skipped`
 - The check for the batch's jobs must not skip locked rows (no `SKIP LOCKED`/`READPAST` in the subquery), and a job that's replaced (a retry, the dashboard's Run now) is inserted before the old row is deleted: on SQL Server without snapshot isolation, a reader can miss a row inserted behind it, and the batch would look finished
 - The history cleanup keeps the history of batches that a waiting continuation needs
+- Dashboard: the Batches page groups the job table and the history by `BatchId` (active: jobs left; finished: history only). Waiting continuations are shown by `JobDto.IsAwaitingBatch`, never by their placeholder date
 
 ### Database Entities
 

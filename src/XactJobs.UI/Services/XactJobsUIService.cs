@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using XactJobs.UI.Services.Models;
 
@@ -43,8 +44,13 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         var dueJobs = await db.Set<XactJob>()
             .CountAsync(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt <= now, ct);
 
+        var awaiting = XactJobBase.AwaitingBatchScheduledAt;
+
         var scheduledJobs = await db.Set<XactJob>()
-            .CountAsync(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt > now, ct);
+            .CountAsync(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt > now && j.ScheduledAt != awaiting, ct);
+
+        var awaitingContinuations = await db.Set<XactJob>()
+            .CountAsync(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt == awaiting, ct);
 
         var historyLast24h = await db.Set<XactJobHistory>()
             .Where(h => h.ProcessedAt >= last24h)
@@ -70,6 +76,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         {
             DueJobs = dueJobs,
             ScheduledJobs = scheduledJobs,
+            AwaitingContinuations = awaitingContinuations,
             ProcessingJobs = processingJobs,
             SucceededLast24h = succeeded,
             FailedLast24h = failed,
@@ -166,23 +173,12 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             .ThenBy(j => j.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(j => new JobDto
-            {
-                Id = j.Id,
-                ScheduledAt = j.ScheduledAt,
-                TypeName = j.TypeName,
-                MethodName = j.MethodName,
-                Queue = j.Queue,
-                ErrorCount = j.ErrorCount,
-                LeasedUntil = j.LeasedUntil,
-                Leaser = j.Leaser,
-                PeriodicJobId = j.PeriodicJobId
-            })
+            .Select(ToJobDto)
             .ToListAsync(ct);
 
         return new PagedResultDto<JobDto>
         {
-            Items = items,
+            Items = await WithBatchJobsLeftAsync(items, ct),
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize
@@ -191,22 +187,13 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     public async Task<JobDto?> GetJobByIdAsync(long id, CancellationToken ct = default)
     {
-        return await db.Set<XactJob>()
+        var job = await db.Set<XactJob>()
             .AsNoTracking()
             .Where(j => j.Id == id)
-            .Select(j => new JobDto
-            {
-                Id = j.Id,
-                ScheduledAt = j.ScheduledAt,
-                TypeName = j.TypeName,
-                MethodName = j.MethodName,
-                Queue = j.Queue,
-                ErrorCount = j.ErrorCount,
-                LeasedUntil = j.LeasedUntil,
-                Leaser = j.Leaser,
-                PeriodicJobId = j.PeriodicJobId
-            })
+            .Select(ToJobDto)
             .FirstOrDefaultAsync(ct);
+
+        return job == null ? null : (await WithBatchJobsLeftAsync([job], ct))[0];
     }
 
     public async Task<ActionResultDto> CancelJobAsync(long id, string? cancelledBy, CancellationToken ct = default)
@@ -246,7 +233,14 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             });
         }, ct);
 
-        return conflict ?? ActionResultDto.Done($"Job #{id} cancelled.");
+        if (conflict != null) return conflict;
+
+        if (job.BatchId != null)
+        {
+            await StartContinuationsIfBatchFinishedAsync(job.BatchId.Value, ct);
+        }
+
+        return ActionResultDto.Done($"Job #{id} cancelled.");
     }
 
     public async Task<ActionResultDto> RunJobNowAsync(long id, CancellationToken ct = default)
@@ -277,20 +271,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             .ThenByDescending(h => h.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(h => new JobHistoryDto
-            {
-                Id = h.Id,
-                ProcessedAt = h.ProcessedAt,
-                ScheduledAt = h.ScheduledAt,
-                Status = h.Status,
-                TypeName = h.TypeName,
-                MethodName = h.MethodName,
-                Queue = h.Queue,
-                ErrorCount = h.ErrorCount,
-                ErrorMessage = h.ErrorMessage,
-                ErrorStackTrace = h.ErrorStackTrace,
-                PeriodicJobId = h.PeriodicJobId
-            })
+            .Select(ToJobHistoryDto)
             .ToListAsync(ct);
 
         return new PagedResultDto<JobHistoryDto>
@@ -307,20 +288,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         return await db.Set<XactJobHistory>()
             .AsNoTracking()
             .Where(h => h.Id == id)
-            .Select(h => new JobHistoryDto
-            {
-                Id = h.Id,
-                ProcessedAt = h.ProcessedAt,
-                ScheduledAt = h.ScheduledAt,
-                Status = h.Status,
-                TypeName = h.TypeName,
-                MethodName = h.MethodName,
-                Queue = h.Queue,
-                ErrorCount = h.ErrorCount,
-                ErrorMessage = h.ErrorMessage,
-                ErrorStackTrace = h.ErrorStackTrace,
-                PeriodicJobId = h.PeriodicJobId
-            })
+            .Select(ToJobHistoryDto)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -332,12 +300,15 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         if (history == null) return ActionResultDto.NotFound($"Job #{historyId} not found in the history.");
 
-        if (history.Status != XactJobStatus.Cancelled)
+        var isSkippedContinuation = history.Status == XactJobStatus.Skipped && history.AwaitsBatchId != null;
+
+        if (history.Status != XactJobStatus.Cancelled && !isSkippedContinuation)
         {
-            return ActionResultDto.Conflict($"Job #{historyId} can't be retried: only failed and cancelled jobs can.");
+            return ActionResultDto.Conflict($"Job #{historyId} can't be retried: only failed and cancelled jobs can, and continuations that were skipped.");
         }
 
-        // a one-off job: as a run of the periodic job, it would schedule a second chain of runs
+        // a one-off job: as a run of the periodic job, it would schedule a second chain of runs.
+        // Outside of any batch: the continuations of its batch, if any, already started or were skipped.
         var newJob = new XactJob(0,
                                  DateTime.UtcNow,
                                  history.TypeName,
@@ -585,6 +556,295 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         return replaced ? null : ActionResultDto.Conflict($"Job #{job.Id} started running or finished meanwhile.");
     }
+
+    public async Task<PagedResultDto<BatchDto>> GetBatchesAsync(BatchState state, int page, int pageSize, CancellationToken ct = default)
+    {
+        (page, pageSize) = Normalize(page, pageSize);
+
+        return state == BatchState.Active
+            ? await GetActiveBatchesAsync(page, pageSize, ct)
+            : await GetFinishedBatchesAsync(page, pageSize, ct);
+    }
+
+    public async Task<BatchDetailsDto?> GetBatchAsync(Guid id, CancellationToken ct = default)
+    {
+        var jobs = await db.Set<XactJob>()
+            .AsNoTracking()
+            .Where(j => j.BatchId == id)
+            .OrderBy(j => j.ScheduledAt)
+            .ThenBy(j => j.Id)
+            .Take(MaxPageSize)
+            .Select(ToJobDto)
+            .ToListAsync(ct);
+
+        var history = await db.Set<XactJobHistory>()
+            .AsNoTracking()
+            .Where(h => h.BatchId == id)
+            .OrderByDescending(h => h.ProcessedAt)
+            .ThenByDescending(h => h.Id)
+            .Take(MaxPageSize)
+            .Select(ToJobHistoryDto)
+            .ToListAsync(ct);
+
+        var pendingContinuations = await db.Set<XactJob>()
+            .AsNoTracking()
+            .Where(j => j.AwaitsBatchId == id)
+            .OrderBy(j => j.Id)
+            .Take(MaxPageSize)
+            .Select(ToJobDto)
+            .ToListAsync(ct);
+
+        var finishedContinuations = await db.Set<XactJobHistory>()
+            .AsNoTracking()
+            .Where(h => h.AwaitsBatchId == id)
+            .OrderByDescending(h => h.ProcessedAt)
+            .ThenByDescending(h => h.Id)
+            .Take(MaxPageSize)
+            .Select(ToJobHistoryDto)
+            .ToListAsync(ct);
+
+        if (jobs.Count == 0 && history.Count == 0 && pendingContinuations.Count == 0 && finishedContinuations.Count == 0)
+        {
+            return null;
+        }
+
+        var batch = (await GetBatchSummariesAsync([id], ct)).GetValueOrDefault(id) ?? new BatchDto { Id = id };
+
+        var continuesBatches = jobs.Select(j => j.AwaitsBatchId)
+            .Concat(history.Select(h => h.AwaitsBatchId))
+            .OfType<Guid>()
+            .Distinct()
+            .ToList();
+
+        return new BatchDetailsDto
+        {
+            Batch = batch,
+            Jobs = jobs,
+            History = history,
+            PendingContinuations = await WithBatchJobsLeftAsync(pendingContinuations, ct),
+            FinishedContinuations = finishedContinuations,
+            ContinuesBatches = continuesBatches
+        };
+    }
+
+    /// <summary>
+    /// Batches with jobs left, the earliest first: the ones whose jobs are all continuations that wait for another batch come last.
+    /// </summary>
+    private async Task<PagedResultDto<BatchDto>> GetActiveBatchesAsync(int page, int pageSize, CancellationToken ct)
+    {
+        var groups = db.Set<XactJob>()
+            .Where(j => j.BatchId != null)
+            .GroupBy(j => j.BatchId)
+            .Select(g => new { Id = g.Key, FirstAt = g.Min(j => j.ScheduledAt) });
+
+        var totalCount = await groups.CountAsync(ct);
+
+        var ids = await groups
+            .OrderBy(g => g.FirstAt)
+            .ThenBy(g => g.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(g => g.Id!.Value)
+            .ToListAsync(ct);
+
+        var summaries = await GetBatchSummariesAsync(ids, ct);
+
+        return new PagedResultDto<BatchDto>
+        {
+            Items = ids.Select(id => summaries[id]).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    /// <summary>
+    /// Batches without jobs left, the latest finished first.
+    /// </summary>
+    private async Task<PagedResultDto<BatchDto>> GetFinishedBatchesAsync(int page, int pageSize, CancellationToken ct)
+    {
+        var jobs = db.Set<XactJob>();
+
+        var groups = db.Set<XactJobHistory>()
+            .Where(h => h.BatchId != null && !jobs.Any(j => j.BatchId == h.BatchId))
+            .GroupBy(h => h.BatchId)
+            .Select(g => new { Id = g.Key, LastAt = g.Max(h => h.ProcessedAt) });
+
+        var totalCount = await groups.CountAsync(ct);
+
+        var ids = await groups
+            .OrderByDescending(g => g.LastAt)
+            .ThenBy(g => g.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(g => g.Id!.Value)
+            .ToListAsync(ct);
+
+        var summaries = await GetBatchSummariesAsync(ids, ct);
+
+        return new PagedResultDto<BatchDto>
+        {
+            Items = ids.Select(id => summaries[id]).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize
+        };
+    }
+
+    /// <summary>
+    /// The counts of the given batches, a few grouped queries for all of them.
+    /// </summary>
+    private async Task<Dictionary<Guid, BatchDto>> GetBatchSummariesAsync(List<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0) return [];
+
+        var now = DateTime.UtcNow;
+        var awaiting = XactJobBase.AwaitingBatchScheduledAt;
+        var batchIds = ids.Select(id => (Guid?)id).ToList();
+
+        var pending = await db.Set<XactJob>()
+            .Where(j => batchIds.Contains(j.BatchId))
+            .GroupBy(j => j.BatchId)
+            .Select(g => new
+            {
+                Id = g.Key,
+                Count = g.Count(),
+                Running = g.Count(j => j.LeasedUntil != null && j.LeasedUntil >= now),
+                NextRunAt = g.Min(j => j.ScheduledAt == awaiting ? (DateTime?)null : j.ScheduledAt),
+                SampleId = g.Min(j => j.Id)
+            })
+            .ToListAsync(ct);
+
+        var finished = await db.Set<XactJobHistory>()
+            .Where(h => batchIds.Contains(h.BatchId))
+            .GroupBy(h => h.BatchId)
+            .Select(g => new
+            {
+                Id = g.Key,
+                Succeeded = g.Count(h => h.Status == XactJobStatus.Completed),
+                Failed = g.Count(h => h.Status == XactJobStatus.Cancelled || h.Status == XactJobStatus.Skipped),
+                LastProcessedAt = g.Max(h => h.ProcessedAt),
+                SampleId = g.Min(h => h.Id)
+            })
+            .ToListAsync(ct);
+
+        var continuations = await db.Set<XactJob>()
+            .Where(j => j.ScheduledAt == awaiting && batchIds.Contains(j.AwaitsBatchId))
+            .GroupBy(j => j.AwaitsBatchId)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        // a job of each batch, to tell them apart: a pending one, or one from the history
+        var pendingSampleIds = pending.Select(p => p.SampleId).ToList();
+        var historySampleIds = finished.Where(f => pending.All(p => p.Id != f.Id)).Select(f => f.SampleId).ToList();
+
+        var samples = await db.Set<XactJob>()
+            .Where(j => pendingSampleIds.Contains(j.Id))
+            .Select(j => new { j.BatchId, j.TypeName, j.MethodName })
+            .ToListAsync(ct);
+
+        samples.AddRange(await db.Set<XactJobHistory>()
+            .Where(h => historySampleIds.Contains(h.Id) && batchIds.Contains(h.BatchId))
+            .Select(h => new { h.BatchId, h.TypeName, h.MethodName })
+            .ToListAsync(ct));
+
+        return ids.ToDictionary(id => id, id =>
+        {
+            var p = pending.FirstOrDefault(x => x.Id == id);
+            var f = finished.FirstOrDefault(x => x.Id == id);
+            var sample = samples.FirstOrDefault(x => x.BatchId == id);
+
+            return new BatchDto
+            {
+                Id = id,
+                PendingJobs = p?.Count ?? 0,
+                RunningJobs = p?.Running ?? 0,
+                NextRunAt = p?.NextRunAt,
+                SucceededJobs = f?.Succeeded ?? 0,
+                FailedJobs = f?.Failed ?? 0,
+                LastProcessedAt = f?.LastProcessedAt,
+                AwaitingContinuations = continuations.FirstOrDefault(x => x.Id == id)?.Count ?? 0,
+                TypeName = sample?.TypeName,
+                MethodName = sample?.MethodName
+            };
+        });
+    }
+
+    /// <summary>
+    /// Adds the number of jobs left in the batch that each waiting continuation waits for.
+    /// </summary>
+    private async Task<List<JobDto>> WithBatchJobsLeftAsync(List<JobDto> jobs, CancellationToken ct)
+    {
+        var awaitedIds = jobs.Where(j => j.IsAwaitingBatch).Select(j => j.AwaitsBatchId).Distinct().ToList();
+
+        if (awaitedIds.Count == 0) return jobs;
+
+        var counts = await db.Set<XactJob>()
+            .Where(j => awaitedIds.Contains(j.BatchId))
+            .GroupBy(j => j.BatchId)
+            .Select(g => new { Id = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return jobs
+            .Select(j => j.IsAwaitingBatch ? j with { BatchJobsLeft = counts.FirstOrDefault(c => c.Id == j.AwaitsBatchId)?.Count ?? 0 } : j)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Wakes up the workers of the continuations of the batch, if it's finished. Best effort: the workers also check on their own.
+    /// </summary>
+    private async Task StartContinuationsIfBatchFinishedAsync(Guid batchId, CancellationToken ct)
+    {
+        if (quickPollChannels == null) return;
+
+        var jobs = db.Set<XactJob>();
+        var awaiting = XactJobBase.AwaitingBatchScheduledAt;
+
+        var queues = await jobs
+            .Where(c => c.AwaitsBatchId == batchId && c.ScheduledAt == awaiting && !jobs.Any(j => j.BatchId == batchId))
+            .Select(c => c.Queue)
+            .Distinct()
+            .ToListAsync(ct);
+
+        foreach (var queue in queues)
+        {
+            quickPollChannels.TryNotifyContinuationsReady(queue);
+        }
+    }
+
+    private static readonly Expression<Func<XactJob, JobDto>> ToJobDto = j => new JobDto
+    {
+        Id = j.Id,
+        ScheduledAt = j.ScheduledAt,
+        TypeName = j.TypeName,
+        MethodName = j.MethodName,
+        Queue = j.Queue,
+        ErrorCount = j.ErrorCount,
+        LeasedUntil = j.LeasedUntil,
+        Leaser = j.Leaser,
+        PeriodicJobId = j.PeriodicJobId,
+        BatchId = j.BatchId,
+        AwaitsBatchId = j.AwaitsBatchId,
+        ContinuationCondition = j.ContinuationCondition
+    };
+
+    private static readonly Expression<Func<XactJobHistory, JobHistoryDto>> ToJobHistoryDto = h => new JobHistoryDto
+    {
+        Id = h.Id,
+        ProcessedAt = h.ProcessedAt,
+        ScheduledAt = h.ScheduledAt,
+        Status = h.Status,
+        TypeName = h.TypeName,
+        MethodName = h.MethodName,
+        Queue = h.Queue,
+        ErrorCount = h.ErrorCount,
+        ErrorMessage = h.ErrorMessage,
+        ErrorStackTrace = h.ErrorStackTrace,
+        PeriodicJobId = h.PeriodicJobId,
+        BatchId = h.BatchId,
+        AwaitsBatchId = h.AwaitsBatchId,
+        ContinuationCondition = h.ContinuationCondition
+    };
 
     private Task<XactJob?> FindJobAsync(long id, CancellationToken ct)
     {

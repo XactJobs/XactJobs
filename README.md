@@ -152,6 +152,7 @@ A batch id that doesn't exist is a finished batch without jobs, so its continuat
 
 - A retry of a job stays in its batch, and a continuation waits for it. A job retried from the dashboard is a new job, outside of the batch.
 - A job of a batch can't be continued on its own: continue the batch. Periodic jobs can't be in a batch, nor be continued.
+- A skipped continuation can be retried from the dashboard: it runs as a new job, outside of any batch.
 - The worker that finishes the last job of a batch wakes up the workers of the continuations' queues, if they run in the same process,
   and the continuations start as soon as a worker is free. Besides that, each worker checks for continuations of finished batches once per polling interval.
   The check is one query, which looks at every continuation of the queue that's still waiting, so keep it in mind with many thousands of them.
@@ -444,12 +445,16 @@ The API endpoints that change data require an antiforgery token, which the dashb
 
 ## Pages and Actions
 
-- **Dashboard** - due, scheduled and running jobs, succeeded and failed jobs in the last 24 hours, and a chart per hour
-- **Scheduled** - the pending and running jobs
-  - *Run now* makes a pending job due now
-  - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead
-- **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts and skipped runs
-  - *Retry* enqueues a failed or cancelled job again, as a new job. A run of a periodic job is enqueued as a one-off job
+- **Dashboard** - due, scheduled and running jobs, continuations waiting for their batch, succeeded and failed jobs in the last 24 hours, and a chart per hour
+- **Scheduled** - the pending and running jobs. A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
+  - *Run now* makes a pending job due now. A continuation that waits for its batch can't: it starts when the batch is finished
+  - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead.
+    A cancelled job of a batch counts as a failed job of the batch, and if it was the last one, the batch's continuations start
+- **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts, and skipped runs and continuations, with the reason
+  - *Retry* enqueues a failed or cancelled job, or a skipped continuation, again as a new job. A run of a periodic job is enqueued as a one-off job,
+    and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations
+- **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress
+  - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
 - **Periodic** - the periodic jobs, with their next run
   - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts again, even if `JobEnsurePeriodic` or `WithPeriodicJob` defines it
   - *Resume* schedules the next run
@@ -480,7 +485,9 @@ All under the API base path (`/api/XactJobs` by default):
 | POST | `/jobs/{id}/cancel` | Cancel a pending job |
 | GET | `/history?category=&page=&pageSize=&queue=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped` |
 | GET | `/history/{id}` | A history row |
-| POST | `/history/{id}/retry` | Enqueue a failed or cancelled job again |
+| POST | `/history/{id}/retry` | Enqueue a failed or cancelled job, or a skipped continuation, again |
+| GET | `/batches?state=&page=&pageSize=` | Batches: `active` or `finished` |
+| GET | `/batches/{id}` | A batch with its jobs, history and continuations |
 | GET | `/periodic?page=&pageSize=` | Periodic jobs |
 | GET | `/periodic/{id}` | A periodic job |
 | POST | `/periodic/{id}/pause` | Pause a periodic job |

@@ -4,8 +4,10 @@ public record DashboardStatsDto
 {
     /// <summary>Jobs whose scheduled time has passed, waiting for a worker.</summary>
     public int DueJobs { get; init; }
-    /// <summary>Jobs scheduled for later.</summary>
+    /// <summary>Jobs scheduled for later, without the continuations that wait for their batch.</summary>
     public int ScheduledJobs { get; init; }
+    /// <summary>Continuations that wait for their batch to finish.</summary>
+    public int AwaitingContinuations { get; init; }
     /// <summary>Jobs leased by a worker at the moment.</summary>
     public int ProcessingJobs { get; init; }
     public int SucceededLast24h { get; init; }

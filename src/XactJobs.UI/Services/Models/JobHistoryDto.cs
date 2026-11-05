@@ -13,9 +13,15 @@ public record JobHistoryDto
     public string? ErrorMessage { get; init; }
     public string? ErrorStackTrace { get; init; }
     public string? PeriodicJobId { get; init; }
+    public Guid? BatchId { get; init; }
+    public Guid? AwaitsBatchId { get; init; }
+    public XactJobContinuation? ContinuationCondition { get; init; }
 
-    /// <summary>Failed and cancelled jobs can be run again.</summary>
-    public bool CanRetry => Status == XactJobStatus.Cancelled;
+    /// <summary>Failed and cancelled jobs can be run again, and so can continuations that were skipped.</summary>
+    public bool CanRetry => Status == XactJobStatus.Cancelled || IsSkippedContinuation;
+
+    public bool IsSkippedContinuation => Status == XactJobStatus.Skipped && AwaitsBatchId != null;
+    public string? DisplayCondition => DisplayNames.Condition(ContinuationCondition);
     public string DisplayTypeName => DisplayNames.Type(TypeName);
 
     public string DisplayMethodName => DisplayNames.Method(MethodName);

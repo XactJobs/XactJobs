@@ -1,0 +1,76 @@
+@model HistoryRowsModel
+
+<div class="card mb-3">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>ID</th>
+                    <th>Type</th>
+                    <th>Method</th>
+                    <th>Queue</th>
+                    <th>Status</th>
+                    <th>Processed At</th>
+                    <th>Message</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var job in Model.Jobs)
+                {
+                    <tr>
+                        <td><code>@job.Id</code></td>
+                        <td title="@job.TypeName">@job.DisplayTypeName</td>
+                        <td>
+                            <code title="@job.MethodName">@job.DisplayMethodName</code>
+                            <partial name="~/Areas/XactJobs/Pages/Partials/_BatchBadges.cshtml"
+                                     model="new BatchBadgesModel(Model.Owner, job.BatchId, job.AwaitsBatchId, job.DisplayCondition, Model.CurrentBatchId)" />
+                        </td>
+                        <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
+                        <td>
+                            @switch (job.Status)
+                            {
+                                case XactJobStatus.Completed:
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Succeeded</span>
+                                    break;
+                                case XactJobStatus.Failed:
+                                    <span class="badge bg-warning text-dark" title="A failed attempt, the job was scheduled to run again"><i class="bi bi-arrow-repeat"></i> Retried</span>
+                                    break;
+                                case XactJobStatus.Cancelled when job.ErrorStackTrace != null:
+                                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Failed</span>
+                                    break;
+                                case XactJobStatus.Cancelled:
+                                    <span class="badge bg-secondary"><i class="bi bi-slash-circle"></i> Cancelled</span>
+                                    break;
+                                case XactJobStatus.Skipped:
+                                    <span class="badge bg-secondary-subtle text-secondary-emphasis border"><i class="bi bi-skip-forward-circle"></i> Skipped</span>
+                                    break;
+                                default:
+                                    <span class="badge bg-light text-dark border">@job.Status</span>
+                                    break;
+                            }
+                        </td>
+                        <td>@XactJobsPageModel.Time(job.ProcessedAt)</td>
+                        <td>
+                            @if (!string.IsNullOrEmpty(job.ErrorMessage))
+                            {
+                                <button class="btn btn-sm btn-link @(job.Status == XactJobStatus.Skipped ? "text-muted" : "text-danger") p-0 text-start"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#xj-error-modal"
+                                        data-job-id="@job.Id"
+                                        data-error-message="@job.ErrorMessage"
+                                        data-error-stack="@job.ErrorStackTrace"
+                                        title="View the details">
+                                    @(job.ErrorMessage.Length > 80 ? job.ErrorMessage[..80] + "..." : job.ErrorMessage)
+                                </button>
+                            }
+                        </td>
+                        <td>
+                            <partial name="~/Areas/XactJobs/Pages/Partials/_RetryButton.cshtml" model="new RetryButtonModel(Model.Owner, job)" />
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

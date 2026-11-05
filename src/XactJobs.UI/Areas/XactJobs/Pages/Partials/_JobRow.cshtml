@@ -1,0 +1,93 @@
+@model JobRowModel
+@{
+    var job = Model.Job;
+}
+<tr>
+    <td><code>@job.Id</code></td>
+    <td title="@job.TypeName">@job.DisplayTypeName</td>
+    <td><code title="@job.MethodName">@job.DisplayMethodName</code></td>
+    <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
+    <td>
+        @if (job.IsAwaitingBatch)
+        {
+            <span class="text-muted text-nowrap" title="Starts when its batch is finished">After its batch</span>
+        }
+        else
+        {
+            @XactJobsPageModel.Time(job.ScheduledAt)
+        }
+    </td>
+    <td>
+        @if (job.IsProcessing)
+        {
+            <span class="badge bg-warning text-dark"><i class="bi bi-play-circle"></i> Running</span>
+        }
+        else if (job.IsAwaitingBatch)
+        {
+            <span class="badge bg-secondary-subtle text-secondary-emphasis border" title="Waits for the batch @job.AwaitsBatchId to finish">
+                <i class="bi bi-hourglass"></i> Awaiting batch · @(job.BatchJobsLeft > 0 ? $"{job.BatchJobsLeft} left" : "starting")
+            </span>
+        }
+        else if (job.IsDue)
+        {
+            <span class="badge bg-primary"><i class="bi bi-hourglass-split"></i> Due</span>
+        }
+        else
+        {
+            <span class="badge bg-info"><i class="bi bi-clock"></i> Scheduled</span>
+        }
+        @if (job.ErrorCount > 0)
+        {
+            <span class="badge bg-danger-subtle text-danger-emphasis"><i class="bi bi-arrow-repeat"></i> Retry</span>
+        }
+        @if (job.IsPeriodic)
+        {
+            <span class="badge bg-light text-dark border" title="Run of the periodic job '@job.PeriodicJobId'">
+                <i class="bi bi-arrow-repeat"></i> @job.PeriodicJobId
+            </span>
+        }
+        <partial name="~/Areas/XactJobs/Pages/Partials/_BatchBadges.cshtml"
+                 model="new BatchBadgesModel(Model.Owner, job.BatchId, job.AwaitsBatchId, job.DisplayCondition, Model.CurrentBatchId)" />
+    </td>
+    <td>
+        @if (job.ErrorCount > 0)
+        {
+            <span class="badge bg-danger">@job.ErrorCount</span>
+        }
+        else
+        {
+            <span class="text-muted">0</span>
+        }
+    </td>
+    <td class="text-nowrap">
+        @{
+            var runNowBlocked = job.IsProcessing ? "The job is running"
+                : job.IsAwaitingBatch ? "The continuation starts when its batch is finished"
+                : job.IsDue ? "The job is already due"
+                : null;
+            var cancelBlocked = job.IsProcessing ? "A running job can't be cancelled"
+                : job.IsPeriodic ? "Runs of periodic jobs can't be cancelled. Pause the periodic job on the Periodic page instead."
+                : null;
+            var cancelConfirm = job.BatchId != null
+                ? $"Cancel job #{job.Id}? It moves to the history as cancelled, and counts as a failed job of its batch."
+                : $"Cancel job #{job.Id}? It moves to the history as cancelled, and can be retried from there.";
+        }
+        <span class="d-inline-block" tabindex="0" title="@(runNowBlocked ?? "Run now")">
+            <button class="btn btn-sm btn-outline-primary me-1"
+                    hx-post="@Model.Owner.ApiUrl($"/jobs/{job.Id}/run-now")"
+                    hx-swap="none"
+                    disabled="@(runNowBlocked != null)">
+                <i class="bi bi-play-fill"></i>
+            </button>
+        </span>
+        <span class="d-inline-block" tabindex="0" title="@(cancelBlocked ?? "Cancel: moves the job to the history as cancelled")">
+            <button class="btn btn-sm btn-outline-danger"
+                    hx-post="@Model.Owner.ApiUrl($"/jobs/{job.Id}/cancel")"
+                    hx-confirm="@cancelConfirm"
+                    hx-swap="none"
+                    disabled="@(cancelBlocked != null)">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </span>
+    </td>
+</tr>
