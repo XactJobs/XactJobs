@@ -28,30 +28,7 @@ internal static class XactJobsApiEndpoints
         var group = endpoints.MapGroup(options.ApiBasePath)
             .WithTags("XactJobs");
 
-        switch (options.Access)
-        {
-            case XactJobsUIAccess.Authorized:
-                if (options.AuthorizationPolicy == null)
-                {
-                    group.RequireAuthorization();
-                }
-                else
-                {
-                    group.RequireAuthorization(options.AuthorizationPolicy);
-                }
-                break;
-
-            case XactJobsUIAccess.LocalRequestsOnly:
-                group.AddEndpointFilter(async (context, next) =>
-                    LocalRequests.IsLocal(context.HttpContext)
-                        ? await next(context)
-                        : Results.StatusCode(StatusCodes.Status403Forbidden));
-                break;
-
-            case XactJobsUIAccess.Anonymous:
-                group.AllowAnonymous();
-                break;
-        }
+        group.RequireDashboardAccess(options);
 
         if (options.RequireAntiforgery)
         {

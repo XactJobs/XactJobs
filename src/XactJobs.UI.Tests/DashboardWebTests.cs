@@ -146,8 +146,46 @@ public partial class DashboardWebTests : IAsyncDisposable
         var html = await client.GetStringAsync("/XactJobs/scheduled");
 
         Assert.DoesNotContain("https://", html);
-        Assert.Contains("/_content/XactJobs.UI/lib/htmx/htmx.min.js", html);
+        Assert.Matches(@"/XactJobs/assets/lib/htmx/htmx\.min\.js\?v=[0-9a-f]{16}""", html);
         Assert.Matches(@"<time class=""text-nowrap"" datetime=""\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z""", html);
+    }
+
+    [Fact]
+    public async Task Assets_AreServedFromTheAssembly_AndCachedByVersion()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        var html = await client.GetStringAsync("/XactJobs/scheduled");
+
+        var urls = Regex.Matches(html, @"(?:href|src)=""(/XactJobs/assets/[^""]+)""").Select(m => WebUtility.HtmlDecode(m.Groups[1].Value)).ToList();
+
+        Assert.Equal(7, urls.Count);
+
+        foreach (var url in urls)
+        {
+            var response = await client.GetAsync(url);
+
+            Assert.True(response.StatusCode == HttpStatusCode.OK, $"{url}: {response.StatusCode}");
+            Assert.Equal(url.Contains(".css") ? "text/css" : "text/javascript", response.Content.Headers.ContentType?.MediaType);
+            Assert.Equal("public, max-age=31536000, immutable", response.Headers.CacheControl?.ToString());
+            Assert.NotNull(response.Headers.ETag);
+            Assert.NotEmpty(await response.Content.ReadAsByteArrayAsync());
+        }
+
+        // a font, referenced from the icons' stylesheet without the version: checked again each time
+        var font = await client.GetAsync("/XactJobs/assets/lib/bootstrap-icons/fonts/bootstrap-icons.woff2");
+
+        Assert.Equal(HttpStatusCode.OK, font.StatusCode);
+        Assert.Equal("font/woff2", font.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-cache", font.Headers.CacheControl?.ToString());
+
+        using var conditional = new HttpRequestMessage(HttpMethod.Get, "/XactJobs/assets/lib/bootstrap-icons/fonts/bootstrap-icons.woff2");
+        conditional.Headers.IfNoneMatch.Add(font.Headers.ETag!);
+
+        Assert.Equal(HttpStatusCode.NotModified, (await client.SendAsync(conditional)).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/XactJobs/assets/js/missing.js")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/XactJobs/assets/%2E%2E/XactJobs.UI.dll")).StatusCode);
     }
 
     [Fact]
@@ -210,6 +248,7 @@ public partial class DashboardWebTests : IAsyncDisposable
     [Theory]
     [InlineData("/XactJobs/scheduled")]
     [InlineData("/api/XactJobs/stats")]
+    [InlineData("/XactJobs/assets/js/xactjobs.js")]
     public async Task ByDefault_OnlyLocalRequestsAreAccepted(string url)
     {
         var client = await StartAsync(configure: null);
@@ -223,6 +262,7 @@ public partial class DashboardWebTests : IAsyncDisposable
     [Theory]
     [InlineData("/XactJobs/periodic")]
     [InlineData("/api/XactJobs/periodic")]
+    [InlineData("/XactJobs/assets/css/xactjobs.css")]
     public async Task WithAPolicy_OnlyAuthorizedUsersAreAccepted(string url)
     {
         var client = await StartAsync(o => o.RequireAuthorizationPolicy("Admins"));

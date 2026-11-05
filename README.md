@@ -423,14 +423,15 @@ builder.Services.AddXactJobsUI<UserDbContext>(options =>
 
 var app = builder.Build();
 
-app.UseStaticFiles();      // the dashboard's scripts and styles
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapXactJobsUI();       // maps the pages (Razor Pages) and the API
+app.MapXactJobsUI();       // maps the pages (Razor Pages), the API, and the dashboard's scripts and styles
 ```
 
-The dashboard serves its scripts and styles itself (Bootstrap, Bootstrap Icons, Chart.js and htmx), so it works without internet access.
+The dashboard's scripts, styles and fonts (Bootstrap, Bootstrap Icons, Chart.js and htmx) are embedded in the package, and `MapXactJobsUI` serves them
+under the dashboard's path, with the same access as the pages. So the dashboard works without internet access, without the static files middleware,
+and in any environment, whether the application is published or not.
 
 ## Access
 
@@ -638,7 +639,7 @@ Oracle also reuses cached query plans. If the first claim runs while the table i
 
 - The dashboard (`XactJobs.UI`) includes [Bootstrap](https://getbootstrap.com) 5.3.3, [Bootstrap Icons](https://icons.getbootstrap.com) 1.11.3,
   [Chart.js](https://www.chartjs.org) 4.4.1 and [htmx](https://htmx.org) 1.9.10, each licensed under the **MIT License**.
-  Their license texts are next to them, in [wwwroot/lib](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.UI/wwwroot/lib).
+  Their license texts are next to them, in [Assets/lib](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.UI/Assets/lib).
 
 ## License Texts
 

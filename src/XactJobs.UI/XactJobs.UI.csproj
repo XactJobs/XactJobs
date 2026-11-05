@@ -37,6 +37,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- the dashboard's scripts, styles and fonts, served by MapXactJobsUI (not a wwwroot: no static web assets) -->
+		<EmbeddedResource Include="Assets\**" LogicalName="XactJobs.UI/Assets/%(RecursiveDir)%(Filename)%(Extension)" />
+		<None Remove="Assets\**" />
+		<Content Remove="Assets\**" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<ProjectReference Include="..\XactJobs\XactJobs.csproj" />
 	</ItemGroup>
 

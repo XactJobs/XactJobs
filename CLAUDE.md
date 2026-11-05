@@ -92,7 +92,8 @@ XactJobs is a .NET library for background job processing with full database tran
 - Dashboard pages (`Areas/XactJobs/Pages/`) with htmx: each list page serves its table on its own (`?handler=Table`), and reloads it when an API action answers with the `xactjobs-changed` event (`HX-Trigger` header)
 - `Services/XactJobsUIService.cs` - queries and actions. Actions must follow the core's rules: never update a job row in place (the scheduled time is part of the primary key) nor touch a leased row, and never add a second pending run to a periodic job
 - `Api/XactJobsApiEndpoints.cs` - REST API, access (local requests only by default, or an authorization policy) and antiforgery checks
-- `wwwroot/lib/` - Bootstrap, Bootstrap Icons, Chart.js and htmx, copied from their npm packages (source map comments removed), so the dashboard needs no CDN. Times are rendered as UTC `<time>` elements and shown in the browser's time zone by `wwwroot/js/xactjobs.js`
+- `Assets/` - the dashboard's scripts, styles and fonts, embedded in the assembly and served by `Api/XactJobsAssets.cs` under `{BasePath}/assets/`, with the pages' access and a content hash in the URL (not a `wwwroot`: static web assets would need the static files middleware, and only work unpublished in Development)
+- `Assets/lib/` - Bootstrap, Bootstrap Icons, Chart.js and htmx, copied from their npm packages (source map comments removed), so the dashboard needs no CDN. Times are rendered as UTC `<time>` elements and shown in the browser's time zone by `Assets/js/xactjobs.js`
 - Actions that replace a row insert the replacement before deleting the old row, and keep `BatchId`, `AwaitsBatchId` and `ContinuationCondition` (see below)
 - History categories: `Failed` in the history is an attempt the runner already rescheduled ("Retried"); a job that ran out of retries, or threw `XactJobCancelException`, is `Cancelled` with a stack trace ("Failed"); a job cancelled from the dashboard is `Cancelled` without one
 
@@ -135,4 +136,4 @@ XactJobs is a .NET library for background job processing with full database tran
 
 - `Internal/XactJobSerializer.cs` - Adapted from Hangfire (LGPL-3.0)
 - `Internal/ExpressionUtil/` - Copied from ASP.NET MVC (Apache 2.0)
-- `XactJobs.UI/wwwroot/lib/` - Bootstrap, Bootstrap Icons, Chart.js, htmx (MIT, license files next to them)
+- `XactJobs.UI/Assets/lib/` - Bootstrap, Bootstrap Icons, Chart.js, htmx (MIT, license files next to them)

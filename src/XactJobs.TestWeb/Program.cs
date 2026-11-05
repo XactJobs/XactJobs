@@ -82,9 +82,6 @@ app.MapGet("/enqueue/scheduled", (AppDbContext db) =>
     return Results.Ok("Job scheduled to run in 30 seconds!");
 });
 
-// needed for the css/js in XactJobs.UI lib
-app.UseStaticFiles();
-
 // Enable XactJobs UI
 app.MapXactJobsUI();
 
