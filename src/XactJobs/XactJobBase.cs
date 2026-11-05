@@ -47,6 +47,44 @@ namespace XactJobs
 
         public int ErrorCount { get; init; }
 
+        private Guid? _batchId;
+
+        /// <summary>
+        /// The batch the job belongs to. The continuations of a batch start when all of its jobs are finished.
+        /// A retry of the job stays in its batch.
+        /// </summary>
+        public Guid? BatchId { get => _batchId; init => _batchId = value; }
+
+        /// <summary>
+        /// For a continuation: the batch it continues. It's kept by its retries and in the history.
+        /// A continuation that waits for its batch is scheduled at <see cref="AwaitingBatchScheduledAt"/>.
+        /// </summary>
+        public Guid? AwaitsBatchId { get; init; }
+
+        /// <summary>
+        /// For a continuation: when it runs, once the batch it waits for is finished.
+        /// </summary>
+        public XactJobContinuation? ContinuationCondition { get; init; }
+
+        /// <summary>
+        /// The scheduled time of a continuation that waits for its batch: the poll for due jobs never reaches it.
+        /// When the batch is finished, a worker claims the continuation, and either runs it or skips it.
+        /// </summary>
+        public static readonly DateTime AwaitingBatchScheduledAt = new(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc);
+
+        /// <summary>
+        /// True for a continuation that waits for its batch to finish.
+        /// </summary>
+        public bool IsAwaitingBatch => AwaitsBatchId != null && ScheduledAt == AwaitingBatchScheduledAt;
+
+        /// <summary>
+        /// A job gets its batch when a continuation is added to it, before it's saved.
+        /// </summary>
+        internal void AssignBatchId(Guid batchId)
+        {
+            _batchId = batchId;
+        }
+
         public XactJobBase(long id,
                            DateTime scheduledAt,
                            string typeName,

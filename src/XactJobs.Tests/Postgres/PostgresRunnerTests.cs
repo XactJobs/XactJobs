@@ -42,8 +42,9 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        await using var indexes = new NpgsqlCommand("SELECT string_agg(indexname, ',') FROM pg_indexes WHERE schemaname = 'xact_jobs' AND tablename = 'job'", connection);
-        Assert.Equal("pk_job", await indexes.ExecuteScalarAsync());
+        // no index on the lease columns: the batch columns are indexed, but a claim doesn't change them
+        await using var indexes = new NpgsqlCommand("SELECT string_agg(indexname, ',' ORDER BY indexname) FROM pg_indexes WHERE schemaname = 'xact_jobs' AND tablename = 'job'", connection);
+        Assert.Equal("ix_job_awaits_batch_id,ix_job_batch_id,pk_job", await indexes.ExecuteScalarAsync());
 
         await using var options = new NpgsqlCommand("SELECT reloptions::text FROM pg_class WHERE oid = 'xact_jobs.job'::regclass", connection);
         Assert.Equal("{fillfactor=70}", await options.ExecuteScalarAsync());

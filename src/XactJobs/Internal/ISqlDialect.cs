@@ -53,6 +53,9 @@ namespace XactJobs.Internal
         string ColUpdatedAt { get; }
         string ColIsActive { get; }
         string ColVersion { get; }
+        string ColBatchId { get; }
+        string ColAwaitsBatchId { get; }
+        string ColContinuationCondition { get; }
 
         string DateTimeColumnType { get; }
 
@@ -60,6 +63,15 @@ namespace XactJobs.Internal
         /// Leases up to <paramref name="maxJobs"/> due jobs from the queue and returns them.
         /// </summary>
         Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Leases up to <paramref name="maxJobs"/> continuations of the queue that wait for a batch that has no jobs left, and returns them.
+        /// <para>
+        /// The check for the batch's jobs must not skip locked rows (no SKIP LOCKED or READPAST in it): a job that is being retried
+        /// is replaced in a transaction, and skipping its rows would make the batch look finished.
+        /// </para>
+        /// </summary>
+        Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken);
 
         /// <summary>
         /// Extends the lease of the given jobs, by primary key, if they are still leased by <paramref name="leaser"/>.

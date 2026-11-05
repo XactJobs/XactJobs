@@ -32,8 +32,12 @@ namespace XactJobs.Internal
         {
             var deleteBeforeUtc = DateTime.UtcNow.Subtract(TimeSpan.FromDays(_options.HistoryRetentionPeriodInDays));
 
+            var jobs = _db.Set<XactJob>();
+
+            // a continuation that still waits for its batch needs the batch's history, to know if its jobs failed
             await _db.Set<XactJobHistory>()
-                .Where(x => x.ProcessedAt < deleteBeforeUtc)
+                .Where(x => x.ProcessedAt < deleteBeforeUtc
+                    && (x.BatchId == null || !jobs.Any(j => j.AwaitsBatchId == x.BatchId && j.ScheduledAt == XactJobBase.AwaitingBatchScheduledAt)))
                 .ExecuteDeleteAsync(cancellationToken)
                 .ConfigureAwait(false);
         }

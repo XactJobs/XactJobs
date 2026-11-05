@@ -50,6 +50,9 @@ namespace XactJobs.Internal.SqlDialects
         public string ColUpdatedAt { get; } = "UPDATED_AT";
         public string ColIsActive { get; } = "IS_ACTIVE";
         public string ColVersion { get; } = "VERSION";
+        public string ColBatchId { get; } = "BATCH_ID";
+        public string ColAwaitsBatchId { get; } = "AWAITS_BATCH_ID";
+        public string ColContinuationCondition { get; } = "CONTINUATION_CONDITION";
 
         public string DateTimeColumnType { get; } = "TIMESTAMP";
 
@@ -87,6 +90,27 @@ SET {ColLeaser} = HEXTORAW({{0}}),
 WHERE {jobKeys}
 ", parameters.ToArray());
         }
+
+        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        {
+            return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               GetLockContinuationsSql(queueName, maxJobs),
+                                                               jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
+                                                               cancellationToken);
+        }
+
+        // only the rows of the outer query are locked: the batch's jobs are a consistent read, which doesn't skip rows
+        public (string Sql, object[] Parameters) GetLockContinuationsSql(string? queueName, int maxJobs) => ($@"
+SELECT c.*
+FROM {XactJobSchema}_{XactJobTable} c
+WHERE c.{ColQueue} = {{0}}
+  AND c.{ColScheduledAt} = {{1}}
+  AND c.{ColAwaitsBatchId} IS NOT NULL
+  AND (c.{ColLeasedUntil} IS NULL OR c.{ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
+  AND NOT EXISTS (SELECT 1 FROM {XactJobSchema}_{XactJobTable} b WHERE b.{ColBatchId} = c.{ColAwaitsBatchId})
+  AND ROWNUM <= {{2}}
+FOR UPDATE SKIP LOCKED
+", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs]);
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {

@@ -30,9 +30,24 @@ namespace XactJobs
             });
         }
 
+        // set when a batch finished, so the next poll claims the continuations, without waiting for its regular check
+        private int _continuationsReady;
+
         internal void Notify()
         {
             _notificationChannel.Writer.TryWrite(true);
+        }
+
+        internal void NotifyContinuationsReady()
+        {
+            Volatile.Write(ref _continuationsReady, 1);
+
+            Notify();
+        }
+
+        internal bool TakeContinuationsReady()
+        {
+            return Interlocked.Exchange(ref _continuationsReady, 0) == 1;
         }
 
         internal ValueTask<bool> WaitToReadAsync(CancellationToken cancellationToken)

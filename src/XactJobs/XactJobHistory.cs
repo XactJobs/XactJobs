@@ -66,10 +66,24 @@ namespace XactJobs
                 innerMostEx = innerMostEx.InnerException;
             }
 
+            return CreateFromJob(job, processedAt, status, errorCount, innerMostEx?.Message, ex?.StackTrace, job.ScheduledAt);
+        }
+
+        /// <summary>
+        /// A continuation that waited for its batch has the reserved scheduled time, so the history gets the time it was claimed instead.
+        /// </summary>
+        internal static XactJobHistory CreateFromJob(XactJob job,
+                                                     DateTime processedAt,
+                                                     XactJobStatus status,
+                                                     int errorCount,
+                                                     string? errorMessage,
+                                                     string? errorStackTrace,
+                                                     DateTime scheduledAt)
+        {
             return new XactJobHistory(job.Id,
                                       processedAt,
                                       status,
-                                      job.ScheduledAt,
+                                      scheduledAt,
                                       job.TypeName,
                                       job.MethodName,
                                       job.MethodArgs,
@@ -78,8 +92,13 @@ namespace XactJobs
                                       job.CronExpression,
                                       job.PeriodicJobVersion,
                                       errorCount,
-                                      innerMostEx?.Message,
-                                      ex?.StackTrace);
+                                      errorMessage,
+                                      errorStackTrace)
+            {
+                BatchId = job.BatchId,
+                AwaitsBatchId = job.AwaitsBatchId,
+                ContinuationCondition = job.ContinuationCondition
+            };
         }
     }
 
