@@ -30,7 +30,12 @@ namespace XactJobs.Internal
         private static readonly ConcurrentDictionary<MethodInfo, AsyncStateMachineAttribute?> _asyncStateMachineAttributeCache = new();
         private static readonly ConcurrentDictionary<MethodInfo, string> _methodSignatureCache = new();
 
-        internal static XactJob FromExpression(LambdaExpression lambdaExp, DateTime? scheduleAtUtc, string? queue)
+        internal static XactJob FromExpression(LambdaExpression lambdaExp,
+                                               DateTime? scheduleAtUtc,
+                                               string? queue,
+                                               Guid? batchId = null,
+                                               Guid? awaitsBatchId = null,
+                                               XactJobContinuation? continuationCondition = null)
         {
             if (scheduleAtUtc.HasValue && scheduleAtUtc.Value.Kind != DateTimeKind.Utc)
             {
@@ -57,7 +62,12 @@ namespace XactJobs.Internal
 
             queue ??= QueueNames.Default;
 
-            return new XactJob(0, scheduleAtUtc.Value, typeName, methodName, serializedArgs, queue);
+            return new XactJob(0, scheduleAtUtc.Value, typeName, methodName, serializedArgs, queue)
+            {
+                BatchId = batchId,
+                AwaitsBatchId = awaitsBatchId,
+                ContinuationCondition = continuationCondition
+            };
         }
 
         internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, string id, string cronExp, string? queue)

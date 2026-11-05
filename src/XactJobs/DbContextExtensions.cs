@@ -176,11 +176,36 @@ namespace XactJobs
             return true;
         }
 
-        internal static XactJob JobAdd(this DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue)
+        /// <summary>
+        /// Starts a new batch: jobs whose continuations start when all of them are finished.
+        /// The jobs of a batch must be saved together, with one SaveChanges.
+        /// </summary>
+        public static XactJobBatch JobBatch(this DbContext dbContext)
         {
-            var job = XactJobSerializer.FromExpression(lambdaExp, scheduledAt, queue);
+            return new XactJobBatch(dbContext, Guid.NewGuid(), isNew: true);
+        }
+
+        /// <summary>
+        /// A batch that's already saved, to add continuations to it. If it's finished, they start right away.
+        /// A batch id that doesn't exist is a finished batch without jobs.
+        /// </summary>
+        public static XactJobBatch JobBatch(this DbContext dbContext, Guid batchId)
+        {
+            return new XactJobBatch(dbContext, batchId, isNew: false);
+        }
+
+        internal static XactJob JobAdd(this DbContext dbContext, LambdaExpression lambdaExp, DateTime? scheduledAt, string? queue, Guid? batchId = null)
+        {
+            if (scheduledAt == XactJobBase.AwaitingBatchScheduledAt)
+            {
+                throw new ArgumentOutOfRangeException(nameof(scheduledAt), scheduledAt, "This scheduled time is reserved for continuations that wait for their batch.");
+            }
+
+            var job = XactJobSerializer.FromExpression(lambdaExp, scheduledAt, queue, batchId);
 
             dbContext.Set<XactJob>().Add(job);
+
+            job.AddedTo = dbContext;
 
             return job;
         }
@@ -311,7 +336,13 @@ namespace XactJobs
                                      job.PeriodicJobId,
                                      job.CronExpression,
                                      job.PeriodicJobVersion,
-                                     errorCount);
+                                     errorCount)
+            {
+                // a retry stays in its batch, and a retry of a continuation is still one, but doesn't wait anymore
+                BatchId = job.BatchId,
+                AwaitsBatchId = job.AwaitsBatchId,
+                ContinuationCondition = job.ContinuationCondition
+            };
 
             dbContext.Set<XactJob>().Add(newJob);
 

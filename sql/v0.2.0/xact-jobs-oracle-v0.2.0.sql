@@ -1,0 +1,18 @@
+-- ============================
+-- Table storing scheduled jobs
+-- ============================
+
+-- Batches and continuations
+ALTER TABLE "XACT_JOBS_JOB" ADD ("BATCH_ID" RAW(16), "AWAITS_BATCH_ID" RAW(16), "CONTINUATION_CONDITION" NUMBER(10));
+
+CREATE INDEX "IX_JOB_BATCH_ID" ON "XACT_JOBS_JOB" ("BATCH_ID");
+CREATE INDEX "IX_JOB_AWAITS_BATCH_ID" ON "XACT_JOBS_JOB" ("AWAITS_BATCH_ID");
+
+-- ===============================
+-- Table storing execution history
+-- ===============================
+
+ALTER TABLE "XACT_JOBS_JOB_HISTORY" ADD ("BATCH_ID" RAW(16), "AWAITS_BATCH_ID" RAW(16), "CONTINUATION_CONDITION" NUMBER(10));
+
+CREATE INDEX "IX_JOB_HISTORY_BATCH_ID" ON "XACT_JOBS_JOB_HISTORY" ("BATCH_ID");
+CREATE INDEX "IX_JOB_HISTORY_AWAITS_BATCH_ID" ON "XACT_JOBS_JOB_HISTORY" ("AWAITS_BATCH_ID");

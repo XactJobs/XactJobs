@@ -111,6 +111,8 @@ dbContext.JobEnqueue(() => EmailService.SendWelcome(userId));
 dbContext.JobScheduleAt(DateTime.UtcNow.AddHours(1), () => SendReminder());
 dbContext.JobScheduleIn(TimeSpan.FromMinutes(30), () => ProcessData());
 dbContext.JobEnsurePeriodicAsync("daily-cleanup", "0 0 * * * *", () => Cleanup());
+dbContext.JobEnqueue(() => Import()).ContinueWith(() => Report());
+dbContext.JobBatch().Enqueue(() => Sync(1)).Enqueue(() => Sync(2)).ContinueWith(() => Report(), XactJobContinuation.OnFinish);
 ```
 
 ## Database Entities
@@ -131,7 +133,7 @@ dbContext.JobEnsurePeriodicAsync("daily-cleanup", "0 0 * * * *", () => Cleanup()
 
 ## Important Notes
 
-- Current version: 0.1.7
+- Current version: 0.2.0
 - Targets: net8.0, net9.0, net10.0
 - License: LGPL-3.0-or-later
 

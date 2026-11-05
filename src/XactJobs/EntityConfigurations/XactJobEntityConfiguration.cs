@@ -81,6 +81,18 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.ErrorCount).HasColumnName(_sqlDialect.ColErrorCount);
 
+            builder.Property(x => x.BatchId).HasColumnName(_sqlDialect.ColBatchId);
+            builder.Property(x => x.AwaitsBatchId).HasColumnName(_sqlDialect.ColAwaitsBatchId);
+            builder.Property(x => x.ContinuationCondition).HasColumnName(_sqlDialect.ColContinuationCondition);
+
+            // to check if a batch has jobs left
+            builder.HasIndex(x => x.BatchId)
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColBatchId}");
+
+            // to find the continuations of a batch
+            builder.HasIndex(x => x.AwaitsBatchId)
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColAwaitsBatchId}");
+
             if (_isOfficialMySqlProvider)
             {
                 // MySQL requires a key starting with an auto increment column, and it's not the first one of the primary key.

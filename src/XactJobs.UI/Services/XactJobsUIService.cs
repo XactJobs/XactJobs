@@ -224,10 +224,11 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         var conflict = await ReplacePendingJobAsync(job, now =>
         {
+            // a continuation that waits for its batch has a reserved scheduled time, which doesn't belong in the history
             db.Set<XactJobHistory>().Add(new XactJobHistory(job.Id,
                                                             now,
                                                             XactJobStatus.Cancelled,
-                                                            job.ScheduledAt,
+                                                            job.IsAwaitingBatch ? now : job.ScheduledAt,
                                                             job.TypeName,
                                                             job.MethodName,
                                                             job.MethodArgs,
@@ -237,7 +238,12 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
                                                             job.PeriodicJobVersion,
                                                             job.ErrorCount,
                                                             message,
-                                                            errorStackTrace: null));
+                                                            errorStackTrace: null)
+            {
+                BatchId = job.BatchId,
+                AwaitsBatchId = job.AwaitsBatchId,
+                ContinuationCondition = job.ContinuationCondition
+            });
         }, ct);
 
         return conflict ?? ActionResultDto.Done($"Job #{id} cancelled.");
@@ -491,6 +497,11 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             return ActionResultDto.Conflict($"{subject} is running.");
         }
 
+        if (job.IsAwaitingBatch)
+        {
+            return ActionResultDto.Conflict($"{subject} is a continuation of the batch {job.AwaitsBatchId}: it starts when the batch is finished.");
+        }
+
         if (job.ScheduledAt <= DateTime.UtcNow)
         {
             NotifyQueue(job.Queue);
@@ -512,7 +523,12 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
                                  job.PeriodicJobId,
                                  job.CronExpression,
                                  job.PeriodicJobVersion,
-                                 job.ErrorCount);
+                                 job.ErrorCount)
+            {
+                BatchId = job.BatchId,
+                AwaitsBatchId = job.AwaitsBatchId,
+                ContinuationCondition = job.ContinuationCondition
+            };
 
             db.Set<XactJob>().Add(newJob);
         }, ct);
@@ -526,6 +542,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
     /// <summary>
     /// Deletes the job row if no worker has leased it, and adds what replaces it, in one transaction.
+    /// The replacement is inserted first, so that the job's batch can't look finished meanwhile
+    /// to a reader that doesn't use snapshots (SQL Server without snapshot isolation).
     /// </summary>
     /// <returns>A conflict if a worker leased the row, or it's gone.</returns>
     private async Task<ActionResultDto?> ReplacePendingJobAsync(XactJob job, Action<DateTime> addReplacement, CancellationToken ct)
@@ -545,6 +563,10 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
             var now = DateTime.UtcNow;
 
+            addReplacement(now);
+
+            await db.SaveChangesAsync(token);
+
             // the whole primary key, so the delete can use it
             var deleted = await db.Set<XactJob>()
                 .Where(j => j.Queue == job.Queue
@@ -553,11 +575,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
                     && (j.LeasedUntil == null || j.LeasedUntil < now))
                 .ExecuteDeleteAsync(token);
 
+            // rolled back when the transaction is disposed
             if (deleted == 0) return false;
-
-            addReplacement(now);
-
-            await db.SaveChangesAsync(token);
 
             await transaction.CommitAsync(token);
 

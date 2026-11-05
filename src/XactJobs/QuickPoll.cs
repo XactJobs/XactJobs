@@ -41,6 +41,14 @@ namespace XactJobs
             additionalChannel.Notify();
             return true;
         }
+
+        internal bool TryNotifyContinuationsReady(string queue)
+        {
+            if (!_channels.TryGetValue(queue, out var channel)) return false;
+
+            channel.NotifyContinuationsReady();
+            return true;
+        }
     }
 
     public class QuickPoll<TDbContext> where TDbContext : DbContext
@@ -98,6 +106,15 @@ namespace XactJobs
         public XactJob JobEnqueue<T>([InstantHandle] Expression<Func<T, Task>> jobExpression, string? queue = null)
         {
             return JobAdd(jobExpression, queue);
+        }
+
+        /// <summary>
+        /// Starts a new batch, whose jobs are registered for QuickPoll notification on SaveChanges or Commit.
+        /// Its continuations don't need it: they are started by the worker that finishes the batch.
+        /// </summary>
+        public XactJobBatch JobBatch()
+        {
+            return new XactJobBatch(DbContext, Guid.NewGuid(), isNew: true, queue => _affectedQueues[queue] = true);
         }
 
         /// <summary>

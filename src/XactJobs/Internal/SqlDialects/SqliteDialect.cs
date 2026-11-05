@@ -33,6 +33,9 @@ namespace XactJobs.Internal.SqlDialects
         public string ColUpdatedAt { get; } = "updated_at";
         public string ColIsActive { get; } = "is_active";
         public string ColVersion { get; } = "version";
+        public string ColBatchId { get; } = "batch_id";
+        public string ColAwaitsBatchId { get; } = "awaits_batch_id";
+        public string ColContinuationCondition { get; } = "continuation_condition";
 
         public bool HasSchemaSupport { get; } = false;
 
@@ -67,6 +70,31 @@ RETURNING *
 ", [queueName ?? QueueNames.Default, maxJobs, leaser.ToString(), leaseDurationInSeconds]);
 
         // The primary key is just the id on Sqlite (see XactJobEntityConfiguration).
+        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        {
+            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
+        }
+
+        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
+WITH cte AS (
+  SELECT c.{ColId}
+  FROM {XactJobSchema}_{XactJobTable} AS c
+  WHERE c.{ColQueue} = {{0}}
+    AND c.{ColScheduledAt} = {{1}}
+    AND c.{ColAwaitsBatchId} IS NOT NULL
+    AND (c.{ColLeasedUntil} IS NULL OR c.{ColLeasedUntil} < datetime('subsec'))
+    AND NOT EXISTS (SELECT 1 FROM {XactJobSchema}_{XactJobTable} AS b WHERE b.{ColBatchId} = c.{ColAwaitsBatchId})
+  ORDER BY c.{ColId}
+  LIMIT {{2}}
+)
+UPDATE {XactJobSchema}_{XactJobTable}
+SET {ColLeaser} = {{3}},
+    {ColLeasedUntil} = datetime('subsec', '+' || {{4}} || ' seconds')
+FROM cte
+WHERE {XactJobSchema}_{XactJobTable}.{ColId} = cte.{ColId}
+RETURNING *
+", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs, leaser.ToString(), leaseDurationInSeconds]);
+
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {
             List<object> parameters = [leaseDurationInSeconds, leaser.ToString()];

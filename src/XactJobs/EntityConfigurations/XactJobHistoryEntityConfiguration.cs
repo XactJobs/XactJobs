@@ -87,8 +87,20 @@ namespace XactJobs.EntityConfigurations
                 builder.Property(x => x.ErrorStackTrace).HasColumnType("NCLOB");
             }
 
+            builder.Property(x => x.BatchId).HasColumnName(_sqlDialect.ColBatchId);
+            builder.Property(x => x.AwaitsBatchId).HasColumnName(_sqlDialect.ColAwaitsBatchId);
+            builder.Property(x => x.ContinuationCondition).HasColumnName(_sqlDialect.ColContinuationCondition);
+
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
+
+            // to count the failed jobs of a batch
+            builder.HasIndex(x => x.BatchId)
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColBatchId}");
+
+            // to find the continuations of a batch in the history
+            builder.HasIndex(x => x.AwaitsBatchId)
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColAwaitsBatchId}");
         }
     }
 }

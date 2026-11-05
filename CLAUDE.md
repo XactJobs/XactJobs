@@ -69,7 +69,8 @@ XactJobs is a .NET library for background job processing with full database tran
 ### Key Components
 
 **Public API** (`src/XactJobs/`)
-- `DbContextExtensions.cs` - Main API: `JobEnqueue()`, `JobScheduleAt()`, `JobScheduleIn()`, `JobEnsurePeriodic()`
+- `DbContextExtensions.cs` - Main API: `JobEnqueue()`, `JobScheduleAt()`, `JobScheduleIn()`, `JobEnsurePeriodic()`, `JobBatch()`
+- `XactJobBatch.cs`, `XactJob.ContinueWith()` - Fluent API for batches and continuations (see below)
 - `QuickPoll.cs` - Channel-based immediate job execution without waiting for poll interval
 - `XactJobsOptionsBuilder.cs` - Fluent configuration for queues, workers, and periodic jobs
 
@@ -92,7 +93,17 @@ XactJobs is a .NET library for background job processing with full database tran
 - `Services/XactJobsUIService.cs` - queries and actions. Actions must follow the core's rules: never update a job row in place (the scheduled time is part of the primary key) nor touch a leased row, and never add a second pending run to a periodic job
 - `Api/XactJobsApiEndpoints.cs` - REST API, access (local requests only by default, or an authorization policy) and antiforgery checks
 - `wwwroot/lib/` - Bootstrap, Bootstrap Icons, Chart.js and htmx, copied from their npm packages (source map comments removed), so the dashboard needs no CDN. Times are rendered as UTC `<time>` elements and shown in the browser's time zone by `wwwroot/js/xactjobs.js`
+- Actions that replace a row insert the replacement before deleting the old row, and keep `BatchId`, `AwaitsBatchId` and `ContinuationCondition` (see below)
 - History categories: `Failed` in the history is an attempt the runner already rescheduled ("Retried"); a job that ran out of retries, or threw `XactJobCancelException`, is `Cancelled` with a stack trace ("Failed"); a job cancelled from the dashboard is `Cancelled` without one
+
+### Batches and Continuations
+
+- A batch is the jobs with the same `BatchId`, and is finished when none of them is left in the job table. There's no batch table. A job continued on its own gets a batch of one
+- A continuation waits as a job row with `AwaitsBatchId`, its `ContinuationCondition`, and the reserved `ScheduledAt` 9999-12-31 (`XactJobBase.AwaitingBatchScheduledAt`), so the poll for due jobs never reaches it. Its retries and history rows keep `AwaitsBatchId`, but have real scheduled times
+- Each worker first claims the continuations of its queue whose batch is finished (`ISqlDialect.ClaimContinuationsAsync`), then due jobs with the slots left. Continuations are claimed at most once per polling interval, or right away when the worker that finished a batch wakes the queue (`QuickPollChannel.NotifyContinuationsReady`)
+- The claimed continuation's worker counts the batch's failed jobs in the history (`Cancelled` or `Skipped`; `Failed` attempts were retried), and either runs the continuation or moves it to the history as `Skipped`
+- The check for the batch's jobs must not skip locked rows (no `SKIP LOCKED`/`READPAST` in the subquery), and a job that's replaced (a retry, the dashboard's Run now) is inserted before the old row is deleted: on SQL Server without snapshot isolation, a reader can miss a row inserted behind it, and the batch would look finished
+- The history cleanup keeps the history of batches that a waiting continuation needs
 
 ### Database Entities
 

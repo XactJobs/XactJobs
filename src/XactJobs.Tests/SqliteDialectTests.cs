@@ -80,8 +80,10 @@ public class SqliteDialectTests
         // Act
         var indexes = context.Model.FindEntityType(typeof(XactJob))!.GetIndexes();
 
-        // Assert
-        Assert.Empty(indexes);
+        // Assert: only the batch columns are indexed
+        Assert.Equal(
+            [nameof(XactJob.AwaitsBatchId), nameof(XactJob.BatchId)],
+            indexes.SelectMany(i => i.Properties).Select(p => p.Name).Order());
     }
 
     [Fact]

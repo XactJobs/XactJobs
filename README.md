@@ -79,7 +79,7 @@ missed runs are not caught up.
 After a periodic job is deleted, or its definition changes, the pending run of the old definition stays in the table until its
 scheduled time. A worker then skips it, adding a `Skipped` row to the history.
 
-### Batches
+### Several Jobs at Once
 Adding multiple jobs before saving changes will enqueue all jobs in a single transaction.
 
 ```csharp
@@ -88,6 +88,76 @@ dbContext.JobEnqueue(() => Greeter.Say("Job 2"));
 
 dbContext.SaveChanges();
 ```
+
+### Continuations
+A continuation is a job that starts when another job is finished. It can have continuations of its own:
+
+```csharp
+dbContext.JobEnqueue<Importer>(x => x.ImportAsync(fileId))
+    .ContinueWith<Reports>(x => x.RebuildAsync())
+    .ContinueWith<Mailer>(x => x.SendReportAsync());
+
+dbContext.SaveChanges();
+```
+
+By default a continuation runs if the job succeeded. The condition can also be `OnFailure` or `OnFinish`, and a continuation can go to another queue:
+
+```csharp
+var import = dbContext.JobEnqueue<Importer>(x => x.ImportAsync(fileId));
+
+import.ContinueWith<Reports>(x => x.RebuildAsync());
+import.ContinueWith<Ops>(x => x.AlertAsync(fileId), XactJobContinuation.OnFailure, QueueNames.Priority);
+```
+
+| Condition | Runs when |
+|---|---|
+| `OnSuccess` (default) | all the jobs it waits for succeeded |
+| `OnFailure` | at least one of them failed |
+| `OnFinish` | they are all finished, whether they succeeded or not |
+
+A job failed if it ran out of retries, threw `XactJobCancelException`, was cancelled from the dashboard, or was a continuation that was skipped,
+so in a chain of `OnSuccess` continuations, a failure skips the rest of the chain. A continuation whose condition isn't met moves to the history as `Skipped`,
+with the reason as its message. Attempts that were retried don't count: a job of a batch that succeeds on its second attempt succeeded.
+
+A job can only be continued before it's saved, because its row can't be changed afterwards. To continue jobs that are saved separately, put them in a batch.
+
+### Batches
+A batch is a group of jobs whose continuations start when all of them are finished:
+
+```csharp
+var batch = dbContext.JobBatch()
+    .Enqueue<InventorySync>(x => x.SyncAsync("leeds"))
+    .Enqueue<InventorySync>(x => x.SyncAsync("reno"))
+    .ScheduleIn<InventorySync>(x => x.SyncAsync("osaka"), TimeSpan.FromHours(2));
+
+batch.ContinueWith<Reports>(x => x.RebuildAsync())
+    .ContinueWith<Mailer>(x => x.SendReportAsync());
+
+batch.ContinueWith<Ops>(x => x.AlertAsync(), XactJobContinuation.OnFailure);
+
+dbContext.SaveChanges();
+```
+
+The jobs of a batch are saved together, with one `SaveChanges`: once it's saved, a batch can't get more jobs. Continuations can be added at any time, also later by
+the batch's id (`batch.Id`). If the batch is already finished, they start right away:
+
+```csharp
+dbContext.JobBatch(batchId)
+    .ContinueWith<Audit>(x => x.LogAsync(batchId), XactJobContinuation.OnFinish);
+
+dbContext.SaveChanges();
+```
+
+A batch id that doesn't exist is a finished batch without jobs, so its continuations run as if all of its jobs succeeded.
+
+- A retry of a job stays in its batch, and a continuation waits for it. A job retried from the dashboard is a new job, outside of the batch.
+- A job of a batch can't be continued on its own: continue the batch. Periodic jobs can't be in a batch, nor be continued.
+- The worker that finishes the last job of a batch wakes up the workers of the continuations' queues, if they run in the same process,
+  and the continuations start as soon as a worker is free. Besides that, each worker checks for continuations of finished batches once per polling interval.
+  The check is one query, which looks at every continuation of the queue that's still waiting, so keep it in mind with many thousands of them.
+- A continuation that waits for its batch is stored with the scheduled time 9999-12-31, so the poll for due jobs never reaches it.
+- With QuickPoll, `JobBatch()` registers the jobs of the batch for the notification. Their continuations don't need it.
+- The history cleanup keeps the history of the batches that continuations still wait for, since it tells if their jobs failed.
 
 ### Transactions
 Jobs participate in DbContext transactions, just like the regular entities in EFCore.
@@ -184,14 +254,17 @@ Finally create the XactJobs tables in your database, by running all the SQL scri
 
 | Database | Scripts |
 |---|---|
-| SQL Server | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlserver-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlserver-v0.1.5.sql) |
-| PostgreSQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-postgresql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-postgresql-v0.1.5.sql) |
-| MySQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-mysql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-mysql-v0.1.5.sql) |
-| Oracle | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-oracle-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-oracle-v0.1.5.sql) |
-| SQLite | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlite-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlite-v0.1.5.sql) |
+| SQL Server | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlserver-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlserver-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlserver-v0.2.0.sql) |
+| PostgreSQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-postgresql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-postgresql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-postgresql-v0.2.0.sql) |
+| MySQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-mysql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-mysql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-mysql-v0.2.0.sql) |
+| Oracle | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-oracle-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-oracle-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-oracle-v0.2.0.sql) |
+| SQLite | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlite-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlite-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlite-v0.2.0.sql) |
 
 When upgrading an existing installation, run only the scripts of the newer versions. For v0.1.5, upgrade all the workers first and then run
 the script, because it drops an index that older versions need.
+
+For v0.2.0, run the script first: it adds the columns for batches and continuations, which v0.2.0 needs. Start using batches and continuations only
+once all the workers run v0.2.0: a worker of an older version that retries a job of a batch removes the job from its batch, so the batch's continuations could start too early.
 
 ## Using EF Migrations
 Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
@@ -445,6 +518,8 @@ public async Task SendInvoiceAsync(int orderId)
 The job moves to the history as cancelled right away, with the exception's message as the error. As with any failure, its database writes are rolled back. The exception is also found when it's wrapped in other exceptions. For a periodic job, only the current run is cancelled: the next one is scheduled as usual.
 
 A job that has nothing to do should just return: it's recorded as completed.
+
+A custom retry strategy gets the job that failed. For the first attempt of a continuation, its `ScheduledAt` is the reserved time 9999-12-31, so base the retry time on the current time.
 
 ## Stopping
 When the application stops, the workers stop polling and running jobs get `ShutdownTimeoutInSeconds` to finish. Then the cancellation token passed to the jobs is cancelled, and they get

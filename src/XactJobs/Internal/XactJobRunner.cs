@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 
 namespace XactJobs.Internal
@@ -43,15 +44,25 @@ namespace XactJobs.Internal
 
         private readonly string _queueName;
         private readonly QuickPollChannel _quickPollChannel;
+        private readonly QuickPollChannels _quickPollChannels;
         private readonly Guid _leaser = Guid.NewGuid();
         private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
-        public XactJobRunner(string queueName, QuickPollChannel quickPollChannel, XactJobsOptionsBase<TDbContext> options, IServiceScopeFactory scopeFactory, ILogger logger)
+        // continuations are claimed at most once per polling interval, unless a finished batch wakes the queue
+        private DateTime _nextContinuationClaimAt = DateTime.MinValue;
+
+        public XactJobRunner(string queueName,
+                             QuickPollChannel quickPollChannel,
+                             QuickPollChannels quickPollChannels,
+                             XactJobsOptionsBase<TDbContext> options,
+                             IServiceScopeFactory scopeFactory,
+                             ILogger logger)
         {
             _queueName = queueName;
             _quickPollChannel = quickPollChannel;
+            _quickPollChannels = quickPollChannels;
             _options = options;
             _scopeFactory = scopeFactory;
             _logger = logger;
@@ -318,8 +329,38 @@ namespace XactJobs.Internal
 
             var dialect = dbContext.Database.ProviderName.ToSqlDialect();
 
-            var jobs = await dialect.ClaimJobsAsync(dbContext, _queueName, maxJobs, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
-                .ConfigureAwait(false);
+            var jobs = new List<XactJob>();
+
+            if (ShouldClaimContinuations())
+            {
+                // first, so that a backlog of the queue doesn't hold them back
+                jobs.AddRange(await dialect.ClaimContinuationsAsync(dbContext, _queueName, maxJobs, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
+                    .ConfigureAwait(false));
+
+                if (jobs.Count == maxJobs)
+                {
+                    // there may be more of them
+                    _nextContinuationClaimAt = DateTime.MinValue;
+                }
+            }
+
+            ExceptionDispatchInfo? claimError = null;
+
+            if (jobs.Count < maxJobs)
+            {
+                try
+                {
+                    jobs.AddRange(await dialect.ClaimJobsAsync(dbContext, _queueName, maxJobs - jobs.Count, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
+                        .ConfigureAwait(false));
+                }
+                catch (Exception ex) when (jobs.Count > 0)
+                {
+                    // the continuations are leased already: start them, then report the failure
+                    claimError = ExceptionDispatchInfo.Capture(ex);
+                }
+            }
+
+            var claimedAt = DateTime.UtcNow;
 
             foreach (var job in jobs)
             {
@@ -356,10 +397,25 @@ namespace XactJobs.Internal
                 Interlocked.Increment(ref _runningJobCount);
 
                 // Task.Run, because a job can block for a long time before its first await, and this is the polling loop
-                _ = Task.Run(() => RunClaimedJobAsync(job, periodicJob, jobsToken), CancellationToken.None);
+                _ = Task.Run(() => RunClaimedJobAsync(job, periodicJob, claimedAt, jobsToken), CancellationToken.None);
             }
 
+            claimError?.Throw();
+
             return jobs.Count;
+        }
+
+        private bool ShouldClaimContinuations()
+        {
+            var now = DateTime.UtcNow;
+
+            var isWokenUp = _quickPollChannel.TakeContinuationsReady();
+
+            if (!isWokenUp && now < _nextContinuationClaimAt) return false;
+
+            _nextContinuationClaimAt = now.AddSeconds(_options.PollingIntervalInSeconds);
+
+            return true;
         }
 
         private static async Task<Dictionary<string, XactJobPeriodic>> LoadPeriodicJobsAsync(TDbContext dbContext, List<XactJob> jobs, CancellationToken cancellationToken)
@@ -382,11 +438,11 @@ namespace XactJobs.Internal
         /// <summary>
         /// Nothing observes this task, so it must not throw.
         /// </summary>
-        private async Task RunClaimedJobAsync(XactJob job, XactJobPeriodic? periodicJob, CancellationToken jobsToken)
+        private async Task RunClaimedJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, CancellationToken jobsToken)
         {
             try
             {
-                await RunJobAsync(job, periodicJob, jobsToken)
+                await RunJobAsync(job, periodicJob, claimedAt, jobsToken)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -400,10 +456,16 @@ namespace XactJobs.Internal
                     _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
                 }
 
-                await RecordFailureAsync(job, periodicJob, ex)
+                var isFinished = await RecordFailureAsync(job, periodicJob, claimedAt, ex)
                     .ConfigureAwait(false);
 
                 _inFlightJobs.TryRemove(GetKey(job), out _);
+
+                if (isFinished)
+                {
+                    await StartContinuationsIfBatchFinishedAsync(job)
+                        .ConfigureAwait(false);
+                }
             }
             finally
             {
@@ -422,8 +484,13 @@ namespace XactJobs.Internal
         /// Records a failed attempt in its own scope, after the job's scope has been rolled back and disposed.
         /// Never throws: if the record can't be saved, the lease expires and the job runs again.
         /// The stopping token isn't used, so that a job failing during shutdown still gets its failure recorded.
+        /// <para>
+        /// The retry is inserted before the failed attempt is deleted, in one transaction: so the job's batch can't look finished
+        /// to a reader that doesn't use snapshots (SQL Server without snapshot isolation).
+        /// </para>
         /// </summary>
-        private async Task RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, Exception jobException)
+        /// <returns>True if the job is finished: it won't be retried.</returns>
+        private async Task<bool> RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception jobException)
         {
             try
             {
@@ -431,19 +498,38 @@ namespace XactJobs.Internal
 
                 var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-                RequireTransactionForSaveChanges(dbContext);
-
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
 
-                dbContext.Attach(job);
+                // a retrying execution strategy, if the app enabled one, only allows explicit transactions inside of it
+                var status = await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
+                {
+                    dbContext.ChangeTracker.Clear();
 
-                var activePeriodicJob = await GetIfStillActiveAsync(dbContext, periodicJob, cts.Token)
-                    .ConfigureAwait(false);
+                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token)
+                        .ConfigureAwait(false);
 
-                RecordFailedAttempt(dbContext, job, activePeriodicJob, jobException);
+                    dbContext.Attach(job);
 
-                await dbContext.SaveChangesAsync(cts.Token)
-                    .ConfigureAwait(false);
+                    var activePeriodicJob = await GetIfStillActiveAsync(dbContext, periodicJob, token)
+                        .ConfigureAwait(false);
+
+                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException);
+
+                    await dbContext.SaveChangesAsync(token)
+                        .ConfigureAwait(false);
+
+                    dbContext.Set<XactJob>().Remove(job);
+
+                    await dbContext.SaveChangesAsync(token)
+                        .ConfigureAwait(false);
+
+                    await transaction.CommitAsync(token)
+                        .ConfigureAwait(false);
+
+                    return recordedStatus;
+                }, cts.Token).ConfigureAwait(false);
+
+                return status != XactJobStatus.Failed;
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -455,6 +541,48 @@ namespace XactJobs.Internal
                 _logger.LogError(ex, "{Queue}: Failed recording job failure, the job will run again when its lease expires: {TypeName}.{MethodName} ({Id})",
                     GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
             }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Wakes up the queues of the batch's continuations, if the job was the last one of its batch.
+        /// Best effort: the workers also check for continuations on their own, on every polling interval.
+        /// </summary>
+        private async Task StartContinuationsIfBatchFinishedAsync(XactJob job)
+        {
+            if (job.BatchId == null) return;
+
+            var batchId = job.BatchId.Value;
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+
+                var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+                var jobs = dbContext.Set<XactJob>();
+
+                var queues = await jobs
+                    .Where(c => c.AwaitsBatchId == batchId
+                        && c.ScheduledAt == XactJobBase.AwaitingBatchScheduledAt
+                        && !jobs.Any(j => j.BatchId == batchId))
+                    .Select(c => c.Queue)
+                    .Distinct()
+                    .ToListAsync(cts.Token)
+                    .ConfigureAwait(false);
+
+                foreach (var queue in queues)
+                {
+                    _quickPollChannels.TryNotifyContinuationsReady(queue);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "{Queue}: Failed checking for the continuations of batch {BatchId}, they start on the next regular check", GetQueueDisplayName(), batchId);
+            }
         }
 
         private Task ExtendLeaseAsync(CancellationToken token)
@@ -462,8 +590,10 @@ namespace XactJobs.Internal
             return ExecuteLeaseSqlForInFlightJobsAsync((dialect, jobs) => dialect.GetExtendLeaseSql(_leaser, jobs, _options.LeaseDurationInSeconds), token);
         }
 
-        public async Task RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, CancellationToken stoppingToken)
+        public async Task RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, CancellationToken stoppingToken)
         {
+            var isFinished = false;
+
             using var scope = _scopeFactory.CreateScope();
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
@@ -476,10 +606,20 @@ namespace XactJobs.Internal
 
                 var isSkipped = job.PeriodicJobId != null && (periodicJob == null || !periodicJob.IsActive || !periodicJob.IsCompatibleWith(job));
 
+                string? skipReason = null;
+
+                if (!isSkipped && job.IsAwaitingBatch)
+                {
+                    skipReason = await GetUnmetContinuationConditionAsync(dbContext, job, stoppingToken)
+                        .ConfigureAwait(false);
+
+                    isSkipped = skipReason != null;
+                }
+
                 if (isSkipped)
                 {
-                    // periodic job is inactive or deleted
-                    RecordSkipped(dbContext, job, periodicJob);
+                    // periodic job is inactive or deleted, or the continuation's condition isn't met
+                    RecordSkipped(dbContext, job, periodicJob, claimedAt, skipReason);
                 }
                 else
                 {
@@ -499,8 +639,10 @@ namespace XactJobs.Internal
                         ? null
                         : await GetIfStillActiveAsync(dbContext, periodicJob, stoppingToken).ConfigureAwait(false);
 
-                    RecordSuccess(dbContext, job, activePeriodicJob);
+                    RecordSuccess(dbContext, job, activePeriodicJob, claimedAt);
                 }
+
+                dbContext.Set<XactJob>().Remove(job);
 
                 await dbContext.SaveChangesAsync(stoppingToken)
                     .ConfigureAwait(false);
@@ -512,6 +654,8 @@ namespace XactJobs.Internal
                 }
 
                 _inFlightJobs.TryRemove(GetKey(job), out _);
+
+                isFinished = true;
 
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
@@ -542,6 +686,41 @@ namespace XactJobs.Internal
                         .ConfigureAwait(false);
                 }
             }
+
+            if (isFinished)
+            {
+                await StartContinuationsIfBatchFinishedAsync(job)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// A job of the batch failed if it ran out of retries or was cancelled (both are Cancelled in the history),
+        /// or was a continuation that was skipped. The attempts that were retried are Failed, and don't count.
+        /// </summary>
+        /// <returns>Why the continuation is skipped, or null if it runs.</returns>
+        private static async Task<string?> GetUnmetContinuationConditionAsync(TDbContext dbContext, XactJob job, CancellationToken cancellationToken)
+        {
+            var batchId = job.AwaitsBatchId;
+
+            var failedCount = await dbContext.Set<XactJobHistory>()
+                .CountAsync(h => h.BatchId == batchId && (h.Status == XactJobStatus.Cancelled || h.Status == XactJobStatus.Skipped), cancellationToken)
+                .ConfigureAwait(false);
+
+            var condition = job.ContinuationCondition ?? XactJobContinuation.OnSuccess;
+
+            var isMet = condition switch
+            {
+                XactJobContinuation.OnFailure => failedCount > 0,
+                XactJobContinuation.OnFinish => true,
+                _ => failedCount == 0,
+            };
+
+            if (isMet) return null;
+
+            return failedCount == 0
+                ? $"Skipped: the batch {batchId} had no failed jobs, and the continuation runs on failure"
+                : $"Skipped: the batch {batchId} had {failedCount} failed job(s), and the continuation runs on success";
         }
 
 
@@ -579,22 +758,31 @@ namespace XactJobs.Internal
             return isActive.Count == 1 && isActive[0] ? periodicJob : null;
         }
 
-        private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
+        private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Completed, null);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Completed, null, null);
         }
 
-        private void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob)
+        private void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? reason)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Skipped, null);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Skipped, null, reason);
         }
 
-        private void RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, Exception ex)
+        private XactJobStatus RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception ex)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, ProcessingResult.Failed, ex);
+            return RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Failed, ex, null);
         }
 
-        private void RecordProcessingAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, ProcessingResult processingResult, Exception? ex)
+        /// <summary>
+        /// Adds the history row, and the retry or the next periodic run. The caller removes the job's row.
+        /// </summary>
+        private XactJobStatus RecordProcessingAttempt(TDbContext dbContext,
+                                                      XactJob job,
+                                                      XactJobPeriodic? periodicJob,
+                                                      DateTime claimedAt,
+                                                      ProcessingResult processingResult,
+                                                      Exception? ex,
+                                                      string? message)
         {
             var status = processingResult switch
             {
@@ -624,9 +812,7 @@ namespace XactJobs.Internal
                 }
             }
 
-            var history = cancel == null
-                ? XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, ex)
-                : CreateCancelledHistory(job, errorCount, cancel);
+            var history = CreateHistory(job, status, errorCount, ex, cancel, message, claimedAt);
 
             dbContext.Set<XactJobHistory>().Add(history);
 
@@ -639,28 +825,36 @@ namespace XactJobs.Internal
                 dbContext.ScheduleNextRun(periodicJob);
             }
 
-            dbContext.Set<XactJob>().Remove(job);
+            return status;
         }
 
         /// <summary>
-        /// The message is the one of the cancel exception, not of its innermost exception (the cause), which is in the details.
+        /// For a cancelled job, the message is the one of the cancel exception, not of its innermost exception (the cause), which is in the details.
+        /// A continuation that waited for its batch gets the time it was claimed as its scheduled time.
         /// </summary>
-        private static XactJobHistory CreateCancelledHistory(XactJob job, int errorCount, XactJobCancelException cancel)
+        private static XactJobHistory CreateHistory(XactJob job,
+                                                    XactJobStatus status,
+                                                    int errorCount,
+                                                    Exception? ex,
+                                                    XactJobCancelException? cancel,
+                                                    string? message,
+                                                    DateTime claimedAt)
         {
-            return new XactJobHistory(job.Id,
-                                      DateTime.UtcNow,
-                                      XactJobStatus.Cancelled,
-                                      job.ScheduledAt,
-                                      job.TypeName,
-                                      job.MethodName,
-                                      job.MethodArgs,
-                                      job.Queue,
-                                      job.PeriodicJobId,
-                                      job.CronExpression,
-                                      job.PeriodicJobVersion,
-                                      errorCount,
-                                      cancel.Message,
-                                      cancel.ToString());
+            var scheduledAt = job.IsAwaitingBatch ? claimedAt : job.ScheduledAt;
+
+            if (cancel != null)
+            {
+                return XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, cancel.Message, cancel.ToString(), scheduledAt);
+            }
+
+            var innerMostEx = ex;
+
+            while (innerMostEx?.InnerException != null)
+            {
+                innerMostEx = innerMostEx.InnerException;
+            }
+
+            return XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, innerMostEx?.Message ?? message, ex?.StackTrace, scheduledAt);
         }
 
         private string GetQueueDisplayName()
