@@ -624,9 +624,11 @@ public class UserDbContext : DbContext
 The workers already do this for their own saves, so running jobs are not affected. Pomelo starts a transaction when a save has more than one statement.
 
 ## Oracle
-Jobs are not claimed strictly oldest first, because Oracle doesn't allow `FOR UPDATE` together with an ordered subquery or `FETCH FIRST`.
+XactJobs needs **Oracle 12c or later**. A claim is one PL/SQL block, which returns the claimed jobs with `DBMS_SQL.RETURN_RESULT`.
 
-Oracle also reuses cached query plans. If the first claim runs while the table is nearly empty, it can get a full table scan, and may keep that plan for a while as the table grows, until the plan is refreshed. Gathering statistics on the table is the usual way to refresh it.
+Jobs are claimed oldest first. The block locks the due jobs with `FOR UPDATE SKIP LOCKED`, fetches only as many as the worker has free slots, and leases them. Oracle locks a row only when it's fetched, so workers that poll at once each get different jobs from a backlog. `ROWNUM` can't be used to limit the rows, because it's applied before locked rows are skipped: all the workers would try the same first rows, and all but one would get none.
+
+The claims read the table's primary key in order (with an index hint), so a claim doesn't sort the whole backlog, even if Oracle cached a plan from when the table was nearly empty.
 
 # License
 
