@@ -14,6 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
@@ -56,9 +57,17 @@ namespace XactJobs.Internal.SqlDialects
 
         public string DateTimeColumnType { get; } = "datetime(6)";
 
+        // InnoDB's default, REPEATABLE READ, would make the locking select of the claim lock every row it scans, leased (running) jobs
+        // too, and the gaps between them: a running job couldn't be deleted, nor a new job inserted, until the claim commits.
+        // READ COMMITTED releases the rows that don't match at once, and doesn't lock gaps.
+        // MySqlConnector (Pomelo) sets the level for the session, not only for the transaction. That's fine: the claim's scope does
+        // nothing else, and the pool's connection reset, or the next transaction (MySqlConnector sets its level too), sets it back.
+        public IsolationLevel? ClaimIsolationLevel { get; } = IsolationLevel.ReadCommitted;
+
         public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
         {
             return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               ClaimIsolationLevel,
                                                                GetLockJobsSql(queueName, maxJobs),
                                                                jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
                                                                cancellationToken);
@@ -94,6 +103,7 @@ WHERE {jobKeys}
         public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
         {
             return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               ClaimIsolationLevel,
                                                                GetLockContinuationsSql(queueName, maxJobs),
                                                                jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
                                                                cancellationToken);

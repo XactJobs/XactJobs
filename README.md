@@ -592,6 +592,10 @@ ALTER TABLE xact_jobs.job SET (
 Long-running transactions **anywhere in the cluster** hold back the cleanup of dead rows, not just the ones using this table. Dead rows pile up meanwhile, which slows down fetching jobs.
 
 ## MySQL
+XactJobs needs **MySQL 8.0 or later**, because claiming jobs uses `SKIP LOCKED` and `FOR UPDATE OF`. MariaDB isn't supported: it doesn't support `FOR UPDATE OF`, and only supports `SKIP LOCKED` from 10.6.
+
+The workers claim jobs at `READ COMMITTED`, not at InnoDB's default `REPEATABLE READ`. At `REPEATABLE READ`, a claim would keep the running jobs it scans locked, and the gaps between rows too, so finished jobs couldn't be deleted, and new jobs (`JobEnqueue` and `SaveChanges`) couldn't be saved until the claim commits. Only the claims use it: your own transactions, and the jobs, keep their isolation level.
+
 The provider depends on the version of .NET:
 
 | .NET | MySQL provider |

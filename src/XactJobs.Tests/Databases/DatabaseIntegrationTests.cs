@@ -1,9 +1,13 @@
 ﻿using System.Collections.Concurrent;
+using System.Data;
+using System.Data.Common;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using XactJobs.Internal.SqlDialects;
 using XactJobs.Tests.Postgres;
 
 namespace XactJobs.Tests.Databases;
@@ -44,6 +48,238 @@ public abstract class MySqlIntegrationTests(MySqlFixtureBase fixture) : Database
         finally
         {
             await db.Database.ExecuteSqlRawAsync("DROP TABLE IF EXISTS model_check_job, model_check_job_history, model_check_job_periodic");
+        }
+    }
+
+    // The claim's locking select scans the leased (running) jobs too, and, at InnoDB's default REPEATABLE READ, keeps them
+    // locked, and locks the gaps it scans: a running job couldn't be deleted, nor a job enqueued, until the claim commits.
+
+    private const string LockQueue = "lock-test";
+
+    private static readonly MySqlDialect Dialect = new();
+
+    [DockerFact]
+    public async Task LockJobsSql_AtReadCommitted_BlocksNeitherAnInsertNorTheDeleteOfARunningJob()
+    {
+        var leased = await AddJobsAsync(continuations: false);
+
+        var (insertTimedOut, deleteTimedOut) = await WriteWhileLockedAsync(IsolationLevel.ReadCommitted, Dialect.GetLockJobsSql(LockQueue, 10), leased);
+
+        Assert.False(insertTimedOut, "The insert of a new job waited for the claim");
+        Assert.False(deleteTimedOut, "The delete of the running job waited for the claim");
+    }
+
+    [DockerFact]
+    public async Task LockJobsSql_AtRepeatableRead_BlocksAnInsertAndTheDeleteOfARunningJob()
+    {
+        var leased = await AddJobsAsync(continuations: false);
+
+        var (insertTimedOut, deleteTimedOut) = await WriteWhileLockedAsync(IsolationLevel.RepeatableRead, Dialect.GetLockJobsSql(LockQueue, 10), leased);
+
+        Assert.True(insertTimedOut, "The insert of a new job didn't wait for the claim");
+        Assert.True(deleteTimedOut, "The delete of the running job didn't wait for the claim");
+    }
+
+    [DockerFact]
+    public async Task LockContinuationsSql_AtReadCommitted_BlocksNeitherAnInsertNorTheDeleteOfARunningContinuation()
+    {
+        var leased = await AddJobsAsync(continuations: true);
+
+        var (insertTimedOut, deleteTimedOut) = await WriteWhileLockedAsync(IsolationLevel.ReadCommitted, Dialect.GetLockContinuationsSql(LockQueue, 10), leased);
+
+        Assert.False(insertTimedOut, "The insert of a new job waited for the claim");
+        Assert.False(deleteTimedOut, "The delete of the running continuation waited for the claim");
+    }
+
+    [DockerFact]
+    public async Task LockContinuationsSql_AtRepeatableRead_BlocksAnInsertAndTheDeleteOfARunningContinuation()
+    {
+        var leased = await AddJobsAsync(continuations: true);
+
+        var (insertTimedOut, deleteTimedOut) = await WriteWhileLockedAsync(IsolationLevel.RepeatableRead, Dialect.GetLockContinuationsSql(LockQueue, 10), leased);
+
+        Assert.True(insertTimedOut, "The insert of a new job didn't wait for the claim");
+        Assert.True(deleteTimedOut, "The delete of the running continuation didn't wait for the claim");
+    }
+
+    /// <summary>
+    /// The same, with the dialect's own claims: the writes are made while the claim's transaction holds its locks, before the lease.
+    /// </summary>
+    [DockerFact]
+    public async Task ClaimJobs_BlocksNeitherAnInsertNorTheDeleteOfARunningJob()
+    {
+        var leased = await AddJobsAsync(continuations: false);
+
+        var (claimed, insertTimedOut, deleteTimedOut) = await WriteDuringClaimAsync(leased, (db, ct) => Dialect.ClaimJobsAsync(db, LockQueue, 10, Guid.NewGuid(), 60, ct));
+
+        Assert.Single(claimed);
+        Assert.False(insertTimedOut, "The insert of a new job waited for the claim");
+        Assert.False(deleteTimedOut, "The delete of the running job waited for the claim");
+    }
+
+    [DockerFact]
+    public async Task ClaimContinuations_BlocksNeitherAnInsertNorTheDeleteOfARunningContinuation()
+    {
+        var leased = await AddJobsAsync(continuations: true);
+
+        var (claimed, insertTimedOut, deleteTimedOut) = await WriteDuringClaimAsync(leased, (db, ct) => Dialect.ClaimContinuationsAsync(db, LockQueue, 10, Guid.NewGuid(), 60, ct));
+
+        Assert.Single(claimed);
+        Assert.False(insertTimedOut, "The insert of a new job waited for the claim");
+        Assert.False(deleteTimedOut, "The delete of the running continuation waited for the claim");
+    }
+
+    /// <summary>
+    /// Adds a leased (running) job and a due one, or a leased continuation and a claimable one, scanned in that order,
+    /// and returns the leased one as stored.
+    /// </summary>
+    private async Task<XactJob> AddJobsAsync(bool continuations)
+    {
+        await using var db = CreateDb();
+
+        var now = DateTime.UtcNow;
+        var leasedUntil = now.AddMinutes(10);
+
+        if (continuations)
+        {
+            db.Jobs.Add(new XactJob(0, XactJobBase.AwaitingBatchScheduledAt, "T", "M()", "[]", LockQueue, leaser: Guid.NewGuid(), leasedUntil: leasedUntil)
+            {
+                AwaitsBatchId = Guid.NewGuid(),
+                ContinuationCondition = XactJobContinuation.OnSuccess
+            });
+
+            await db.SaveChangesAsync(); // a lower id: scanned first
+
+            db.Jobs.Add(new XactJob(0, XactJobBase.AwaitingBatchScheduledAt, "T", "M()", "[]", LockQueue)
+            {
+                AwaitsBatchId = Guid.NewGuid(),
+                ContinuationCondition = XactJobContinuation.OnSuccess
+            });
+        }
+        else
+        {
+            db.Jobs.Add(new XactJob(0, now.AddMinutes(-2), "T", "M()", "[]", LockQueue, leaser: Guid.NewGuid(), leasedUntil: leasedUntil));
+            db.Jobs.Add(new XactJob(0, now.AddMinutes(-1), "T", "M()", "[]", LockQueue));
+        }
+
+        await db.SaveChangesAsync();
+
+        return await db.Jobs.AsNoTracking().SingleAsync(j => j.Queue == LockQueue && j.LeasedUntil != null);
+    }
+
+    /// <summary>
+    /// Runs the lock SQL in a transaction at <paramref name="isolationLevel"/>, and makes the writes while it's open.
+    /// </summary>
+    private async Task<(bool InsertTimedOut, bool DeleteTimedOut)> WriteWhileLockedAsync(IsolationLevel isolationLevel, (string Sql, object[] Parameters) lockSql, XactJob leased)
+    {
+        await using var db = CreateDb();
+
+        await using var transaction = await db.Database.BeginTransactionAsync(isolationLevel);
+
+        var locked = await db.Jobs.FromSqlRaw(lockSql.Sql, lockSql.Parameters).AsNoTracking().ToListAsync();
+
+        Assert.Single(locked); // the leased one doesn't match
+
+        var result = await WriteAsync(leased);
+
+        await transaction.RollbackAsync();
+
+        return result;
+    }
+
+    private async Task<(List<XactJob> Claimed, bool InsertTimedOut, bool DeleteTimedOut)> WriteDuringClaimAsync(XactJob leased, Func<DbContext, CancellationToken, Task<List<XactJob>>> claim)
+    {
+        var interceptor = new BeforeLeaseInterceptor(() => WriteAsync(leased));
+
+        var options = new DbContextOptionsBuilder<TestDbContext>();
+
+        fixture.Configure(options, retryOnFailure: false);
+
+        options.AddInterceptors(interceptor);
+
+        await using var db = new TestDbContext(options.Options);
+
+        var claimed = await claim(db, CancellationToken.None);
+
+        Assert.True(interceptor.Result.HasValue, "The claim didn't lease any jobs");
+
+        return (claimed, interceptor.Result.Value.InsertTimedOut, interceptor.Result.Value.DeleteTimedOut);
+    }
+
+    /// <summary>
+    /// From another connection, with a short lock wait: enqueues a job in the claimed queue, and deletes the leased job,
+    /// as its worker does when it's done.
+    /// </summary>
+    private async Task<(bool InsertTimedOut, bool DeleteTimedOut)> WriteAsync(XactJob leased)
+    {
+        await using var db = CreateDb();
+
+        await db.Database.OpenConnectionAsync();
+
+        await db.Database.ExecuteSqlRawAsync("SET SESSION innodb_lock_wait_timeout = 2");
+
+        var insertTimedOut = await TimesOutAsync(() =>
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow, "T", "M()", "[]", LockQueue));
+
+            return db.SaveChangesAsync();
+        });
+
+        var deleteTimedOut = await TimesOutAsync(() => db.Jobs
+            .Where(j => j.Queue == leased.Queue && j.ScheduledAt == leased.ScheduledAt && j.Id == leased.Id)
+            .ExecuteDeleteAsync());
+
+        return (insertTimedOut, deleteTimedOut);
+    }
+
+    private static async Task<bool> TimesOutAsync(Func<Task> write)
+    {
+        try
+        {
+            await write();
+
+            return false;
+        }
+        catch (Exception ex) when (IsLockWaitTimeout(ex))
+        {
+            return true;
+        }
+    }
+
+    private static bool IsLockWaitTimeout(Exception? ex)
+    {
+        for (; ex != null; ex = ex.InnerException)
+        {
+            if (ex.Message.Contains("Lock wait timeout exceeded")) return true;
+        }
+
+        return false;
+    }
+
+    private TestDbContext CreateDb()
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>();
+
+        fixture.Configure(options, retryOnFailure: false);
+
+        return new TestDbContext(options.Options);
+    }
+
+    /// <summary>
+    /// Runs <paramref name="write"/> once, before the claim's lease statement: the claim's locks are held then.
+    /// </summary>
+    private sealed class BeforeLeaseInterceptor(Func<Task<(bool InsertTimedOut, bool DeleteTimedOut)>> write) : DbCommandInterceptor
+    {
+        public (bool InsertTimedOut, bool DeleteTimedOut)? Result { get; private set; }
+
+        public override async ValueTask<InterceptionResult<int>> NonQueryExecutingAsync(DbCommand command, CommandEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
+        {
+            if (Result == null && command.Transaction != null && command.CommandText.Contains("SET leaser"))
+            {
+                Result = await write();
+            }
+
+            return result;
         }
     }
 }

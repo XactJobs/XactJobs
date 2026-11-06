@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
@@ -40,6 +41,8 @@ namespace XactJobs.Internal.SqlDialects
         public bool HasSchemaSupport { get; } = false;
 
         public string DateTimeColumnType { get; } = "DATETIME"; // SQLite stores datetimes as ISO8601 text
+
+        public IsolationLevel? ClaimIsolationLevel { get; } = null;
 
         public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
         {
