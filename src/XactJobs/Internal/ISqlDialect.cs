@@ -116,7 +116,7 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// For databases that can't return updated rows (MySQL, Oracle): locks the rows with a select,
+        /// For databases that can't return updated rows (MySQL): locks the rows with a select,
         /// then leases them by primary key, in one transaction, at <paramref name="isolationLevel"/> if it's set.
         /// </summary>
         public static Task<List<XactJob>> ClaimJobsWithLockAsync(DbContext db,

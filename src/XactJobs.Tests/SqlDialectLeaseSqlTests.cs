@@ -150,24 +150,44 @@ public class SqlDialectLeaseSqlTests
     }
 
     [Fact]
-    public void Oracle_ClaimLocksRows_ThenLeasesThemByPrimaryKey()
+    public void Oracle_ClaimLocksAtMostMaxJobsRowsOldestFirst_ThenLeasesThem()
     {
-        var dialect = new OracleDialect();
+        var (sql, parameters) = new OracleDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration);
 
-        var (lockSql, lockParameters) = dialect.GetLockJobsSql("queue-a", 10);
+        AssertFullyParameterized(sql, parameters);
+        Assert.Contains("SELECT /*+ INDEX_ASC(XACT_JOBS_JOB (QUEUE, SCHEDULED_AT, ID)) */ ROWIDTOCHAR(ROWID)", sql);
+        Assert.Contains("ORDER BY SCHEDULED_AT\n    FOR UPDATE SKIP LOCKED", sql);
+        Assert.DoesNotContain("ROWNUM", sql); // applied before locked rows are skipped
+        Assert.Contains("FETCH claimable BULK COLLECT INTO claimed LIMIT {1};\n  CLOSE claimable;", sql);
+        Assert.Contains("SET LEASER = HEXTORAW({2})", sql);
+        Assert.Contains("NUMTODSINTERVAL({3}, 'SECOND')", sql);
+        Assert.Contains("DBMS_SQL.RETURN_RESULT(result);", sql);
+        Assert.Equal(["queue-a", 10, Leaser.ToString("N"), LeaseDuration], parameters);
 
-        AssertFullyParameterized(lockSql, lockParameters);
-        Assert.Contains("ROWNUM <= {1}", lockSql);
-        Assert.Contains("FOR UPDATE SKIP LOCKED", lockSql);
-        Assert.DoesNotContain("LEASER", lockSql);
-        Assert.Equal(["queue-a", 10], lockParameters);
+        // the result is opened before the lease, so it returns the rows as they were locked
+        Assert.True(sql.IndexOf("OPEN result FOR", StringComparison.Ordinal) < sql.IndexOf("FORALL", StringComparison.Ordinal));
+    }
 
-        var (leaseSql, parameters) = dialect.GetLeaseJobsSql(Leaser, Jobs, LeaseDuration);
+    [Fact]
+    public void Oracle_ContinuationClaimLocksAtMostMaxJobsRowsInIdOrder_ThenLeasesThem()
+    {
+        var (sql, parameters) = new OracleDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration);
 
-        AssertFullyParameterized(leaseSql, parameters);
-        Assert.Contains("HEXTORAW({0})", leaseSql);
-        Assert.Contains("QUEUE = {2} AND SCHEDULED_AT = {3} AND ID = {4}", leaseSql);
-        Assert.Equal([Leaser.ToString("N"), LeaseDuration, "queue-a", ScheduledAt, 11L, "queue-b", ScheduledAt, 22L], parameters);
+        AssertFullyParameterized(sql, parameters);
+        Assert.Contains("SELECT /*+ INDEX_ASC(c (QUEUE, SCHEDULED_AT, ID)) */ ROWIDTOCHAR(c.ROWID)", sql);
+        Assert.Contains("ORDER BY c.ID\n    FOR UPDATE SKIP LOCKED", sql);
+        Assert.DoesNotContain("ROWNUM", sql);
+        Assert.Contains("BULK COLLECT INTO claimed LIMIT {2}", sql);
+        Assert.Contains("SET LEASER = HEXTORAW({3})", sql);
+        Assert.Equal(["queue-a", XactJobBase.AwaitingBatchScheduledAt, 10, Leaser.ToString("N"), LeaseDuration], parameters);
+    }
+
+    [Fact]
+    public void Oracle_ClaimLimit_FitsTheCollectionOfClaimedRows()
+    {
+        var (_, parameters) = new OracleDialect().GetFetchJobsSql("queue-a", int.MaxValue, Leaser, LeaseDuration);
+
+        Assert.Equal(32767, parameters[1]); // SYS.ODCIVARCHAR2LIST is a VARRAY(32767)
     }
 
     private static void AssertFullyParameterized(string sql, object[] parameters)
