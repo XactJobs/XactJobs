@@ -133,7 +133,7 @@ dbContext.JobBatch().Enqueue(() => Sync(1)).Enqueue(() => Sync(2)).ContinueWith(
 
 ## Important Notes
 
-- Current version: 0.2.0
+- Current version: 0.2.1
 - Targets: net8.0, net9.0, net10.0
 - License: LGPL-3.0-or-later
 
