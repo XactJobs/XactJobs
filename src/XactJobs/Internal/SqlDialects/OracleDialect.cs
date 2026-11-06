@@ -14,6 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
@@ -56,9 +57,12 @@ namespace XactJobs.Internal.SqlDialects
 
         public string DateTimeColumnType { get; } = "TIMESTAMP";
 
+        public IsolationLevel? ClaimIsolationLevel { get; } = null;
+
         public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
         {
             return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               ClaimIsolationLevel,
                                                                GetLockJobsSql(queueName, maxJobs),
                                                                jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
                                                                cancellationToken);
@@ -94,6 +98,7 @@ WHERE {jobKeys}
         public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
         {
             return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
+                                                               ClaimIsolationLevel,
                                                                GetLockContinuationsSql(queueName, maxJobs),
                                                                jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
                                                                cancellationToken);

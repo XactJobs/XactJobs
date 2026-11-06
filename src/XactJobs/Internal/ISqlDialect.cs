@@ -15,6 +15,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using System.Collections.Concurrent;
+using System.Data;
 
 using XactJobs.Internal.SqlDialects;
 
@@ -58,6 +59,13 @@ namespace XactJobs.Internal
         string ColContinuationCondition { get; }
 
         string DateTimeColumnType { get; }
+
+        /// <summary>
+        /// The isolation level of the transaction that locks and leases the claimed jobs, for the dialects that claim in a transaction
+        /// (<see cref="SqlDialectExtensions.ClaimJobsWithLockAsync"/>), or null for the database's default.
+        /// Only the claim uses it: running the jobs and extending or clearing their leases don't.
+        /// </summary>
+        IsolationLevel? ClaimIsolationLevel { get; }
 
         /// <summary>
         /// Leases up to <paramref name="maxJobs"/> due jobs from the queue and returns them.
@@ -109,9 +117,10 @@ namespace XactJobs.Internal
 
         /// <summary>
         /// For databases that can't return updated rows (MySQL, Oracle): locks the rows with a select,
-        /// then leases them by primary key, in one transaction.
+        /// then leases them by primary key, in one transaction, at <paramref name="isolationLevel"/> if it's set.
         /// </summary>
         public static Task<List<XactJob>> ClaimJobsWithLockAsync(DbContext db,
+                                                                 IsolationLevel? isolationLevel,
                                                                  (string Sql, object[] Parameters) lockJobs,
                                                                  Func<XactJob[], (string Sql, object[] Parameters)> getLeaseJobsSql,
                                                                  CancellationToken cancellationToken)
@@ -119,8 +128,9 @@ namespace XactJobs.Internal
             // a retrying execution strategy, if the app enabled one, only allows explicit transactions inside of it
             return db.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
             {
-                using var transaction = await db.Database.BeginTransactionAsync(token)
-                    .ConfigureAwait(false);
+                using var transaction = isolationLevel is { } level
+                    ? await db.Database.BeginTransactionAsync(level, token).ConfigureAwait(false)
+                    : await db.Database.BeginTransactionAsync(token).ConfigureAwait(false);
 
                 var jobs = await db.Set<XactJob>().FromSqlRaw(lockJobs.Sql, lockJobs.Parameters)
                     .AsNoTracking()

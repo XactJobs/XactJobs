@@ -14,6 +14,7 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
@@ -55,6 +56,8 @@ namespace XactJobs.Internal.SqlDialects
         public string ColContinuationCondition { get; } = "ContinuationCondition";
 
         public string DateTimeColumnType { get; } = "datetime2";
+
+        public IsolationLevel? ClaimIsolationLevel { get; } = null;
 
         public Task<List<XactJob>> ClaimJobsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
         {

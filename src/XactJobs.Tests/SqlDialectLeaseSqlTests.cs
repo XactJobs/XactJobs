@@ -1,3 +1,4 @@
+﻿using System.Data;
 using System.Text.RegularExpressions;
 using XactJobs.Internal.SqlDialects;
 
@@ -26,6 +27,17 @@ public class SqlDialectLeaseSqlTests
     };
 
     public static TheoryData<string> DialectNames => new(Dialects.Keys);
+
+    // only MySQL claims at another level than the default: see MySqlDialect
+    [Fact]
+    public void ClaimIsolationLevel_IsReadCommittedOnMySql_AndTheDefaultElsewhere()
+    {
+        Assert.Equal(IsolationLevel.ReadCommitted, new MySqlDialect().ClaimIsolationLevel);
+        Assert.Null(new OracleDialect().ClaimIsolationLevel);
+        Assert.Null(new PostgreSqlDialect().ClaimIsolationLevel);
+        Assert.Null(new SqlServerDialect().ClaimIsolationLevel);
+        Assert.Null(new SqliteDialect().ClaimIsolationLevel);
+    }
 
     [Theory]
     [MemberData(nameof(DialectNames))]
