@@ -459,7 +459,7 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
     options
         .WithWorkerCount(2)                         // workers polling the queue
         .WithMaxDegreeOfParallelism(8)              // jobs running at the same time, per worker (default: processor count)
-     // .WithBatchSize(100)                         // jobs a worker claims and holds at a time (default: MaxDegreeOfParallelism, see Polling)
+     // .WithBatchSize(16)                          // jobs a worker claims and holds at a time (default: twice MaxDegreeOfParallelism, see Polling)
         .WithPollingInterval(6)                     // seconds between polls, per worker
         .WithLeaseDuration(120)                     // seconds, extended automatically while a job is running
         .WithShutdownTimeout(10)                    // seconds running jobs get to finish on stop, before they are cancelled
@@ -582,17 +582,18 @@ Without the queue and the scheduled time, these routes answer `400`.
 # How Jobs Run
 
 ## Polling
-A worker only claims jobs it can start immediately, up to `MaxDegreeOfParallelism` at a time, so claimed jobs never wait behind a slow job while another
-worker is free. A slow job only occupies its own slot, and the worker keeps claiming jobs for the other slots.
+A worker runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of claimed (leased) jobs: by default twice as many, so that each
+slot has a job waiting for it. A free slot takes the next job the worker holds, oldest first, without waiting for a claim. A slow job only
+occupies its own slot.
 
-If a poll fills all the free slots there is likely a backlog, so the worker polls again as soon as a slot frees up. Otherwise it waits for
-the polling interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own queue.
+If a poll fills the batch there is likely a backlog, so the worker claims again as soon as fewer jobs wait than it can run, instead of once
+for each job that finishes. Otherwise it waits for the polling interval or a QuickPoll notification. Polling can stop only if all the slots
+are occupied, so long-running jobs are best kept in their own queue.
 
-`WithBatchSize` lets a worker claim more jobs than it runs at a time: it holds up to that many, leased, and runs them
-`MaxDegreeOfParallelism` at a time, oldest first. A free slot then takes the next job it holds, without waiting for a claim, and during
-a backlog the worker claims again only when fewer jobs wait than it can run. That saves most of the claims, which helps short jobs: on
-PostgreSQL, 2 workers running 4 no-op jobs at a time each drained a backlog about twice as fast with a batch of 100.
-The cost is that the jobs a worker holds wait for its slots, also when another worker is idle, so keep it off, or small, for slow jobs.
+`WithBatchSize` changes the batch. A larger one saves claims, which helps short jobs: on PostgreSQL, 2 workers running 4 no-op jobs at a
+time each drained a backlog about twice as fast with a batch of 100 as with no batch. The cost is that the jobs a worker holds wait for its
+slots, also when another worker is idle, and wait for their leases to expire if the worker crashes. At or below `MaxDegreeOfParallelism`,
+there's no batch: a worker only claims jobs it can start immediately, so they never wait behind a slow job while another worker is free.
 When the worker stops, the jobs it holds that haven't started are released right away, for the other workers.
 
 ## Failures and Retries

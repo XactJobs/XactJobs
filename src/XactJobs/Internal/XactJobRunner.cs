@@ -37,8 +37,8 @@ namespace XactJobs.Internal
             FullMode = BoundedChannelFullMode.DropWrite
         });
 
-        // The most jobs in flight (claimed, and not finished) at the same time: the batch size, or the parallelism by default,
-        // so that a worker only claims jobs it can start immediately
+        // The most jobs in flight (claimed, and not finished) at the same time: the batch size, by default twice the parallelism.
+        // At or below the parallelism, a worker only claims jobs it can start immediately
         private readonly int _capacity;
 
         // The most jobs running at the same time
@@ -78,7 +78,8 @@ namespace XactJobs.Internal
             _logger = logger;
 
             _maxDegreeOfParallelism = options.MaxDegreeOfParallelism > 0 ? options.MaxDegreeOfParallelism : Environment.ProcessorCount;
-            _capacity = Math.Max(options.BatchSize, _maxDegreeOfParallelism);
+            // by default twice the parallelism: each slot has a job waiting, so it doesn't wait for a claim when its job finishes
+            _capacity = options.BatchSize > 0 ? Math.Max(options.BatchSize, _maxDegreeOfParallelism) : 2 * _maxDegreeOfParallelism;
 
             if (_capacity > _maxDegreeOfParallelism)
             {

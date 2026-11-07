@@ -36,8 +36,9 @@ namespace XactJobs
 
         /// <summary>
         /// The most jobs a worker claims and holds at a time, running <see cref="XactJobsOptionsBase{TDbContext}.MaxDegreeOfParallelism"/>
-        /// of them at once. By default a worker only claims jobs it can start immediately. A larger batch means fewer claims, but the
-        /// jobs a worker holds wait for its free slots, also when another worker is idle.
+        /// of them at once. Default: twice MaxDegreeOfParallelism, so each slot has a job waiting for it. At or below MaxDegreeOfParallelism,
+        /// a worker only claims jobs it can start immediately. A larger batch means fewer claims, but the jobs a worker holds wait for its
+        /// free slots, also when another worker is idle.
         /// </summary>
         public TBuilder WithBatchSize(int batchSize)
         {

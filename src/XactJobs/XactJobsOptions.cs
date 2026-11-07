@@ -30,14 +30,14 @@ namespace XactJobs
 
         /// <summary>
         /// The most jobs running at the same time per worker. Default -1 (means ProcessorCount).
-        /// A worker only claims jobs it can start immediately, so this is also the most jobs it claims at a time.
+        /// A worker also holds jobs waiting for a slot: see <see cref="BatchSize"/>, by default twice this.
         /// </summary>
         public int MaxDegreeOfParallelism { get; set; } = -1;
 
         /// <summary>
         /// The most jobs a worker claims and holds at a time, running <see cref="MaxDegreeOfParallelism"/> of them at once.
-        /// Default -1 (means MaxDegreeOfParallelism: a worker only claims jobs it can start immediately). Values below
-        /// MaxDegreeOfParallelism have no effect.
+        /// Default -1 (means twice MaxDegreeOfParallelism: each slot has a job waiting for it). At or below MaxDegreeOfParallelism,
+        /// a worker only claims jobs it can start immediately.
         /// A larger batch means fewer claims, but the jobs a worker holds wait for its free slots, also when another worker is idle.
         /// </summary>
         public int BatchSize { get; set; } = -1;

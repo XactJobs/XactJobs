@@ -135,10 +135,13 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
         await WaitForAsync(() => Task.FromResult(_state.QuickCount == jobs), "the backlog to finish");
     }
 
+    /// <summary>
+    /// Without a batch (BatchSize at the parallelism), a worker only claims jobs it can start immediately.
+    /// </summary>
     [Fact]
-    public async Task NeverClaimsMoreThanCapacity_AndClaimsAgainWhenASlotFrees()
+    public async Task WithoutABatch_NeverClaimsMoreThanCapacity_AndClaimsAgainWhenASlotFrees()
     {
-        await CreateHostAsync(capacity: 2);
+        await CreateHostAsync(capacity: 2, batchSize: 2);
 
         await WithDbAsync(db =>
         {
@@ -165,6 +168,36 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
         await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 3), "the next job to start");
 
         Assert.Equal(2, await WithDbAsync(db => db.Jobs.CountAsync(j => j.PeriodicJobId == null && j.Leaser != null)));
+    }
+
+    /// <summary>
+    /// By default a worker holds twice its parallelism: each slot has a job waiting for it.
+    /// </summary>
+    [Fact]
+    public async Task ByDefault_HoldsTwiceTheParallelism_AndRunsAtTheParallelism()
+    {
+        await CreateHostAsync(capacity: 2);
+
+        await WithDbAsync(db =>
+        {
+            for (var i = 0; i < 6; i++)
+            {
+                db.JobEnqueue<PollingJob>(x => x.BlockUntilReleasedAsync());
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 2), "two jobs to start");
+        await WaitForAsync(async () => await CountLeasedAsync() == 4, "twice the parallelism to be claimed");
+
+        // more than one polling interval
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(2, _state.BlockedCount);
+        Assert.Equal(4, await CountLeasedAsync());
     }
 
     /// <summary>
