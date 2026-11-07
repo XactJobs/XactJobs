@@ -42,6 +42,8 @@ public class SerializerValidationTests : IDisposable
         ("method of another instance", db => db.JobEnqueue<InstanceJobs>(x => new InstanceJobs().Run())),
         ("instance method from a static lambda", db => db.JobEnqueue(() => new InstanceJobs().Run())),
         ("periodic generic method", db => db.JobEnsurePeriodic<InvalidJobs>(x => x.Generic(1), "golden_invalid", Cron.Daily())),
+        ("lambda passed as an object", db => db.JobEnqueue(() => StaticJobs.Objects(new Address(), new Money(1, "x"), (Func<int>)(() => 1), null))),
+        ("delegate passed as an object", db => db.JobEnqueue(() => StaticJobs.Objects(new Address(), new Money(1, "x"), SomeAction, null))),
         ("local scheduled time", db => db.JobScheduleAt(() => StaticJobs.NoArgs(), new DateTime(2026, 3, 14, 15, 9, 26, DateTimeKind.Local))),
         ("unspecified scheduled time", db => db.JobScheduleAt(() => StaticJobs.NoArgs(), new DateTime(2026, 3, 14, 15, 9, 26, DateTimeKind.Unspecified))),
     ];
@@ -59,6 +61,8 @@ public class SerializerValidationTests : IDisposable
         ["method of another instance"] = null, // stored as InstanceJobs.Run(): the worker creates its own instance
         ["instance method from a static lambda"] = null, // the same
         ["periodic generic method"] = null, // the same gap
+        ["lambda passed as an object"] = typeof(System.NotSupportedException), // System.Text.Json can't serialize a delegate
+        ["delegate passed as an object"] = typeof(System.NotSupportedException), // the same
         ["local scheduled time"] = typeof(System.ArgumentException),
         ["unspecified scheduled time"] = typeof(System.ArgumentException),
     };
