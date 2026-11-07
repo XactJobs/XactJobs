@@ -453,7 +453,8 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
         .WithLeaseDuration(120)                     // seconds, extended automatically while a job is running
         .WithShutdownTimeout(10)                    // seconds running jobs get to finish on stop, before they are cancelled
         .WithPeriodicJobReconciliationInterval(300) // seconds between the checks for periodic jobs without a pending run
-        .WithHistoryRetentionPeriodInDays(30);
+        .WithHistoryRetentionPeriodInDays(30)
+        .WithSaveOutsideTransaction(XactJobSaveCheck.Warn); // when a job saves without a transaction: Warn, Throw or Ignore (all the queues)
 
     // isolated queues have their own settings
     options.WithLongRunningQueue(queue => queue.WithMaxDegreeOfParallelism(2));
@@ -622,6 +623,12 @@ the other one's delete affects 0 rows, EF throws a concurrency exception, and it
 
 **This doesn't apply to** changes the job saves without a transaction, or commits itself, because they are already permanent when the job finishes.
 It also doesn't apply to other DbContext instances, or to external side effects like sending emails or calling HTTP APIs. These can happen more than once, so they should be idempotent.
+
+**The worker warns when a job saves without a transaction.** While a job runs, the worker checks the saves on the scoped `TDbContext` it created for the job.
+If the job calls `SaveChanges` without a transaction, the worker logs a warning that names the job, once per job method, and the save goes ahead.
+`WithSaveOutsideTransaction` changes this: with `XactJobSaveCheck.Throw`, `SaveChanges` throws instead, so nothing is saved, and the job fails and is retried as after any other exception.
+`XactJobSaveCheck.Ignore` turns the check off. Only `SaveChanges` on that `TDbContext` is checked: not other DbContext instances, not `ExecuteUpdate`, `ExecuteDelete`
+or raw SQL, which also run right away without a transaction, and not a transaction the job commits itself.
 
 ## Idempotent External Calls
 Calls to other systems, like a payment provider or an email API, are at least once: a job that fails after the call, or whose lease expired, runs the call again.

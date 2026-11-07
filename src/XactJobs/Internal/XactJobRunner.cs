@@ -47,6 +47,7 @@ namespace XactJobs.Internal
         private readonly QuickPollChannels _quickPollChannels;
         private readonly Guid _leaser = Guid.NewGuid();
         private readonly XactJobsOptionsBase<TDbContext> _options;
+        private readonly XactJobSaveChecker _saveChecker;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
@@ -57,6 +58,7 @@ namespace XactJobs.Internal
                              QuickPollChannel quickPollChannel,
                              QuickPollChannels quickPollChannels,
                              XactJobsOptionsBase<TDbContext> options,
+                             XactJobSaveChecker saveChecker,
                              IServiceScopeFactory scopeFactory,
                              ILogger logger)
         {
@@ -64,6 +66,7 @@ namespace XactJobs.Internal
             _quickPollChannel = quickPollChannel;
             _quickPollChannels = quickPollChannels;
             _options = options;
+            _saveChecker = saveChecker;
             _scopeFactory = scopeFactory;
             _logger = logger;
 
@@ -632,8 +635,18 @@ namespace XactJobs.Internal
 
                     var context = new XactJobContext(job.GetOriginallyScheduledAt(claimedAt));
 
-                    await XactJobCompiler.CompileAndRunJobAsync(scope, job, context, stoppingToken)
-                        .ConfigureAwait(false);
+                    // only while the job runs: the worker's own save, below, isn't checked
+                    var saveCheck = _saveChecker.Subscribe(dbContext, job, _logger, GetQueueDisplayName());
+
+                    try
+                    {
+                        await XactJobCompiler.CompileAndRunJobAsync(scope, job, context, stoppingToken)
+                            .ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        XactJobSaveChecker.Unsubscribe(dbContext, saveCheck);
+                    }
 
                     // detached means the job deleted its own periodic job and saved that, so there's no next run to schedule
                     var isPeriodicJobDeleted = periodicJob != null && dbContext.Entry(periodicJob).State == EntityState.Detached;

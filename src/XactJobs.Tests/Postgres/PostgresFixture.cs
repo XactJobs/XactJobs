@@ -35,6 +35,15 @@ public sealed class PostgresFixture : DatabaseFixture
 
     public override async Task PrepareForTestAsync()
     {
+        // each test gets its own database, so its own pool: close the idle connections of the previous test's pool, which Npgsql
+        // keeps open for 5 minutes, or the suite runs out of the server's 100 connections
+        if (_connectionString != "")
+        {
+            await using var previous = new NpgsqlConnection(_connectionString);
+
+            NpgsqlConnection.ClearPool(previous);
+        }
+
         _connectionString = await CreateDatabaseAsync();
     }
 
