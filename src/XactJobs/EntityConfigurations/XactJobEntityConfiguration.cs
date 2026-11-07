@@ -26,9 +26,10 @@ namespace XactJobs.EntityConfigurations
         private readonly bool _excludeFromMigrations;
         private readonly bool _isOfficialMySqlProvider;
 
-        public XactJobEntityConfiguration(string? providerName, bool excludeFromMigrations = true)
+        /// <param name="schema">The schema of XactJobs' tables, or null for the default (PostgreSQL and SQL Server only).</param>
+        public XactJobEntityConfiguration(string? providerName, bool excludeFromMigrations = true, string? schema = null)
         {
-            _sqlDialect = providerName.ToSqlDialect();
+            _sqlDialect = providerName.ToSqlDialect(schema);
             _isOfficialMySqlProvider = providerName == "MySql.EntityFrameworkCore";
             _excludeFromMigrations = excludeFromMigrations;
         }

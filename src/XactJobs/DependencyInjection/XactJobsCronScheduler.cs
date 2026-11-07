@@ -88,7 +88,7 @@ namespace XactJobs.DependencyInjection
 
             var db = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            var dialect = db.Database.ProviderName.ToSqlDialect();
+            var dialect = db.GetSqlDialect();
 
             // a retrying execution strategy, if the app enabled one, only allows explicit transactions inside of it
             await db.Database.CreateExecutionStrategy().ExecuteAsync(async token =>

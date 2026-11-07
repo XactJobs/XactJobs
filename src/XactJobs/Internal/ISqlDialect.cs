@@ -106,7 +106,7 @@ namespace XactJobs.Internal
         // keeps a statement within the parameter limits of all dialects (SQL Server allows 2100, at 3 per job)
         public const int MaxJobsPerStatement = 500;
 
-        private static readonly ConcurrentDictionary<string, ISqlDialect> _cachedDialects = new();
+        private static readonly ConcurrentDictionary<(string ProviderName, string? Schema), ISqlDialect> _cachedDialects = new();
 
         /// <summary>
         /// For databases that can update rows and return them in one statement.
@@ -155,14 +155,22 @@ namespace XactJobs.Internal
             }, cancellationToken);
         }
 
-        public static ISqlDialect ToSqlDialect(this string? providerName)
+        /// <param name="schema">The schema of XactJobs' tables, or null for the default. Only PostgreSQL and SQL Server have one.</param>
+        public static ISqlDialect ToSqlDialect(this string? providerName, string? schema = null)
         {
-            return _cachedDialects.GetOrAdd(providerName ?? "", key =>
+            return _cachedDialects.GetOrAdd((providerName ?? "", schema), entry =>
             {
-                key = key.ToLowerInvariant();
+                var key = entry.ProviderName.ToLowerInvariant();
 
-                if (key.EndsWith(".sqlserver")) return new SqlServerDialect();
-                if (key.EndsWith(".postgresql")) return new PostgreSqlDialect();
+                if (key.EndsWith(".sqlserver")) return new SqlServerDialect(schema);
+                if (key.EndsWith(".postgresql")) return new PostgreSqlDialect(schema);
+
+                if (schema != null)
+                {
+                    throw new NotSupportedException($"A schema for XactJobs' tables is only supported on PostgreSQL and SQL Server, not with provider '{entry.ProviderName}'. " +
+                        "There, give each app its own database (on Oracle, its own user).");
+                }
+
                 if (key.EndsWith(".mysql")) return new MySqlDialect(); // Pomelo.EntityFrameworkCore.MySql
                 if (key.StartsWith("mysql.")) return new MySqlDialect(); // MySql.EntityFrameworkCore
                 if (key.StartsWith("oracle.")) return new OracleDialect();
@@ -170,6 +178,29 @@ namespace XactJobs.Internal
 
                 throw new NotSupportedException($"XactJobs does not support provider '{key}'.");
             });
+        }
+
+        /// <summary>
+        /// The dialect of the context, with the schema its model gives XactJobs' tables (see ApplyXactJobsConfigurations).
+        /// </summary>
+        public static ISqlDialect GetSqlDialect(this DbContext db)
+        {
+            return db.Database.ProviderName.ToSqlDialect(db.Model.FindEntityType(typeof(XactJob))?.GetSchema());
+        }
+
+        /// <summary>
+        /// The dialects write the schema into their SQL, so it must be a plain identifier.
+        /// </summary>
+        internal static string CheckSchemaName(string? schema, string defaultSchema, string pattern)
+        {
+            if (schema == null) return defaultSchema;
+
+            if (!System.Text.RegularExpressions.Regex.IsMatch(schema, pattern))
+            {
+                throw new ArgumentException($"The schema '{schema}' isn't a plain identifier (it must match {pattern}).", nameof(schema));
+            }
+
+            return schema;
         }
 
         /// <summary>
