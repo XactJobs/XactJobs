@@ -1,7 +1,7 @@
 # XactJobs Codebase Summary
 
 ## Project Overview
-XactJobs is a .NET background job processing library with integrated database transaction support using Entity Framework Core. Version 0.1.4, licensed under LGPL-3.0-or-later.
+XactJobs is a .NET background job processing library with integrated database transaction support using Entity Framework Core. Version 0.1.4, licensed under MIT.
 
 ## Project Type
 Library (NuGet package) for reliable job scheduling and execution with full database transaction support.
@@ -135,7 +135,7 @@ dbContext.JobBatch().Enqueue(() => Sync(1)).Enqueue(() => Sync(2)).ContinueWith(
 
 - Current version: 0.3.0
 - Targets: net8.0, net9.0, net10.0
-- License: LGPL-3.0-or-later
+- License: MIT
 
 ## Design Patterns Used
 

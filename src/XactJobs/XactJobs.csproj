@@ -8,7 +8,7 @@
 
 		<Version>0.3.0</Version>
 		<RepositoryUrl>https://github.com/XactJobs/XactJobs</RepositoryUrl>
-		<PackageLicenseExpression>LGPL-3.0-or-later</PackageLicenseExpression>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<Authors>XactJobs</Authors>
 		<Copyright>Copyright (c) 2025 XactJobs</Copyright>
 		<Description>Easy background jobs processing with transactions, using EntityFrameworkCore. Supports SQL Server, PostgreSQL, MySQL, Oracle and SQLite.</Description>
