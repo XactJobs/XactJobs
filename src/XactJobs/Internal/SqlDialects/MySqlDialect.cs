@@ -163,24 +163,25 @@ WHERE {ColLeaser} = {{0}}
 ", parameters.ToArray());
         }
 
+        // MySQL's named locks belong to the server: with the database's name, apps with their own database on the same server don't
+        // wait for each other. A name has at most 64 characters, so the database's name is hashed.
+        // They also belong to the session, not to the transaction: the scheduler releases it, also when its cycle fails.
+        public string GetTableLockNameSql(string tableSchema, string tableName) => $"CONCAT('{tableSchema}_{tableName}:', MD5(DATABASE()))";
+
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
-            var tableLockName = $"{tableSchema}_{tableName}";
-
-            var result = await db.Database.ExecuteScalarIntAsync($"SELECT GET_LOCK('{tableLockName}', 30)", cancellationToken)
+            var result = await db.Database.ExecuteScalarIntAsync($"SELECT GET_LOCK({GetTableLockNameSql(tableSchema, tableName)}, 30)", cancellationToken)
                 .ConfigureAwait(false);
 
-            if (result != 1) throw new Exception($"Failed to acquire lock (LockName='{tableLockName}', Result={result})");
+            if (result != 1) throw new Exception($"Failed to acquire lock (LockName='{tableSchema}_{tableName}' of the database, Result={result})");
         }
 
         public async Task ReleaseTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
-            var tableLockName = $"{tableSchema}_{tableName}";
-
-            var result = await db.Database.ExecuteScalarIntAsync($"SELECT RELEASE_LOCK('{tableLockName}')", cancellationToken)
+            var result = await db.Database.ExecuteScalarIntAsync($"SELECT RELEASE_LOCK({GetTableLockNameSql(tableSchema, tableName)})", cancellationToken)
                 .ConfigureAwait(false);
 
-            if (result != 1) throw new Exception($"Failed to release lock (LockName='{tableLockName}', Result={result})");
+            if (result != 1) throw new Exception($"Failed to release lock (LockName='{tableSchema}_{tableName}' of the database, Result={result})");
         }
     }
 }

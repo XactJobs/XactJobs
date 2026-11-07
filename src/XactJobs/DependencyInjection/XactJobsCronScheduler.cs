@@ -101,24 +101,48 @@ namespace XactJobs.DependencyInjection
                 await dialect.AcquireTableLockAsync(db, dialect.XactJobSchema, dialect.XactJobPeriodicTable, token)
                     .ConfigureAwait(false);
 
-                if (ensurePeriodicJobs)
+                try
                 {
-                    await EnsurePeriodicJobsAsync(db, token)
+                    if (ensurePeriodicJobs)
+                    {
+                        await EnsurePeriodicJobsAsync(db, token)
+                            .ConfigureAwait(false);
+
+                        await db.SaveChangesAsync(token)
+                            .ConfigureAwait(false);
+                    }
+
+                    await ReconcilePeriodicJobsAsync(db, token)
                         .ConfigureAwait(false);
 
-                    await db.SaveChangesAsync(token)
+                    await tx.CommitAsync(token)
                         .ConfigureAwait(false);
                 }
-
-                await ReconcilePeriodicJobsAsync(db, token)
-                    .ConfigureAwait(false);
-
-                await tx.CommitAsync(token)
-                    .ConfigureAwait(false);
-
-                await dialect.ReleaseTableLockAsync(db, dialect.XactJobSchema, dialect.XactJobPeriodicTable, token)
-                    .ConfigureAwait(false);
+                finally
+                {
+                    // also when the cycle fails or is cancelled (e.g. on shutdown): MySQL's lock belongs to the session, not to the
+                    // transaction, so its connection would go back to the pool still holding it, and the other nodes' cycles would wait for it
+                    await ReleaseTableLockAsync(db, dialect)
+                        .ConfigureAwait(false);
+                }
             }, stoppingToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Never throws, so that it doesn't hide the cycle's own error. The other databases' locks end with the transaction.
+        /// </summary>
+        private async Task ReleaseTableLockAsync(TDbContext db, ISqlDialect dialect)
+        {
+            try
+            {
+                await dialect.ReleaseTableLockAsync(db, dialect.XactJobSchema, dialect.XactJobPeriodicTable, CancellationToken.None)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // if the connection is broken, its session ends, and the lock with it
+                Logger.LogWarning(ex, "Failed to release the lock of the periodic jobs");
+            }
         }
 
         /// <summary>

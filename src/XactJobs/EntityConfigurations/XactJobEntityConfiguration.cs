@@ -101,6 +101,8 @@ namespace XactJobs.EntityConfigurations
             builder.HasIndex(x => x.AwaitsBatchId)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColAwaitsBatchId}");
 
+            ConfigurePeriodicJobIdIndex(builder);
+
             if (_isOfficialMySqlProvider)
             {
                 // MySQL requires a key starting with an auto increment column, and it's not the first one of the primary key.
@@ -113,6 +115,33 @@ namespace XactJobs.EntityConfigurations
                 // Free space on each page, so that lease updates can be HOT updates.
                 // This is the annotation behind Npgsql's HasFillFactor (this library doesn't reference Npgsql).
                 builder.HasAnnotation("Npgsql:StorageParameter:fillfactor", 70);
+            }
+        }
+
+        /// <summary>
+        /// To find the runs of a periodic job (e.g. when it's paused, or ensured at start), without reading the whole table.
+        /// Only the rows of periodic jobs, one pending run each: the other jobs' inserts and deletes don't write to it.
+        /// </summary>
+        private void ConfigurePeriodicJobIdIndex(EntityTypeBuilder<XactJob> builder)
+        {
+            // MySQL has no filtered indexes, and a full one would be written by every job
+            if (_sqlDialect is MySqlDialect) return;
+
+            var index = builder.HasIndex(x => x.PeriodicJobId)
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}");
+
+            // Oracle doesn't store the rows where all the index's columns are null, so its index is filtered on its own
+            var filter = _sqlDialect switch
+            {
+                PostgreSqlDialect => $"{_sqlDialect.ColPeriodicJobId} IS NOT NULL",
+                SqlServerDialect => $"[{_sqlDialect.ColPeriodicJobId}] IS NOT NULL",
+                SqliteDialect => $"\"{_sqlDialect.ColPeriodicJobId}\" IS NOT NULL",
+                _ => null
+            };
+
+            if (filter != null)
+            {
+                index.HasFilter(filter);
             }
         }
     }

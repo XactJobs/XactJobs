@@ -130,6 +130,52 @@ public abstract class MySqlIntegrationTests(MySqlFixtureBase fixture) : Database
     }
 
     /// <summary>
+    /// MySQL's named locks belong to the session, not to the transaction: a scheduler cycle that fails after taking the lock of the
+    /// periodic jobs must release it. Otherwise its connection goes back to the pool still holding it (MySql.Data doesn't reset a
+    /// pooled session), and the other nodes' cycles wait for it, and fail.
+    /// </summary>
+    [DockerFact]
+    public async Task SchedulerCycle_ThatFails_ReleasesTheLockOfThePeriodicJobs()
+    {
+        // its cron expression can't be parsed: the cycle fails after taking the lock, when it schedules the first run
+        var host = CreateHost(options => options
+            .WithWorkerCount(0)
+            .WithPeriodicJob(() => Console.WriteLine("never"), "broken", "not a cron expression"));
+
+        await host.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_logs.Contains("Failed to create periodic jobs")), "the scheduler's cycle to fail");
+
+        // no cycle runs after this
+        await host.StopAsync();
+
+        Assert.True(await IsPeriodicJobsLockFreeAsync(), "The failed cycle left the lock of the periodic jobs held");
+    }
+
+    /// <summary>
+    /// From a connection of its own, not one of the pool's: a pooled connection could be the one holding the lock.
+    /// </summary>
+    private async Task<bool> IsPeriodicJobsLockFreeAsync()
+    {
+        await using var db = CreateDb();
+
+        var pooled = db.Database.GetDbConnection();
+
+        await using var connection = (DbConnection)Activator.CreateInstance(pooled.GetType())!;
+
+        connection.ConnectionString = pooled.ConnectionString + ";Pooling=false";
+
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+
+        // the same database: the lock's name has the database's name
+        command.CommandText = $"SELECT IS_FREE_LOCK({Dialect.GetTableLockNameSql(Dialect.XactJobSchema, Dialect.XactJobPeriodicTable)})";
+
+        return Convert.ToInt32(await command.ExecuteScalarAsync()) == 1;
+    }
+
+    /// <summary>
     /// Adds a leased (running) job and a due one, or a leased continuation and a claimable one, scanned in that order,
     /// and returns the leased one as stored.
     /// </summary>
@@ -305,7 +351,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
 
     private readonly List<IHost> _hosts = [];
     private readonly IntegrationJobState _state = new();
-    private readonly LogCapture _logs = new();
+    private protected readonly LogCapture _logs = new();
 
     public async Task InitializeAsync()
     {
@@ -994,7 +1040,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         Assert.False(await WithDbAsync(host, db => db.JobHistory.AnyAsync(h => h.Id == jobId)));
     }
 
-    private IHost CreateHost(Action<XactJobsOptionsBuilder<TestDbContext>>? configure = null, bool retryOnFailure = false)
+    private protected IHost CreateHost(Action<XactJobsOptionsBuilder<TestDbContext>>? configure = null, bool retryOnFailure = false)
     {
         var builder = Host.CreateApplicationBuilder();
 
@@ -1097,7 +1143,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         return await action(scope.ServiceProvider.GetRequiredService<TestDbContext>());
     }
 
-    private static async Task WaitForAsync(Func<Task<bool>> condition, string description)
+    private protected static async Task WaitForAsync(Func<Task<bool>> condition, string description)
     {
         var deadline = DateTime.UtcNow + WaitTimeout;
 
@@ -1236,7 +1282,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => retryAt;
     }
 
-    private sealed class LogCapture : ILoggerProvider, ILogger
+    private protected sealed class LogCapture : ILoggerProvider, ILogger
     {
         private readonly ConcurrentQueue<(LogLevel Level, string Message)> _entries = new();
 

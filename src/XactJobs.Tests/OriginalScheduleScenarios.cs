@@ -265,7 +265,7 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
 
         var slot = await WithDbAsync(host, db => db.Jobs.Where(j => j.PeriodicJobId == "daily_trigger").Select(j => j.ScheduledAt).SingleAsync());
 
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.RunJobNowAsync(jobId))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.RunJobNowAsync(KeyOf(host, jobId)))).Status);
         Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.TriggerPeriodicJobAsync("daily_trigger"))).Status);
 
         await host.StartAsync();
@@ -356,12 +356,12 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
             return (retry.Id, plain.Id, same.Id);
         });
 
-        Assert.Equal(original, (await WithServiceAsync(host, s => s.GetJobByIdAsync(retry)))!.OriginallyScheduledAt);
-        Assert.Null((await WithServiceAsync(host, s => s.GetJobByIdAsync(plain)))!.OriginallyScheduledAt);
-        Assert.Null((await WithServiceAsync(host, s => s.GetJobByIdAsync(same)))!.OriginallyScheduledAt);
+        Assert.Equal(original, (await WithServiceAsync(host, s => s.GetJobAsync(KeyOf(host, retry))))!.OriginallyScheduledAt);
+        Assert.Null((await WithServiceAsync(host, s => s.GetJobAsync(KeyOf(host, plain))))!.OriginallyScheduledAt);
+        Assert.Null((await WithServiceAsync(host, s => s.GetJobAsync(KeyOf(host, same))))!.OriginallyScheduledAt);
 
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.CancelJobAsync(retry, null))).Status);
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.CancelJobAsync(plain, null))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.CancelJobAsync(KeyOf(host, retry), null))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.CancelJobAsync(KeyOf(host, plain), null))).Status);
 
         var cancelled = await WithDbAsync(host, db => db.JobHistory.AsNoTracking().SingleAsync(h => h.Id == retry));
 
@@ -499,6 +499,16 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
 
             await Task.Delay(50);
         }
+    }
+
+    /// <summary>
+    /// The primary key of a pending job, as the dashboard has it from the job's row (the stored time, with the database's precision).
+    /// </summary>
+    private static JobKey KeyOf(IHost host, long id)
+    {
+        using var scope = host.Services.CreateScope();
+
+        return JobKey.Of(scope.ServiceProvider.GetRequiredService<TestDbContext>().Jobs.AsNoTracking().Single(j => j.Id == id));
     }
 
     private static async Task<T> WithDbAsync<T>(IHost host, Func<TestDbContext, Task<T>> action)

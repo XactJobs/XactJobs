@@ -17,18 +17,22 @@ public interface IXactJobsUIService
     // Pending/Scheduled Jobs
     Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
         int page, int pageSize, string? queue = null, CancellationToken ct = default);
-    Task<JobDto?> GetJobByIdAsync(long id, CancellationToken ct = default);
+
+    /// <summary>
+    /// A pending or running job, by its primary key (see <see cref="JobKey"/>).
+    /// </summary>
+    Task<JobDto?> GetJobAsync(JobKey key, CancellationToken ct = default);
 
     /// <summary>
     /// Moves a pending job to the history as cancelled. Not allowed for running jobs, nor for runs of periodic jobs:
     /// those are stopped by pausing the periodic job.
     /// </summary>
-    Task<ActionResultDto> CancelJobAsync(long id, string? cancelledBy, CancellationToken ct = default);
+    Task<ActionResultDto> CancelJobAsync(JobKey key, string? cancelledBy, CancellationToken ct = default);
 
     /// <summary>
     /// Makes a pending job due now. Not allowed for running jobs, nor for continuations that wait for their batch.
     /// </summary>
-    Task<ActionResultDto> RunJobNowAsync(long id, CancellationToken ct = default);
+    Task<ActionResultDto> RunJobNowAsync(JobKey key, CancellationToken ct = default);
 
     // Job History
     Task<PagedResultDto<JobHistoryDto>> GetHistoryAsync(

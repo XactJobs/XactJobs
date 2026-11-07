@@ -84,21 +84,28 @@ internal static class XactJobsApiEndpoints
                 queue, ct)))
             .WithName("XactJobsGetScheduledJobs");
 
+        // a pending job is identified by its primary key: the id, and the queue and the scheduled time in the query string (see JobKey)
         group.MapGet("/jobs/{id:long}", async (
-            IXactJobsUIService service, long id, CancellationToken ct) =>
+            IXactJobsUIService service, long id, [FromQuery] string? queue, [FromQuery] string? scheduledAt, CancellationToken ct) =>
         {
-            var job = await service.GetJobByIdAsync(id, ct);
+            if (!JobKey.TryParse(id, queue, scheduledAt, out var key)) return JobKeyRequired();
+
+            var job = await service.GetJobAsync(key, ct);
             return job is not null ? Results.Ok(job) : Results.NotFound();
         }).WithName("XactJobsGetJobById");
 
         group.MapPost("/jobs/{id:long}/cancel", async (
-            IXactJobsUIService service, HttpContext httpContext, long id, CancellationToken ct) =>
-            ToResult(httpContext, await service.CancelJobAsync(id, httpContext.User.Identity?.Name, ct)))
+            IXactJobsUIService service, HttpContext httpContext, long id, [FromQuery] string? queue, [FromQuery] string? scheduledAt, CancellationToken ct) =>
+            JobKey.TryParse(id, queue, scheduledAt, out var key)
+                ? ToResult(httpContext, await service.CancelJobAsync(key, httpContext.User.Identity?.Name, ct))
+                : JobKeyRequired())
             .WithName("XactJobsCancelJob");
 
         group.MapPost("/jobs/{id:long}/run-now", async (
-            IXactJobsUIService service, HttpContext httpContext, long id, CancellationToken ct) =>
-            ToResult(httpContext, await service.RunJobNowAsync(id, ct)))
+            IXactJobsUIService service, HttpContext httpContext, long id, [FromQuery] string? queue, [FromQuery] string? scheduledAt, CancellationToken ct) =>
+            JobKey.TryParse(id, queue, scheduledAt, out var key)
+                ? ToResult(httpContext, await service.RunJobNowAsync(key, ct))
+                : JobKeyRequired())
             .WithName("XactJobsRunJobNow");
 
         // History endpoints
@@ -224,6 +231,11 @@ internal static class XactJobsApiEndpoints
             _ => Results.Conflict(body),
         };
     }
+
+    private static IResult JobKeyRequired() => Results.BadRequest(new
+    {
+        message = "A pending job is identified by its primary key: the id in the route, and the queue and the scheduledAt (UTC, e.g. 2026-11-07T10:00:00.1234567Z) of the job in the query string."
+    });
 
     private static bool TryParseCategory(string? value, out HistoryCategory category)
     {

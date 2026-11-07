@@ -185,20 +185,19 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         };
     }
 
-    public async Task<JobDto?> GetJobByIdAsync(long id, CancellationToken ct = default)
+    public async Task<JobDto?> GetJobAsync(JobKey key, CancellationToken ct = default)
     {
-        var job = await db.Set<XactJob>()
-            .AsNoTracking()
-            .Where(j => j.Id == id)
+        var job = await WhereKey(db.Set<XactJob>().AsNoTracking(), key)
             .Select(ToJobDto)
             .FirstOrDefaultAsync(ct);
 
         return job == null ? null : (await WithBatchJobsLeftAsync([job], ct))[0];
     }
 
-    public async Task<ActionResultDto> CancelJobAsync(long id, string? cancelledBy, CancellationToken ct = default)
+    public async Task<ActionResultDto> CancelJobAsync(JobKey key, string? cancelledBy, CancellationToken ct = default)
     {
-        var job = await FindJobAsync(id, ct);
+        var id = key.Id;
+        var job = await FindJobAsync(key, ct);
 
         if (job == null) return JobNotFound(id);
 
@@ -244,9 +243,10 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         return ActionResultDto.Done($"Job #{id} cancelled.");
     }
 
-    public async Task<ActionResultDto> RunJobNowAsync(long id, CancellationToken ct = default)
+    public async Task<ActionResultDto> RunJobNowAsync(JobKey key, CancellationToken ct = default)
     {
-        var job = await FindJobAsync(id, ct);
+        var id = key.Id;
+        var job = await FindJobAsync(key, ct);
 
         if (job == null) return JobNotFound(id);
 
@@ -746,8 +746,9 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         var pendingSampleIds = pending.Select(p => p.SampleId).ToList();
         var historySampleIds = finished.Where(f => pending.All(p => p.Id != f.Id)).Select(f => f.SampleId).ToList();
 
+        // with the batch, so it uses the index of the batch column: on most databases there's no index on the id alone
         var samples = await db.Set<XactJob>()
-            .Where(j => pendingSampleIds.Contains(j.Id))
+            .Where(j => pendingSampleIds.Contains(j.Id) && batchIds.Contains(j.BatchId))
             .Select(j => new { j.BatchId, j.TypeName, j.MethodName })
             .ToListAsync(ct);
 
@@ -856,11 +857,15 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         OriginallyScheduledAt = h.OriginallyScheduledAt != h.ScheduledAt ? h.OriginallyScheduledAt : null
     };
 
-    private Task<XactJob?> FindJobAsync(long id, CancellationToken ct)
+    private Task<XactJob?> FindJobAsync(JobKey key, CancellationToken ct)
     {
-        return db.Set<XactJob>()
-            .AsNoTracking()
-            .FirstOrDefaultAsync(j => j.Id == id, ct);
+        return WhereKey(db.Set<XactJob>().AsNoTracking(), key).FirstOrDefaultAsync(ct);
+    }
+
+    // the whole primary key: on PostgreSQL, SQL Server and Oracle there's no index on the id alone
+    private static IQueryable<XactJob> WhereKey(IQueryable<XactJob> jobs, JobKey key)
+    {
+        return jobs.Where(j => j.Queue == key.Queue && j.ScheduledAt == key.ScheduledAt && j.Id == key.Id);
     }
 
     private void NotifyQueue(string queue)

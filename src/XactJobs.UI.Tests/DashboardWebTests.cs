@@ -13,6 +13,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XactJobs.UI.DependencyInjection;
+using XactJobs.UI.Services.Models;
 
 namespace XactJobs.UI.Tests;
 
@@ -281,11 +282,6 @@ public partial class DashboardWebTests : IAsyncDisposable
 
         var jobId = await WithDbAsync(db => db.Jobs.Where(j => j.PeriodicJobId == null).Select(j => j.Id).SingleAsync());
 
-        var withoutToken = await client.PostAsync($"/api/XactJobs/jobs/{jobId}/cancel", null);
-
-        Assert.Equal(HttpStatusCode.BadRequest, withoutToken.StatusCode);
-        Assert.Equal(1, await WithDbAsync(db => db.Jobs.CountAsync(j => j.Id == jobId)));
-
         var page = await client.GetAsync("/XactJobs/scheduled");
         var html = await page.Content.ReadAsStringAsync();
         var token = WebUtility.HtmlDecode(AntiforgeryMeta().Match(html).Groups["token"].Value);
@@ -293,7 +289,15 @@ public partial class DashboardWebTests : IAsyncDisposable
 
         Assert.NotEmpty(token);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/XactJobs/jobs/{jobId}/cancel");
+        // the page's Cancel button: the job's primary key, written from the row SQLite returned, and read back by the API
+        var cancelUrl = WebUtility.HtmlDecode(HxPost().Matches(html).Select(m => m.Groups["url"].Value).Single(u => u.StartsWith($"/api/XactJobs/jobs/{jobId}/cancel?")));
+
+        var withoutToken = await client.PostAsync(cancelUrl, null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, withoutToken.StatusCode);
+        Assert.Equal(1, await WithDbAsync(db => db.Jobs.CountAsync(j => j.Id == jobId)));
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, cancelUrl);
         request.Headers.Add("Cookie", cookie);
         request.Headers.Add("RequestVerificationToken", token);
 
@@ -311,13 +315,50 @@ public partial class DashboardWebTests : IAsyncDisposable
 
         await SeedAsync();
 
-        var runId = await WithDbAsync(db => db.Jobs.Where(j => j.PeriodicJobId != null).Select(j => j.Id).SingleAsync());
+        var run = await WithDbAsync(db => db.Jobs.AsNoTracking().Where(j => j.PeriodicJobId != null).SingleAsync());
 
-        var response = await client.PostAsync($"/api/XactJobs/jobs/{runId}/cancel", null);
+        var response = await client.PostAsync($"/api/XactJobs/jobs/{run.Id}/cancel{JobKey.Of(run).ToQueryString()}", null);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Contains("Pause the periodic job", await response.Content.ReadAsStringAsync());
         Assert.Contains("danger", response.Headers.GetValues("HX-Trigger").Single());
+    }
+
+    /// <summary>
+    /// A pending job is identified by its primary key: on PostgreSQL, SQL Server and Oracle, a lookup by the id alone would read the whole table.
+    /// </summary>
+    [Fact]
+    public async Task JobRoutes_NeedTheJobsPrimaryKey()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous().DisableAntiforgery());
+
+        await SeedAsync();
+
+        var job = await WithDbAsync(db => db.Jobs.AsNoTracking().Where(j => j.PeriodicJobId == null).SingleAsync());
+
+        foreach (var request in new[]
+        {
+            new HttpRequestMessage(HttpMethod.Get, $"/api/XactJobs/jobs/{job.Id}"),
+            new HttpRequestMessage(HttpMethod.Get, $"/api/XactJobs/jobs/{job.Id}?queue={Uri.EscapeDataString(job.Queue)}"),
+            new HttpRequestMessage(HttpMethod.Post, $"/api/XactJobs/jobs/{job.Id}/run-now"),
+            new HttpRequestMessage(HttpMethod.Post, $"/api/XactJobs/jobs/{job.Id}/cancel?queue=x&scheduledAt=not-a-time"),
+        })
+        {
+            var response = await client.SendAsync(request);
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("primary key", await response.Content.ReadAsStringAsync());
+        }
+
+        var found = await client.GetAsync($"/api/XactJobs/jobs/{job.Id}{JobKey.Of(job).ToQueryString()}");
+
+        Assert.Equal(HttpStatusCode.OK, found.StatusCode);
+        Assert.Contains($"\"id\":{job.Id}", await found.Content.ReadAsStringAsync());
+
+        // another scheduled time: another row
+        var otherTime = new JobKey(job.Queue, job.ScheduledAt.AddSeconds(1), job.Id);
+
+        Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/api/XactJobs/jobs/{job.Id}{otherTime.ToQueryString()}")).StatusCode);
     }
 
     [Fact]
@@ -339,6 +380,9 @@ public partial class DashboardWebTests : IAsyncDisposable
 
     [GeneratedRegex("""<meta name="xactjobs-antiforgery" content="(?<token>[^"]+)""")]
     private static partial Regex AntiforgeryMeta();
+
+    [GeneratedRegex("""hx-post="(?<url>[^"]+)""")]
+    private static partial Regex HxPost();
 
     private async Task<HttpClient> StartAsync(Action<XactJobsUIOptionsBuilder>? configure)
     {

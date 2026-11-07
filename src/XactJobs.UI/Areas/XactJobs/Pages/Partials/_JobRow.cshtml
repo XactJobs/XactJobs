@@ -75,7 +75,7 @@
         }
         <span class="d-inline-block" tabindex="0" title="@(runNowBlocked ?? "Run now")">
             <button class="btn btn-sm btn-outline-primary me-1"
-                    hx-post="@Model.Owner.ApiUrl($"/jobs/{job.Id}/run-now")"
+                    hx-post="@Model.Owner.ApiUrl($"/jobs/{job.Id}/run-now{JobKey.Of(job).ToQueryString()}")"
                     hx-swap="none"
                     disabled="@(runNowBlocked != null)">
                 <i class="bi bi-play-fill"></i>
@@ -83,7 +83,7 @@
         </span>
         <span class="d-inline-block" tabindex="0" title="@(cancelBlocked ?? "Cancel: moves the job to the history as cancelled")">
             <button class="btn btn-sm btn-outline-danger"
-                    hx-post="@Model.Owner.ApiUrl($"/jobs/{job.Id}/cancel")"
+                    hx-post="@Model.Owner.ApiUrl($"/jobs/{job.Id}/cancel{JobKey.Of(job).ToQueryString()}")"
                     hx-confirm="@cancelConfirm"
                     hx-swap="none"
                     disabled="@(cancelBlocked != null)">

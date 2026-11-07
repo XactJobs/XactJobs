@@ -66,9 +66,9 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         await EnsurePeriodicAsync();
         var periodicRun = await GetPeriodicRunAsync();
 
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.CancelJobAsync(pendingId, "alice"))).Status);
-        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.CancelJobAsync(runningId, null))).Status);
-        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.CancelJobAsync(periodicRun.Id, null))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.CancelJobAsync(KeyOf(pendingId), "alice"))).Status);
+        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.CancelJobAsync(KeyOf(runningId), null))).Status);
+        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.CancelJobAsync(KeyOf(periodicRun.Id), null))).Status);
 
         await using var db = CreateDb();
 
@@ -95,8 +95,8 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         var running = DateTime.UtcNow.AddHours(1);
         var runningId = await AddJobAsync(running, leasedUntil: DateTime.UtcNow.AddMinutes(5));
 
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RunJobNowAsync(futureId))).Status);
-        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RunJobNowAsync(runningId))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RunJobNowAsync(KeyOf(futureId)))).Status);
+        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RunJobNowAsync(KeyOf(runningId)))).Status);
 
         await using var db = CreateDb();
 
@@ -323,6 +323,16 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         fixture.Configure(options, retryOnFailure: false);
 
         return new TestDbContext(options.Options);
+    }
+
+    /// <summary>
+    /// The primary key of a pending job, as the dashboard has it from the job's row (the stored time, with the database's precision).
+    /// </summary>
+    private JobKey KeyOf(long id)
+    {
+        using var db = CreateDb();
+
+        return JobKey.Of(db.Jobs.AsNoTracking().Single(j => j.Id == id));
     }
 
     private async Task<T> WithDbAsync<T>(Func<TestDbContext, Task<T>> action)
