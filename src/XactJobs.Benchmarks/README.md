@@ -62,3 +62,12 @@ XactJobs overhead                    ...
   ```
 
   The database's CPU time isn't in `CPU µs`, which is the benchmark process's only.
+- `--sqlserver <connection string>` does the same on SQL Server. For example:
+
+  ```bash
+  docker run -d --name xactjobs-bench-mssql -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=Bench_pass1!' -e MSSQL_MEMORY_LIMIT_MB=2048 \
+      -p 127.0.0.1:51433:1433 mcr.microsoft.com/mssql/server:2022-latest
+  dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 4 \
+      --sqlserver "Server=127.0.0.1,51433;User ID=sa;Password=Bench_pass1!;TrustServerCertificate=True"
+  docker rm -f xactjobs-bench-mssql
+  ```

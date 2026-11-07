@@ -58,7 +58,7 @@ Then the same with `-f net10.0`.
 
 ## Benchmark Commands
 
-`src/XactJobs.Benchmarks/` (see its README) measures XactJobs' own code, to compare commits on the same machine: `micro` (BenchmarkDotNet, no database) and `drain` (the worker on SQLite in memory, compared with the same database work in plain EF). Release builds only, and like the tests, one run at a time on a small machine.
+`src/XactJobs.Benchmarks/` (see its README) measures XactJobs' own code, to compare commits on the same machine: `micro` (BenchmarkDotNet, no database) and `drain` (the worker on SQLite in memory, or on PostgreSQL or SQL Server, compared with the same database work in plain EF). Release builds only, and like the tests, one run at a time on a small machine.
 
 ```bash
 dotnet build -c Release src/XactJobs.Benchmarks/XactJobs.Benchmarks.csproj
