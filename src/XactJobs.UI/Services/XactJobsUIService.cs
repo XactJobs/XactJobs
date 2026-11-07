@@ -229,7 +229,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             {
                 BatchId = job.BatchId,
                 AwaitsBatchId = job.AwaitsBatchId,
-                ContinuationCondition = job.ContinuationCondition
+                ContinuationCondition = job.ContinuationCondition,
+                OriginallyScheduledAt = job.OriginallyScheduledAt
             });
         }, ct);
 
@@ -309,12 +310,16 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         // a one-off job: as a run of the periodic job, it would schedule a second chain of runs.
         // Outside of any batch: the continuations of its batch, if any, already started or were skipped.
+        // it keeps the time the job was originally scheduled for, as a retry by a worker does
         var newJob = new XactJob(0,
                                  DateTime.UtcNow,
                                  history.TypeName,
                                  history.MethodName,
                                  history.MethodArgs,
-                                 history.Queue);
+                                 history.Queue)
+        {
+            OriginallyScheduledAt = history.OriginallyScheduledAt ?? history.ScheduledAt
+        };
 
         db.Set<XactJob>().Add(newJob);
 
@@ -498,7 +503,10 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             {
                 BatchId = job.BatchId,
                 AwaitsBatchId = job.AwaitsBatchId,
-                ContinuationCondition = job.ContinuationCondition
+                ContinuationCondition = job.ContinuationCondition,
+
+                // the run keeps the time it was scheduled for, e.g. the cron slot of a periodic job
+                OriginallyScheduledAt = job.OriginallyScheduledAt ?? job.ScheduledAt
             };
 
             db.Set<XactJob>().Add(newJob);
@@ -825,7 +833,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         PeriodicJobId = j.PeriodicJobId,
         BatchId = j.BatchId,
         AwaitsBatchId = j.AwaitsBatchId,
-        ContinuationCondition = j.ContinuationCondition
+        ContinuationCondition = j.ContinuationCondition,
+        OriginallyScheduledAt = j.OriginallyScheduledAt != j.ScheduledAt ? j.OriginallyScheduledAt : null
     };
 
     private static readonly Expression<Func<XactJobHistory, JobHistoryDto>> ToJobHistoryDto = h => new JobHistoryDto
@@ -843,7 +852,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         PeriodicJobId = h.PeriodicJobId,
         BatchId = h.BatchId,
         AwaitsBatchId = h.AwaitsBatchId,
-        ContinuationCondition = h.ContinuationCondition
+        ContinuationCondition = h.ContinuationCondition,
+        OriginallyScheduledAt = h.OriginallyScheduledAt != h.ScheduledAt ? h.OriginallyScheduledAt : null
     };
 
     private Task<XactJob?> FindJobAsync(long id, CancellationToken ct)

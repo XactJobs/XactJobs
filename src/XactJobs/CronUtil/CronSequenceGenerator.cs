@@ -52,7 +52,7 @@ namespace XactJobs.CronUtil
 		{
 			if (dateTimeUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("Only UTC times can be used", nameof(dateTimeUtc));
 
-			var truncatedUtc = dateTimeUtc.TruncateMs();
+			var truncatedUtc = dateTimeUtc.TruncateToSeconds();
 
 			var dateTime = TimeZoneInfo.ConvertTimeFromUtc(truncatedUtc, _timeZoneInfo);
 

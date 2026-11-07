@@ -255,17 +255,20 @@ Finally create the XactJobs tables in your database, by running all the SQL scri
 
 | Database | Scripts |
 |---|---|
-| SQL Server | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlserver-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlserver-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlserver-v0.2.0.sql) |
-| PostgreSQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-postgresql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-postgresql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-postgresql-v0.2.0.sql) |
-| MySQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-mysql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-mysql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-mysql-v0.2.0.sql) |
-| Oracle | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-oracle-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-oracle-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-oracle-v0.2.0.sql) |
-| SQLite | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlite-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlite-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlite-v0.2.0.sql) |
+| SQL Server | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlserver-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlserver-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlserver-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-sqlserver-v0.3.0.sql) |
+| PostgreSQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-postgresql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-postgresql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-postgresql-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-postgresql-v0.3.0.sql) |
+| MySQL | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-mysql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-mysql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-mysql-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-mysql-v0.3.0.sql) |
+| Oracle | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-oracle-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-oracle-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-oracle-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-oracle-v0.3.0.sql) |
+| SQLite | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlite-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlite-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlite-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-sqlite-v0.3.0.sql) |
 
 When upgrading an existing installation, run only the scripts of the newer versions. For v0.1.5, upgrade all the workers first and then run
 the script, because it drops an index that older versions need.
 
 For v0.2.0, run the script first: it adds the columns for batches and continuations, which v0.2.0 needs. Start using batches and continuations only
 once all the workers run v0.2.0: a worker of an older version that retries a job of a batch removes the job from its batch, so the batch's continuations could start too early.
+
+For v0.3.0, run the script first: it adds the column for the time a job was originally scheduled for, which v0.3.0 needs. Then upgrade the workers.
+A worker of an older version that retries a job leaves the column empty, so that retry sees its own retry time as `XactJobContext.OriginallyScheduledAt`.
 
 ## Using EF Migrations
 Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
@@ -336,6 +339,24 @@ dbContext.SaveChanges();
 
 If a method accepts a cancellation token, then `null` or `CancellationToken.None` should be passed when the job is enqueued.  
 When the worker executes the job, it will pass the correct stopping token.
+
+In the same way, a method can take an `XactJobContext` parameter, with `null` passed when the job is enqueued. The worker passes the context of the run.
+For now it has `OriginallyScheduledAt`, the time (UTC) the job was originally scheduled for, which stays the same across its retries:
+
+```csharp
+public async Task SendDailyReportAsync(XactJobContext context, CancellationToken cancellationToken)
+{
+    var idempotencyKey = $"daily-report-{context.OriginallyScheduledAt:yyyy-MM-dd}";
+    // ...
+}
+
+dbContext.JobEnsurePeriodic<ReportSender>(
+    x => x.SendDailyReportAsync(null!, CancellationToken.None),
+    "daily_report",
+    Cron.Daily());
+```
+
+For a periodic job it's the cron slot of the run, and for a continuation the time its first attempt was claimed, once its batch was finished.
 
 ### Instance methods
 
@@ -448,12 +469,12 @@ The API endpoints that change data require an antiforgery token, which the dashb
 
 - **Dashboard** - due, scheduled and running jobs, continuations waiting for their batch, succeeded and failed jobs in the last 24 hours, and a chart per hour
 - **Scheduled** - the pending and running jobs. A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
-  - *Run now* makes a pending job due now. A continuation that waits for its batch can't: it starts when the batch is finished
+  - *Run now* makes a pending job due now, and the job keeps the time it was scheduled for as `XactJobContext.OriginallyScheduledAt`. A continuation that waits for its batch can't: it starts when the batch is finished
   - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead.
     A cancelled job of a batch counts as a failed job of the batch, and if it was the last one, the batch's continuations start
 - **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts, and skipped runs and continuations, with the reason
   - *Retry* enqueues a failed or cancelled job, or a skipped continuation, again as a new job. A run of a periodic job is enqueued as a one-off job,
-    and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations
+    and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations. Like a retry by a worker, it keeps the time the job was originally scheduled for
 - **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
 - **Periodic** - the periodic jobs, with their next run
@@ -575,6 +596,22 @@ the other one's delete affects 0 rows, EF throws a concurrency exception, and it
 
 **This doesn't apply to** changes the job saves without a transaction, or commits itself, because they are already permanent when the job finishes.
 It also doesn't apply to other DbContext instances, or to external side effects like sending emails or calling HTTP APIs. These can happen more than once, so they should be idempotent.
+
+## Idempotent External Calls
+Calls to other systems, like a payment provider or an email API, are at least once: a job that fails after the call, or whose lease expired, runs the call again.
+To make them safe, send an idempotency key with the call, and pass it to the job as a method argument:
+
+- a business key, like `$"charge-order-{orderId}"`,
+- or `Guid.NewGuid()`: method arguments are evaluated once, when the job is enqueued, so every retry gets the same key.
+
+```csharp
+dbContext.JobEnqueue<PaymentJob>(x => x.ChargeAsync(orderId, Guid.NewGuid(), CancellationToken.None));
+```
+
+A periodic job gets the same arguments on every run, so build its key from the run's cron slot instead, with
+[`XactJobContext.OriginallyScheduledAt`](#static-methods), e.g. `$"daily-report-{context.OriginallyScheduledAt:yyyy-MM-dd}"`.
+
+The receiving system has to support idempotency keys: it does the work for the first call with a key, and answers the same for the next ones.
 
 # Database Notes
 

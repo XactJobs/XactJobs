@@ -97,7 +97,8 @@ namespace XactJobs
             {
                 BatchId = job.BatchId,
                 AwaitsBatchId = job.AwaitsBatchId,
-                ContinuationCondition = job.ContinuationCondition
+                ContinuationCondition = job.ContinuationCondition,
+                OriginallyScheduledAt = job.OriginallyScheduledAt
             };
         }
     }

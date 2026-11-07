@@ -47,6 +47,13 @@ namespace XactJobs
 
         public int ErrorCount { get; init; }
 
+        /// <summary>
+        /// The time (UTC) the job was originally scheduled for, when it differs from <see cref="ScheduledAt"/>: a retry has it
+        /// (also one from the dashboard's history), and so has a run that the dashboard moved to now. It stays the same across retries. Null means the same as ScheduledAt.
+        /// A job method gets it as <see cref="XactJobContext.OriginallyScheduledAt"/>.
+        /// </summary>
+        public DateTime? OriginallyScheduledAt { get; init; }
+
         private Guid? _batchId;
 
         /// <summary>
@@ -76,6 +83,15 @@ namespace XactJobs
         /// True for a continuation that waits for its batch to finish.
         /// </summary>
         public bool IsAwaitingBatch => AwaitsBatchId != null && ScheduledAt == AwaitingBatchScheduledAt;
+
+        /// <summary>
+        /// <see cref="OriginallyScheduledAt"/>, or else the scheduled time. A continuation's first attempt waits at the reserved
+        /// <see cref="AwaitingBatchScheduledAt"/>, so it gets the time it was claimed instead.
+        /// </summary>
+        internal DateTime GetOriginallyScheduledAt(DateTime claimedAt)
+        {
+            return OriginallyScheduledAt ?? (IsAwaitingBatch ? claimedAt : ScheduledAt);
+        }
 
         /// <summary>
         /// A job gets its batch when a continuation is added to it, before it's saved.

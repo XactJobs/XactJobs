@@ -52,7 +52,10 @@ else
                                          model="new BatchBadgesModel(Model, job.BatchId, job.AwaitsBatchId, job.DisplayCondition)" />
                             </td>
                             <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>
-                            <td>@XactJobsPageModel.Time(job.ScheduledAt)</td>
+                            <td>
+                                @XactJobsPageModel.Time(job.ScheduledAt)
+                                @XactJobsPageModel.OriginalTime(job.OriginallyScheduledAt)
+                            </td>
                             <td>@XactJobsPageModel.Time(job.ProcessedAt)</td>
                             @if (Model.ShowsErrors)
                             {

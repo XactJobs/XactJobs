@@ -91,6 +91,9 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.AwaitsBatchId).HasColumnName(_sqlDialect.ColAwaitsBatchId);
             builder.Property(x => x.ContinuationCondition).HasColumnName(_sqlDialect.ColContinuationCondition);
 
+            builder.Property(x => x.OriginallyScheduledAt).HasColumnName(_sqlDialect.ColOriginallyScheduledAt)
+                .HasColumnType(_sqlDialect.DateTimeColumnType);
+
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
 
