@@ -10,19 +10,19 @@
   --muted: #94a3b8;
   --accent: var(--xj-accent-400);
   --accent-ink: var(--xj-accent-300);
-  --accent-soft: rgb(45 212 191 / 0.12);
-  --btn-ink: #042f2e;
+  --accent-soft: rgb(76 187 142 / 0.12);
+  --btn-ink: #0b231b;
   --shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 12px 32px -12px rgb(0 0 0 / 0.5);
-  --glow: radial-gradient(60rem 30rem at 70% -10%, rgb(20 184 166 / 0.18), transparent 60%);
+  --glow: radial-gradient(60rem 30rem at 70% -10%, rgb(47 158 116 / 0.16), transparent 60%);
 
-  --ill-box-a: #0c2e2c;
+  --ill-box-a: #0d2a20;
   --ill-box-b: #0d1729;
-  --ill-box-stroke: rgb(45 212 191 / 0.45);
+  --ill-box-stroke: rgb(76 187 142 / 0.45);
   --ill-chip: var(--xj-accent-500);
-  --ill-chip-text: #042f2e;
+  --ill-chip-text: #0b231b;
   --ill-surface: #131d33;
   --ill-card-stroke: #26344f;
-  --ill-glyph-bg: rgb(45 212 191 / 0.16);
+  --ill-glyph-bg: rgb(76 187 142 / 0.16);
   --ill-glyph: var(--xj-accent-300);
   --ill-ink: #f1f5f9;
   --ill-muted: #8696ad;
@@ -40,7 +40,7 @@
   --surface: #ffffff;
   --surface-2: #f6f8fb;
   --border: #e2e8f0;
-  --ink: #0f172a;
+  --ink: var(--xj-navy);
   --ink-2: #334155;
   --muted: #5b6b80;
   --accent: var(--xj-accent-700);
@@ -48,18 +48,18 @@
   --accent-soft: var(--xj-accent-50);
   --btn-ink: #ffffff;
   --shadow: 0 1px 2px rgb(15 23 42 / 0.06), 0 12px 32px -12px rgb(15 23 42 / 0.16);
-  --glow: radial-gradient(60rem 30rem at 70% -10%, rgb(20 184 166 / 0.14), transparent 60%);
+  --glow: radial-gradient(60rem 30rem at 70% -10%, rgb(47 158 116 / 0.12), transparent 60%);
 
-  --ill-box-a: #effcf9;
+  --ill-box-a: #effaf5;
   --ill-box-b: #ffffff;
-  --ill-box-stroke: rgb(13 148 136 / 0.35);
+  --ill-box-stroke: rgb(35 128 94 / 0.35);
   --ill-chip: var(--xj-accent-700);
   --ill-chip-text: #ffffff;
   --ill-surface: #ffffff;
   --ill-card-stroke: #e2e8f0;
   --ill-glyph-bg: var(--xj-accent-50);
   --ill-glyph: var(--xj-accent-700);
-  --ill-ink: #0f172a;
+  --ill-ink: var(--xj-navy);
   --ill-muted: #64748b;
   --ill-accent-ink: var(--xj-accent-700);
   --ill-line: #cbd5e1;
@@ -205,7 +205,7 @@ h3 { font-size: 1.1rem; font-weight: 650; letter-spacing: -0.01em; }
   transition: transform 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
 .btn:hover { transform: translateY(-1px); }
-.btn-primary { background: var(--accent); color: var(--btn-ink); box-shadow: 0 8px 24px -10px rgb(20 184 166 / 0.6); }
+.btn-primary { background: var(--accent); color: var(--btn-ink); box-shadow: 0 8px 24px -10px rgb(47 158 116 / 0.55); }
 .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, var(--ink)); }
 .btn-secondary { background: var(--surface); color: var(--ink); border-color: var(--border); }
 .btn-secondary:hover { border-color: var(--muted); }
