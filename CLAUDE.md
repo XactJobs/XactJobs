@@ -191,7 +191,7 @@ XactJobs is a .NET library for background job processing with full database tran
 - Default queue (2 workers)
 - Priority queue (optional, `WithPriorityQueue()`)
 - Long-running queue (optional, `WithLongRunningQueue()`)
-- Custom queues via `WithCustomQueue()`
+- Custom queues via `WithIsolatedQueue(name)`
 
 ## Target Frameworks
 

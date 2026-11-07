@@ -11,7 +11,7 @@
 		<PackageLicenseExpression>LGPL-3.0-or-later</PackageLicenseExpression>
 		<Authors>XactJobs</Authors>
 		<Copyright>Copyright (c) 2025 XactJobs</Copyright>
-		<Description>Easy background jobs processing with transactions, using EntityFrameworkCore. Supports SqlServer, PostgreSql, MySql, and Oracle.</Description>
+		<Description>Easy background jobs processing with transactions, using EntityFrameworkCore. Supports SQL Server, PostgreSQL, MySQL, Oracle and SQLite.</Description>
 		<PackageIcon>icon.png</PackageIcon>
 		<PackageProjectUrl>https://github.com/XactJobs/XactJobs</PackageProjectUrl>
 		<PackageReadmeFile>README.md</PackageReadmeFile>

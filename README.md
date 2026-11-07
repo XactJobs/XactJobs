@@ -53,7 +53,8 @@ public static class Greeter
 ```
 
 ### Fire and Forget Jobs
-Fire-and-forget jobs are executed once by a background worker in the next polling interval (configurable, default 3s).
+Fire-and-forget jobs are executed once by a background worker, in its next poll. Each worker polls every 6 seconds by default (`WithPollingInterval`),
+and the workers of a queue take turns, so with the default 2 workers the queue is polled every 3 seconds. [QuickPoll](#quickpoll) runs a job right away.
 
 ```csharp
 // ... other business logic
@@ -217,6 +218,9 @@ dbContext.JobEnqueue(() => Greeter.Say("Job 2"), QueueNames.LongRunning);
 
 dbContext.SaveChanges();
 ```
+
+A queue's jobs only run on its workers, so each queue needs them in the options: `WithPriorityQueue()`, `WithLongRunningQueue()`, or
+`WithIsolatedQueue("name")` for a queue of your own (see [Configuration](#configuration)).
 
 ### QuickPoll
 QuickPoll can be used if a job should be executed immediately, without waiting for the next poll interval.
@@ -502,6 +506,8 @@ The `XactJobs.UI` package adds a web dashboard and a REST API to see and manage 
 ![The dashboard: due, running, succeeded and failed jobs, and the jobs processed per hour](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/dashboard.png)
 
 ```csharp
+using XactJobs.UI.DependencyInjection;
+
 builder.Services.AddXactJobsUI<UserDbContext>(options =>
 {
     options
@@ -625,7 +631,7 @@ With real jobs, their own work sets the pace. The benchmark is in [src/XactJobs.
 
 ## Failures and Retries
 
-When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to an hour), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
+When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to 30 minutes), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
 
 A job that finds it can never succeed, e.g. because the data it works on is gone, throws `XactJobCancelException` to stop without retries:
 
@@ -646,8 +652,8 @@ A job that has nothing to do should just return: it's recorded as completed.
 A custom retry strategy gets the job that failed. For the first attempt of a continuation, its `ScheduledAt` is the reserved time 9999-12-31, so base the retry time on the current time.
 
 ## Stopping
-When the application stops, the workers stop polling and running jobs get `ShutdownTimeoutInSeconds` to finish. Then the cancellation token passed to the jobs is cancelled, and they get
-5 more seconds to react. Finally, the leases of the unfinished jobs are cleared so they can run again right away, which takes up to `ClearLeaseTimeoutInSeconds`.
+When the application stops, the workers stop polling and running jobs get the shutdown timeout (`WithShutdownTimeout`, 10 seconds by default) to finish. Then the cancellation token passed to the jobs is cancelled, and they get
+5 more seconds to react. Finally, the leases of the unfinished jobs are cleared so they can run again right away, which takes up to 10 seconds (`options.Options.ClearLeaseTimeoutInSeconds`).
 A cancelled job doesn't count as a failed attempt.
 
 With the default settings this fits in the default 30 second shutdown timeout of the .NET host. If you lower that timeout, lower these as well.
