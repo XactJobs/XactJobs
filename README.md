@@ -522,6 +522,9 @@ The dashboard's scripts, styles and fonts (Bootstrap, Bootstrap Icons, Chart.js 
 under the dashboard's path, with the same access as the pages. So the dashboard works without internet access, without the static files middleware,
 and in any environment, whether the application is published or not.
 
+The dashboard follows the light or dark setting of the operating system, and the switch in its navbar chooses light, dark or auto (the
+operating system's setting) in each browser.
+
 ## Access
 
 By default the dashboard only accepts requests from the local machine. Choose who can use it:

@@ -160,7 +160,7 @@ public partial class DashboardWebTests : IAsyncDisposable
 
         var urls = Regex.Matches(html, @"(?:href|src)=""(/XactJobs/assets/[^""]+)""").Select(m => WebUtility.HtmlDecode(m.Groups[1].Value)).ToList();
 
-        Assert.Equal(7, urls.Count);
+        Assert.Equal(8, urls.Count);
 
         foreach (var url in urls)
         {
@@ -187,6 +187,27 @@ public partial class DashboardWebTests : IAsyncDisposable
 
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/XactJobs/assets/js/missing.js")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/XactJobs/assets/%2E%2E/XactJobs.UI.dll")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Theme_IsSetBeforeTheStyles_AndCanBeChosenInTheNavbar()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        var html = await client.GetStringAsync("/XactJobs");
+
+        // a blocking script in the head, before the first stylesheet, so the page is drawn in its theme from the start
+        var head = html[..html.IndexOf("</head>", StringComparison.Ordinal)];
+        var themeScript = head.IndexOf("/assets/js/xactjobs-theme.js", StringComparison.Ordinal);
+
+        Assert.True(themeScript >= 0, "The theme script isn't in the head");
+        Assert.True(themeScript < head.IndexOf("rel=\"stylesheet\"", StringComparison.Ordinal), "The theme script comes after a stylesheet");
+        Assert.DoesNotMatch(@"<script[^>]*xactjobs-theme\.js[^>]*\b(defer|async)\b", head);
+
+        foreach (var choice in new[] { "light", "dark", "auto" })
+        {
+            Assert.Contains($"data-xj-theme=\"{choice}\"", html);
+        }
     }
 
     [Fact]
