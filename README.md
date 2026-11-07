@@ -40,6 +40,8 @@ Until 1.0:
 
 Feedback and issue reports are very welcome, especially from production use.
 
+XactJobs was started in 2025, and written without AI. Newer releases are developed with AI, and the changes are reviewed by a human.
+
 ## Features
 The examples below use this simple job:
 
