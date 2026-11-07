@@ -135,6 +135,12 @@ XactJobs is a .NET library for background job processing with full database tran
 - `XactJobSaveCheck` (`WithSaveOutsideTransaction`, all the queues): `Warn` logs once per job type and method, per dispatcher (the runners share one checker); `Throw` throws `InvalidOperationException` from the event, so nothing is saved and the job is retried; `Ignore` doesn't subscribe. In `Warn` mode a job method that was already warned about isn't subscribed again
 - Only `SaveChanges` on that context is seen: not other DbContext instances, `ExecuteUpdate`/`ExecuteDelete`, raw SQL, or a transaction the job commits itself
 
+### SQL Scripts
+
+- `sql/v<version>/xact-jobs-<database>-v<version>.sql` - one per schema change and database, to upgrade an installation. Released ones never change
+- `sql/install/xact-jobs-<database>.sql` - the whole latest schema, for a new installation. A schema change updates it too, and its version in the header: `InstallScriptIntegrationTests` (and `SqliteInstallScriptTests`) check on every database that it creates the same schema as the versioned scripts
+- The EF model must match them too (the EF migrations route): `ModelIndexTests`, and `SchemaGeneratedFromTheModel_IsAcceptedByTheDatabase` on MySQL
+
 ### Periodic Job Scheduler
 
 - `XactJobsCronScheduler` ensures the periodic jobs from the options at start, and reconciles them every interval, in a transaction that holds a lock (`ISqlDialect.AcquireTableLockAsync`), so that nodes don't do it at the same time
