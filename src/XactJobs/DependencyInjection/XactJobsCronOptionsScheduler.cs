@@ -43,7 +43,7 @@ namespace XactJobs.DependencyInjection
                     .ConfigureAwait(false);
             }
 
-            await EnsureMaintenanceJobsAsync(db, stoppingToken)
+            await EnsureMaintenanceJobsAsync(db, _options, stoppingToken)
                 .ConfigureAwait(false);
 
             await db.SaveChangesAsync(stoppingToken)
@@ -62,11 +62,25 @@ namespace XactJobs.DependencyInjection
             }
         }
 
-        private static async Task EnsureMaintenanceJobsAsync(TDbContext db, CancellationToken stoppingToken)
+        internal const string HistoryCleanupJobId = "xj_history_cleanup";
+
+        /// <summary>
+        /// The history cleanup only runs if the app sets a retention period. Without one, a cleanup job added by an older version, which
+        /// had a default of 30 days, is removed, so that it stops deleting the history.
+        /// </summary>
+        private static async Task EnsureMaintenanceJobsAsync(TDbContext db, XactJobsOptions<TDbContext> options, CancellationToken stoppingToken)
         {
+            if (options.HistoryRetentionPeriodInDays == null)
+            {
+                await db.JobDeletePeriodicAsync(HistoryCleanupJobId, stoppingToken)
+                    .ConfigureAwait(false);
+
+                return;
+            }
+
             await db.JobEnsurePeriodicAsync<XactJobMaintenance<TDbContext>>(
                 x => x.CleanupJobHistoryAsync(CancellationToken.None), 
-                "xj_history_cleanup", 
+                HistoryCleanupJobId, 
                 Cron.HourInterval(1), 
                 stoppingToken).ConfigureAwait(false);
         }

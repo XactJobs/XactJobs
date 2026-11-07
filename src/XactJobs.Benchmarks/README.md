@@ -50,6 +50,8 @@ XactJobs overhead                    ...
 - `--sql` lists each command, with its count and time per job.
 - `--only xactjobs` or `--only ef` runs one of them, e.g. to profile it with `dotnet-trace`.
 - `--workers N` runs N workers, and `--parallelism N` N jobs at a time per worker. Plain EF gets as many slots in all, each claiming one job when it's free. On SQLite the claims and the saves then wait for each other, so this measures SQLite's single writer more than XactJobs: use PostgreSQL.
+- `--batch-size N` makes the XactJobs workers claim batches of N jobs (`WithBatchSize`). Plain EF doesn't batch.
+- `--log` shows XactJobs' warnings and errors, e.g. why a job failed. A failed attempt doesn't end the drain: only completions count, and the failed attempts are printed.
 - `--postgres <connection string>` drains on PostgreSQL instead: a new database on that server for each drain, with the schema from the install script and fresh statistics, dropped afterwards. With several workers, XactJobs is measured once all of them poll (each one's first poll waits for its polling interval). For example, with a container:
 
   ```bash

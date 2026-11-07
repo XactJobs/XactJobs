@@ -37,8 +37,15 @@ namespace XactJobs.Internal
             FullMode = BoundedChannelFullMode.DropWrite
         });
 
-        // The most jobs in flight at the same time: never claim more than can start running immediately
+        // The most jobs in flight (claimed, and not finished) at the same time: the batch size, or the parallelism by default,
+        // so that a worker only claims jobs it can start immediately
         private readonly int _capacity;
+
+        // The most jobs running at the same time
+        private readonly int _maxDegreeOfParallelism;
+
+        // With a batch larger than the parallelism, the claimed jobs wait here for a slot to run, oldest first. Null otherwise.
+        private readonly SemaphoreSlim? _runSlots;
 
         private int _runningJobCount;
 
@@ -70,7 +77,13 @@ namespace XactJobs.Internal
             _scopeFactory = scopeFactory;
             _logger = logger;
 
-            _capacity = options.MaxDegreeOfParallelism > 0 ? options.MaxDegreeOfParallelism : Environment.ProcessorCount;
+            _maxDegreeOfParallelism = options.MaxDegreeOfParallelism > 0 ? options.MaxDegreeOfParallelism : Environment.ProcessorCount;
+            _capacity = Math.Max(options.BatchSize, _maxDegreeOfParallelism);
+
+            if (_capacity > _maxDegreeOfParallelism)
+            {
+                _runSlots = new SemaphoreSlim(_maxDegreeOfParallelism, _maxDegreeOfParallelism);
+            }
         }
 
         /// <summary>
@@ -183,9 +196,24 @@ namespace XactJobs.Internal
             return _capacity - _inFlightJobs.Count;
         }
 
+        /// <summary>
+        /// During a backlog: when a slot is free. With a batch larger than the parallelism, only once fewer jobs wait than can run,
+        /// so that the worker claims a batch, not one job each time one finishes.
+        /// </summary>
+        private bool ShouldClaimMore()
+        {
+            if (GetFreeSlots() <= 0) return false;
+
+            if (_runSlots == null) return true;
+
+            var waiting = _inFlightJobs.Count - Volatile.Read(ref _runningJobCount);
+
+            return waiting < _maxDegreeOfParallelism;
+        }
+
         private async Task WaitForFreeSlotAsync(CancellationToken stoppingToken)
         {
-            while (GetFreeSlots() <= 0)
+            while (!ShouldClaimMore())
             {
                 await _jobFinished.Reader.ReadAsync(stoppingToken)
                     .ConfigureAwait(false);
@@ -398,10 +426,14 @@ namespace XactJobs.Internal
                     periodicJobs.TryGetValue(job.PeriodicJobId, out periodicJob);
                 }
 
-                Interlocked.Increment(ref _runningJobCount);
+                // with a batch, it counts as running once it has a slot to run (see TakeRunSlotAsync)
+                if (_runSlots == null)
+                {
+                    Interlocked.Increment(ref _runningJobCount);
+                }
 
                 // Task.Run, because a job can block for a long time before its first await, and this is the polling loop
-                _ = Task.Run(() => RunClaimedJobAsync(job, periodicJob, claimedAt, jobsToken), CancellationToken.None);
+                _ = Task.Run(() => RunClaimedJobAsync(job, periodicJob, claimedAt, jobsToken, stoppingToken), CancellationToken.None);
             }
 
             claimError?.Throw();
@@ -442,8 +474,11 @@ namespace XactJobs.Internal
         /// <summary>
         /// Nothing observes this task, so it must not throw.
         /// </summary>
-        private async Task RunClaimedJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, CancellationToken jobsToken)
+        private async Task RunClaimedJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, CancellationToken jobsToken, CancellationToken stoppingToken)
         {
+            // the worker is stopping: it stays in flight, so its lease is cleared, and another worker can claim it right away
+            if (_runSlots != null && !await TakeRunSlotAsync(stoppingToken).ConfigureAwait(false)) return;
+
             try
             {
                 await RunJobAsync(job, periodicJob, claimedAt, jobsToken)
@@ -475,8 +510,39 @@ namespace XactJobs.Internal
             {
                 Interlocked.Decrement(ref _runningJobCount);
 
+                _runSlots?.Release();
+
                 _jobFinished.Writer.TryWrite(true);
             }
+        }
+
+        /// <summary>
+        /// Waits for a slot to run a claimed job of a batch, and counts it as running. False if the worker is stopping: the job
+        /// doesn't start. The count goes up before the check, so a shutdown that sees no running jobs can't miss one that starts.
+        /// </summary>
+        private async Task<bool> TakeRunSlotAsync(CancellationToken stoppingToken)
+        {
+            try
+            {
+                await _runSlots!.WaitAsync(stoppingToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+
+            Interlocked.Increment(ref _runningJobCount);
+
+            if (!stoppingToken.IsCancellationRequested) return true;
+
+            Interlocked.Decrement(ref _runningJobCount);
+
+            _runSlots.Release();
+
+            _jobFinished.Writer.TryWrite(true);
+
+            return false;
         }
 
         private static (string Queue, DateTime ScheduledAt, long Id) GetKey(XactJob job)
