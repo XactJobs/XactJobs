@@ -768,11 +768,6 @@ The claims read the table's primary key in order (with an index hint), so a clai
 
 ## Included Third-Party Code
 
-- The file [Internal/XactJobSerializer.cs](https://github.com/XactJobs/XactJobs/blob/main/src/XactJobs/Internal/XactJobSerializer.cs) includes code adapted from **Hangfire**,  
-  licensed under the **LGPL-3.0-or-later**.  
-  Copyright © 2013-2014 Hangfire OÜ.  
-  See [http://www.gnu.org/licenses/](http://www.gnu.org/licenses/).
-
 - Source files in the folder [Internal/ExpressionUtil](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs/Internal/ExpressionUtil) are copied unchanged from the **ASP.NET MVC** project,  
   licensed under the **Apache License 2.0**.  
   Copyright © .NET Foundation.  
