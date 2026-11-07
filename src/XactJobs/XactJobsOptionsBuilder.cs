@@ -117,6 +117,18 @@ namespace XactJobs
             return this;
         }
 
+        /// <summary>
+        /// What the worker does when a job calls <c>SaveChanges</c> on its scoped <typeparamref name="TDbContext"/> outside a transaction:
+        /// warn (the default), throw, or ignore it. Applies to all the queues.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithSaveOutsideTransaction(XactJobSaveCheck check)
+        {
+            if (!Enum.IsDefined(check)) throw new ArgumentOutOfRangeException(nameof(check), check, null);
+
+            Options.SaveOutsideTransaction = check;
+            return this;
+        }
+
         public XactJobsOptionsBuilder<TDbContext> WithPriorityQueue(Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
         {
             WithIsolatedQueue(QueueNames.Priority, options =>

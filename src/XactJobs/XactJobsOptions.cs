@@ -90,6 +90,12 @@ namespace XactJobs
         public int PeriodicJobReconciliationIntervalInSeconds { get; set; } = 300;
 
         /// <summary>
+        /// What the worker does when a job calls <c>SaveChanges</c> on its scoped <typeparamref name="TDbContext"/> outside a transaction,
+        /// which loses the exactly-once database effects. Default <see cref="XactJobSaveCheck.Warn"/>. Applies to all the queues.
+        /// </summary>
+        public XactJobSaveCheck SaveOutsideTransaction { get; set; } = XactJobSaveCheck.Warn;
+
+        /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>
         public Dictionary<string, XactJobsOptionsBase<TDbContext>> IsolatedQueues { get; set; } = [];
