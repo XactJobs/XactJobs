@@ -763,15 +763,19 @@ The claims read the table's primary key in order (with an index hint), so a clai
 
 # License
 
-**XactJobs** is licensed under the  
-**GNU Lesser General Public License version 3.0 or later (LGPL-3.0-or-later).**
+**XactJobs** is licensed under the **MIT License**: see the [LICENSE](https://github.com/XactJobs/XactJobs/blob/main/LICENSE) file.
+Versions before 0.3.0 were licensed under the LGPL-3.0-or-later.
 
 ## Included Third-Party Code
 
-- Source files in the folder [Internal/ExpressionUtil](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs/Internal/ExpressionUtil) are copied unchanged from the **ASP.NET MVC** project,  
-  licensed under the **Apache License 2.0**.  
+- Source files in the folder [Internal/ExpressionUtil](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs/Internal/ExpressionUtil), and
+  [Internal/CachedExpressionCompiler.cs](https://github.com/XactJobs/XactJobs/blob/main/src/XactJobs/Internal/CachedExpressionCompiler.cs), are copied
+  unchanged from the **ASP.NET MVC** project, licensed under the **Apache License 2.0**.  
   Copyright © .NET Foundation.  
   See [http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0).
+
+- [CronUtil/CronSequenceGenerator.cs](https://github.com/XactJobs/XactJobs/blob/main/src/XactJobs/CronUtil/CronSequenceGenerator.cs) is modeled on the
+  **Spring Framework**'s `CronSequenceGenerator`, licensed under the **Apache License 2.0**, copyright the original author or authors.
 
 - The dashboard (`XactJobs.UI`) includes [Bootstrap](https://getbootstrap.com) 5.3.3, [Bootstrap Icons](https://icons.getbootstrap.com) 1.11.3,
   [Chart.js](https://www.chartjs.org) 4.4.1 and [htmx](https://htmx.org) 1.9.10, each licensed under the **MIT License**.
@@ -779,10 +783,5 @@ The claims read the table's primary key in order (with an index hint), so a clai
 
 ## License Texts
 
-- The full text of the LGPL-3.0 license is available in the `COPYING.LESSER` file.  
-- The Apache License 2.0 text is available in the `LICENSE-ASP.NET.txt` file.
-
-## Disclaimer
-
-XactJobs is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the respective license files for details.
+- The MIT License text is in the `LICENSE` file.  
+- The Apache License 2.0 text is in the `LICENSE-ASP.NET.txt` file.

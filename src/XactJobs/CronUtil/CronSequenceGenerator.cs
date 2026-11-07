@@ -1,17 +1,8 @@
-﻿// This file is part of XactJobs.
+﻿// Copyright (c) 2025 XactJobs
+// Licensed under the MIT License. See LICENSE in the repository root.
 //
-// XactJobs is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Lesser General Public License as published
-// by the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// XactJobs is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Lesser General Public License for more details.
-//
-// You should have received a copy of the GNU Lesser General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
+// Modeled on the Spring Framework's CronSequenceGenerator, copyright the original author or authors, licensed under the
+// Apache License, Version 2.0 (see LICENSE-ASP.NET.txt for the license text, and http://www.apache.org/licenses/LICENSE-2.0).
 
 using System.Collections;
 

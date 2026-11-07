@@ -200,5 +200,8 @@ XactJobs is a .NET library for background job processing with full database tran
 
 ## Third-Party Code
 
-- `Internal/ExpressionUtil/` - Copied from ASP.NET MVC (Apache 2.0)
+XactJobs is MIT (`LICENSE`; before 0.3.0 it was LGPL-3.0-or-later). Its source files start with the two-line MIT header. Code from elsewhere must have a license that allows that, and keep its notice:
+
+- `Internal/ExpressionUtil/`, `Internal/CachedExpressionCompiler.cs` - Copied from ASP.NET MVC (Apache 2.0)
+- `CronUtil/CronSequenceGenerator.cs` - Modeled on the Spring Framework's CronSequenceGenerator (Apache 2.0)
 - `XactJobs.UI/Assets/lib/` - Bootstrap, Bootstrap Icons, Chart.js, htmx (MIT, license files next to them)
