@@ -51,7 +51,7 @@ public class SerializerValidationTests : IDisposable
     /// <summary>The exception each case is rejected with, or null if it's accepted.</summary>
     public static readonly Dictionary<string, Type?> Expected = new()
     {
-        ["generic method"] = null, // a known gap: accepted here, and it fails when it runs (a job can't be a generic method)
+        ["generic method"] = typeof(System.NotSupportedException), // a job can't be a generic method: rejected when it's enqueued, not when it runs
         ["delegate parameter"] = typeof(System.NotSupportedException),
         ["func parameter"] = typeof(System.NotSupportedException),
         ["async void"] = typeof(System.NotSupportedException),
@@ -60,7 +60,7 @@ public class SerializerValidationTests : IDisposable
         ["not a method call"] = typeof(System.ArgumentException),
         ["method of another instance"] = null, // stored as InstanceJobs.Run(): the worker creates its own instance
         ["instance method from a static lambda"] = null, // the same
-        ["periodic generic method"] = null, // the same gap
+        ["periodic generic method"] = typeof(System.NotSupportedException), // the same
         ["lambda passed as an object"] = typeof(System.NotSupportedException), // System.Text.Json can't serialize a delegate
         ["delegate passed as an object"] = typeof(System.NotSupportedException), // the same
         ["local scheduled time"] = typeof(System.ArgumentException),
