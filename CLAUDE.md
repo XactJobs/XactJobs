@@ -56,6 +56,18 @@ dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filt
 
 Then the same with `-f net10.0`.
 
+## Benchmark Commands
+
+`src/XactJobs.Benchmarks/` (see its README) measures XactJobs' own code, to compare commits on the same machine: `micro` (BenchmarkDotNet, no database) and `drain` (the worker on SQLite in memory, compared with the same database work in plain EF). Release builds only, and like the tests, one run at a time on a small machine.
+
+```bash
+dotnet build -c Release src/XactJobs.Benchmarks/XactJobs.Benchmarks.csproj
+dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- micro --filter "*" --job short --inProcess
+dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 3000 --runs 5
+```
+
+The library has `InternalsVisibleTo` for the benchmarks, which call the serializer, the compiler and the save check directly.
+
 ## Code Quality
 
 - `TreatWarningsAsErrors` is enabled - all warnings fail the build
