@@ -34,7 +34,7 @@ else
                     <span class="badge bg-danger"><i class="bi bi-x-circle"></i> @batch.FailedJobs failed</span>
                     @foreach (var continued in details.ContinuesBatches)
                     {
-                        <a class="badge bg-light text-dark border text-decoration-none" href="@Model.BatchUrl(continued)" title="The jobs of this batch continue the batch @continued">
+                        <a class="badge bg-body-secondary text-body-emphasis border text-decoration-none" href="@Model.BatchUrl(continued)" title="The jobs of this batch continue the batch @continued">
                             <i class="bi bi-arrow-return-right"></i> continues @XactJobsPageModel.DisplayBatch(continued)
                         </a>
                     }

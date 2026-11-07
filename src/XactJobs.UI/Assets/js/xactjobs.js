@@ -51,6 +51,14 @@ document.addEventListener('DOMContentLoaded', function () {
         showToast('The server could not be reached.', 'danger');
     });
 
+    // Theme switch (the theme itself is set by xactjobs-theme.js, before the page is drawn)
+    document.querySelectorAll('[data-xj-theme]').forEach(function (item) {
+        item.addEventListener('click', function () {
+            window.xactJobsTheme.set(item.dataset.xjTheme);
+        });
+    });
+    xactJobsShowThemeChoice();
+
     // Error details modal
     const errorModal = document.getElementById('xj-error-modal');
     if (errorModal) {
@@ -74,6 +82,58 @@ function xactJobsLocalizeTimes(root) {
 
 // runs for the page and for every piece of content htmx swaps in
 htmx.onLoad(xactJobsLocalizeTimes);
+
+// Marks the chosen theme in the switch, and shows its icon on the switch's button
+function xactJobsShowThemeChoice() {
+    if (!window.xactJobsTheme) return;
+
+    const choice = window.xactJobsTheme.choice();
+    const icons = { light: 'bi-sun-fill', dark: 'bi-moon-stars-fill', auto: 'bi-circle-half' };
+
+    document.querySelectorAll('[data-xj-theme]').forEach(function (item) {
+        const chosen = item.dataset.xjTheme === choice;
+        item.classList.toggle('active', chosen);
+        item.setAttribute('aria-pressed', String(chosen));
+    });
+
+    document.querySelectorAll('[data-xj-theme-icon]').forEach(function (icon) {
+        icon.className = 'bi ' + icons[choice];
+    });
+}
+
+// The charts' text and grid lines take the theme's colors: as defaults for the charts the page creates, and set on the ones it
+// already has when the theme changes
+function xactJobsApplyChartTheme() {
+    if (typeof Chart === 'undefined') return;
+
+    const style = getComputedStyle(document.documentElement);
+    const text = style.getPropertyValue('--bs-secondary-color').trim();
+    const grid = style.getPropertyValue('--bs-border-color-translucent').trim();
+
+    Chart.defaults.color = text;
+    Chart.defaults.borderColor = grid;
+
+    Object.values(Chart.instances).forEach(function (chart) {
+        chart.options.color = text;
+        chart.options.borderColor = grid;
+        Object.values(chart.options.scales || {}).forEach(function (scale) {
+            if (scale.ticks) scale.ticks.color = text;
+            if (scale.grid) scale.grid.color = grid;
+            if (scale.border) scale.border.color = grid;
+        });
+        if (chart.options.plugins && chart.options.plugins.legend && chart.options.plugins.legend.labels) {
+            chart.options.plugins.legend.labels.color = text;
+        }
+        chart.update('none');
+    });
+}
+
+xactJobsApplyChartTheme();
+
+document.addEventListener('xactjobs-theme', function () {
+    xactJobsShowThemeChoice();
+    xactJobsApplyChartTheme();
+});
 
 // True while the user is looking at something an automatic refresh would disturb
 function xactJobsIsBusy() {

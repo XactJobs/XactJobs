@@ -2,20 +2,20 @@
 
 @if (Model.AwaitsBatchId is Guid awaits && awaits != Model.CurrentBatchId)
 {
-    <a class="badge bg-light text-dark border text-decoration-none" href="@Model.Owner.BatchUrl(awaits)"
+    <a class="badge bg-body-secondary text-body-emphasis border text-decoration-none" href="@Model.Owner.BatchUrl(awaits)"
        title="Continuation of the batch @awaits, runs @Model.Condition">
         <i class="bi bi-arrow-return-right"></i> @XactJobsPageModel.DisplayBatch(awaits) · @Model.Condition
     </a>
 }
 else if (Model.AwaitsBatchId != null)
 {
-    <span class="badge bg-light text-dark border" title="Continuation of this batch, runs @Model.Condition">
+    <span class="badge bg-body-secondary text-body-emphasis border" title="Continuation of this batch, runs @Model.Condition">
         <i class="bi bi-arrow-return-right"></i> @Model.Condition
     </span>
 }
 @if (Model.BatchId is Guid batchId && batchId != Model.CurrentBatchId)
 {
-    <a class="badge bg-light text-dark border text-decoration-none" href="@Model.Owner.BatchUrl(batchId)" title="In the batch @batchId">
+    <a class="badge bg-body-secondary text-body-emphasis border text-decoration-none" href="@Model.Owner.BatchUrl(batchId)" title="In the batch @batchId">
         <i class="bi bi-collection"></i> @XactJobsPageModel.DisplayBatch(batchId)
     </a>
 }
