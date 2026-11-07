@@ -596,6 +596,14 @@ slots, also when another worker is idle, and wait for their leases to expire if 
 there's no batch: a worker only claims jobs it can start immediately, so they never wait behind a slow job while another worker is free.
 When the worker stops, the jobs it holds that haven't started are released right away, for the other workers.
 
+## Throughput
+On a Hetzner Cloud CX33 (cost-optimized, 4 shared vCPUs, AMD EPYC Rome, 8 GB of RAM), with PostgreSQL 16 in a container on the
+same machine (its default settings, so every commit waits for the disk), .NET 10 and EF Core 10, XactJobs drained a backlog of 20,000
+no-op jobs at **2,300 to 2,600 jobs per second**. The best setting was 2 workers, `MaxDegreeOfParallelism` 4 and `WithBatchSize(100)`.
+Each job is still its own transaction: its changes, the delete of its row and its history row commit together.
+
+With real jobs, their own work sets the pace. The benchmark is in [src/XactJobs.Benchmarks](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.Benchmarks), to measure on your own machine.
+
 ## Failures and Retries
 
 When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to an hour), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
