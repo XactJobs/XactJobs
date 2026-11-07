@@ -11,13 +11,12 @@ public sealed class SqliteOriginalScheduleTests : IAsyncLifetime
     // this connection keeps the memory DB alive during the test
     private readonly SqliteConnection _memoryConnection;
     private readonly OriginalScheduleScenarios _scenarios;
+    private readonly string _connectionString = $"Data Source={Guid.NewGuid():N};Mode=Memory;Cache=Shared;";
 
     public SqliteOriginalScheduleTests()
     {
-        var connectionString = $"Data Source={Guid.NewGuid():N};Mode=Memory;Cache=Shared;";
-
-        _memoryConnection = new SqliteConnection(connectionString);
-        _scenarios = new OriginalScheduleScenarios(options => options.UseSqlite(connectionString));
+        _memoryConnection = new SqliteConnection(_connectionString);
+        _scenarios = new OriginalScheduleScenarios(options => options.UseSqlite(_connectionString));
     }
 
     public async Task InitializeAsync()
@@ -50,6 +49,12 @@ public sealed class SqliteOriginalScheduleTests : IAsyncLifetime
     public Task Continuation_ItsRetriesSeeTheTimeItsFirstAttemptWasClaimed() => _scenarios.Continuation_ItsRetriesSeeTheTimeItsFirstAttemptWasClaimed();
 
     [Fact]
+    public Task Continuation_RunAgainAfterItsLeaseExpired_SeesTheTimeOfTheFirstClaim() => _scenarios.Continuation_RunAgainAfterItsLeaseExpired_SeesTheTimeOfTheFirstClaim();
+
+    [Fact]
+    public Task RegularAndPeriodicClaims_DontSetTheColumn() => _scenarios.RegularAndPeriodicClaims_DontSetTheColumn();
+
+    [Fact]
     public Task RunNowAndTrigger_KeepTheOriginalTime() => _scenarios.RunNowAndTrigger_KeepTheOriginalTime();
 
     [Fact]
@@ -63,6 +68,50 @@ public sealed class SqliteOriginalScheduleTests : IAsyncLifetime
 
     [Fact]
     public Task ContextPassedAtEnqueue_IsNotStored() => _scenarios.ContextPassedAtEnqueue_IsNotStored();
+
+    /// <summary>
+    /// The claim saves the claim time as the continuation's original time, returns it (SQLite returns the rows after the lease),
+    /// and a second claim, after the lease expired, keeps it.
+    /// </summary>
+    [Fact]
+    public async Task Claim_SavesTheClaimTime_AndASecondClaimAfterTheLeaseExpiredKeepsIt()
+    {
+        var dialect = new XactJobs.Internal.SqlDialects.SqliteDialect();
+
+        var continuation = new XactJob(0, XactJobBase.AwaitingBatchScheduledAt, "T", "M()", "[]", "q")
+        {
+            AwaitsBatchId = Guid.NewGuid(),
+            ContinuationCondition = XactJobContinuation.OnFinish
+        };
+
+        await using (var db = CreateDb())
+        {
+            db.Jobs.Add(continuation);
+
+            await db.SaveChangesAsync();
+        }
+
+        var claimedA = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc).AddTicks(1234560);
+
+        await using (var db = CreateDb())
+        {
+            var first = Assert.Single(await dialect.ClaimContinuationsAsync(db, "q", 10, Guid.NewGuid(), 60, claimedA, CancellationToken.None));
+
+            Assert.Equal(claimedA, first.OriginallyScheduledAt);
+
+            await db.Jobs.ExecuteUpdateAsync(s => s.SetProperty(j => j.LeasedUntil, DateTime.UtcNow.AddMinutes(-1)));
+        }
+
+        await using (var db = CreateDb())
+        {
+            var second = Assert.Single(await dialect.ClaimContinuationsAsync(db, "q", 10, Guid.NewGuid(), 60, claimedA.AddSeconds(5), CancellationToken.None));
+
+            Assert.Equal(claimedA, second.OriginallyScheduledAt);
+            Assert.Equal(claimedA, await db.Jobs.AsNoTracking().Select(j => j.OriginallyScheduledAt).SingleAsync());
+        }
+    }
+
+    private TestDbContext CreateDb() => new(new DbContextOptionsBuilder<TestDbContext>().UseSqlite(_connectionString).Options);
 
     private static IEnumerable<string> GetSqliteMigrationScripts()
     {

@@ -86,27 +86,38 @@ LIMIT {{1}}
 FOR UPDATE SKIP LOCKED
 ", [queueName ?? QueueNames.Default, maxJobs]);
 
-        // the leaser is passed as a string, because the column is char(36)
-        public (string Sql, object[] Parameters) GetLeaseJobsSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
+        // The leaser is passed as a string, because the column is char(36).
+        // For continuations, claimedAt sets their original time, if it isn't set yet (see ISqlDialect.ClaimContinuationsAsync).
+        public (string Sql, object[] Parameters) GetLeaseJobsSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds, DateTime? claimedAt = null)
         {
             List<object> parameters = [leaser.ToString(), leaseDurationInSeconds];
+
+            var setOriginallyScheduledAt = "";
+
+            if (claimedAt.HasValue)
+            {
+                setOriginallyScheduledAt = $@",
+    {ColOriginallyScheduledAt} = COALESCE({ColOriginallyScheduledAt}, {{{parameters.Count}}})";
+
+                parameters.Add(claimedAt.Value);
+            }
 
             var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
 
             return ($@"
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = {{0}},
-    {ColLeasedUntil} = UTC_TIMESTAMP(6) + INTERVAL {{1}} SECOND
+    {ColLeasedUntil} = UTC_TIMESTAMP(6) + INTERVAL {{1}} SECOND{setOriginallyScheduledAt}
 WHERE {jobKeys}
 ", parameters.ToArray());
         }
 
-        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt, CancellationToken cancellationToken)
         {
             return SqlDialectExtensions.ClaimJobsWithLockAsync(db,
                                                                ClaimIsolationLevel,
                                                                GetLockContinuationsSql(queueName, maxJobs),
-                                                               jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds),
+                                                               jobs => GetLeaseJobsSql(leaser, jobs, leaseDurationInSeconds, claimedAt),
                                                                cancellationToken);
         }
 

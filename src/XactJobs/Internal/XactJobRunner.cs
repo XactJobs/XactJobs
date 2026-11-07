@@ -331,10 +331,13 @@ namespace XactJobs.Internal
 
             var jobs = new List<XactJob>();
 
+            // in whole microseconds, which every database stores exactly: the continuation claim saves it as their original time
+            var claimedAt = TruncateToMicroseconds(DateTime.UtcNow);
+
             if (ShouldClaimContinuations())
             {
                 // first, so that a backlog of the queue doesn't hold them back
-                jobs.AddRange(await dialect.ClaimContinuationsAsync(dbContext, _queueName, maxJobs, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
+                jobs.AddRange(await dialect.ClaimContinuationsAsync(dbContext, _queueName, maxJobs, _leaser, _options.LeaseDurationInSeconds, claimedAt, stoppingToken)
                     .ConfigureAwait(false));
 
                 if (jobs.Count == maxJobs)
@@ -359,9 +362,6 @@ namespace XactJobs.Internal
                     claimError = ExceptionDispatchInfo.Capture(ex);
                 }
             }
-
-            // in whole microseconds, which every database stores exactly: a continuation's retries get it as their original time
-            var claimedAt = TruncateToMicroseconds(DateTime.UtcNow);
 
             foreach (var job in jobs)
             {

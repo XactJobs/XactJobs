@@ -356,7 +356,11 @@ dbContext.JobEnsurePeriodic<ReportSender>(
     Cron.Daily());
 ```
 
-For a periodic job it's the cron slot of the run, and for a continuation the time its first attempt was claimed, once its batch was finished.
+For a periodic job it's the cron slot of the run. For a continuation, it's the time its first attempt was claimed, once its batch was finished: the time is saved
+when the first attempt is claimed, so a second run of that attempt, after its lease expired, gets the same value.
+
+The cron slot and `OriginallyScheduledAt` are in UTC, because cron expressions are evaluated in UTC. So a daily run at midnight in a time zone east of UTC,
+written as its UTC time (e.g. `0 0 22 * * *` for UTC+2), has the previous day's UTC date. If that's confusing, format the key with the full time, e.g. `:yyyyMMddHHmmss`.
 
 ### Instance methods
 

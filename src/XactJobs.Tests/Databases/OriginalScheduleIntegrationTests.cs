@@ -48,6 +48,12 @@ public abstract class OriginalScheduleIntegrationTests(DatabaseFixture fixture) 
     public Task Continuation_ItsRetriesSeeTheTimeItsFirstAttemptWasClaimed() => _scenarios.Continuation_ItsRetriesSeeTheTimeItsFirstAttemptWasClaimed();
 
     [DockerFact]
+    public Task Continuation_RunAgainAfterItsLeaseExpired_SeesTheTimeOfTheFirstClaim() => _scenarios.Continuation_RunAgainAfterItsLeaseExpired_SeesTheTimeOfTheFirstClaim();
+
+    [DockerFact]
+    public Task RegularAndPeriodicClaims_DontSetTheColumn() => _scenarios.RegularAndPeriodicClaims_DontSetTheColumn();
+
+    [DockerFact]
     public Task RunNowAndTrigger_KeepTheOriginalTime() => _scenarios.RunNowAndTrigger_KeepTheOriginalTime();
 
     [DockerFact]

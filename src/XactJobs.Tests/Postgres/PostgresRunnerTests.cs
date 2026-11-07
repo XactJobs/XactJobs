@@ -86,6 +86,68 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
         Assert.Equal(5, hotUpdates);
     }
 
+    /// <summary>
+    /// The continuation claim also sets the original time, which isn't indexed: it stays a HOT update.
+    /// </summary>
+    [PostgresFact]
+    public async Task ContinuationClaim_IsHotUpdate()
+    {
+        CreateHost();
+
+        await WithDbAsync(db =>
+        {
+            for (var i = 0; i < 5; i++)
+            {
+                // each waits for a batch with no jobs left
+                db.Jobs.Add(new XactJob(0, XactJobBase.AwaitingBatchScheduledAt, "Type", "Method", "[]", QueueNames.Default)
+                {
+                    AwaitsBatchId = Guid.NewGuid(),
+                    ContinuationCondition = XactJobContinuation.OnFinish
+                });
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        var claimedAt = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+
+        var claimed = await WithDbAsync(db => _dialect.ClaimContinuationsAsync(db, QueueNames.Default, 5, Guid.NewGuid(), 60, claimedAt, CancellationToken.None));
+
+        Assert.Equal(5, claimed.Count);
+        Assert.All(claimed, job => Assert.Equal(claimedAt, job.OriginallyScheduledAt));
+
+        var (updates, hotUpdates) = await GetUpdateStatisticsAsync(5);
+
+        Assert.Equal(5, updates);
+        Assert.Equal(5, hotUpdates);
+    }
+
+    private async Task<(long Updates, long HotUpdates)> GetUpdateStatisticsAsync(int expectedUpdates)
+    {
+        // closing the backends flushes their statistics
+        NpgsqlConnection.ClearAllPools();
+
+        await using var connection = new NpgsqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        long updates = 0, hotUpdates = 0;
+
+        await WaitForAsync(async () =>
+        {
+            await using var command = new NpgsqlCommand("SELECT n_tup_upd, n_tup_hot_upd FROM pg_stat_user_tables WHERE schemaname = 'xact_jobs' AND relname = 'job'", connection);
+            await using var reader = await command.ExecuteReaderAsync();
+
+            await reader.ReadAsync();
+
+            updates = reader.GetInt64(0);
+            hotUpdates = reader.GetInt64(1);
+
+            return updates >= expectedUpdates;
+        }, "statistics to be flushed");
+
+        return (updates, hotUpdates);
+    }
+
     [PostgresFact]
     public async Task Claim_WithSpecialCharactersInQueueName_TreatsThemAsData()
     {

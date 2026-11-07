@@ -110,7 +110,9 @@ XactJobs is a .NET library for background job processing with full database tran
 ### Original Scheduled Time
 
 - `XactJobBase.OriginallyScheduledAt`: the time a job was originally scheduled for, null when it's the same as `ScheduledAt`. Retries (`Reschedule`), the dashboard's Run now (and Trigger, which uses it) and the dashboard's Retry from the history set it, the history rows copy it. Cron slots are whole seconds (`CronSequenceGenerator` drops the whole fraction of the current second)
-- `GetOriginallyScheduledAt(claimedAt)` gives the effective value: for a continuation's first attempt, which waits at the reserved time, it's the claim time (`claimedAt`, in whole microseconds, so every database stores the retries' copy exactly). Never copy 9999-12-31
+- `GetOriginallyScheduledAt(claimedAt)` gives the effective value: for a continuation's first attempt, which waits at the reserved time, it's the time of its first claim. Never copy 9999-12-31
+- The continuation claim saves it: the statement that leases the rows (every dialect's `ClaimContinuationsAsync`) sets `originally_scheduled_at = COALESCE(originally_scheduled_at, claimedAt)`, with the runner's `claimedAt` as a parameter (in whole microseconds, so every database stores it exactly), not the database clock. So a second run of the first attempt, after its lease expired, gets the same value. PostgreSQL, SQL Server and SQLite return the rows after the lease; MySQL's locking select and Oracle's result cursor return them as they were before it, with the value of an earlier claim (committed), or null on a first claim, when the worker's `claimedAt` is the value just saved. The claims of regular jobs don't set it. The column isn't indexed, so the PostgreSQL claim stays a HOT update
+- History rows get it only when it differs from their own scheduled time
 - Jobs get it as `XactJobContext.OriginallyScheduledAt`: a job method can take an `XactJobContext` parameter, which `XactJobSerializer` stores as null and `XactJobCompiler` fills in, like a `CancellationToken`
 
 ### Database Entities

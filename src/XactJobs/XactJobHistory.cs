@@ -98,7 +98,9 @@ namespace XactJobs
                 BatchId = job.BatchId,
                 AwaitsBatchId = job.AwaitsBatchId,
                 ContinuationCondition = job.ContinuationCondition,
-                OriginallyScheduledAt = job.OriginallyScheduledAt
+
+                // null when it's the same: e.g. the first attempt of a continuation, whose claim saved its claim time
+                OriginallyScheduledAt = job.OriginallyScheduledAt != scheduledAt ? job.OriginallyScheduledAt : null
             };
         }
     }

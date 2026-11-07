@@ -75,12 +75,14 @@ namespace XactJobs.Internal
 
         /// <summary>
         /// Leases up to <paramref name="maxJobs"/> continuations of the queue that wait for a batch that has no jobs left, and returns them.
+        /// The statement that leases them also sets their original time to <paramref name="claimedAt"/>, if it isn't set yet: a second run
+        /// of the first attempt, after its lease expired, gets the time of the first claim (see <see cref="XactJobBase.GetOriginallyScheduledAt"/>).
         /// <para>
         /// The check for the batch's jobs must not skip locked rows (no SKIP LOCKED or READPAST in it): a job that is being retried
         /// is replaced in a transaction, and skipping its rows would make the batch look finished.
         /// </para>
         /// </summary>
-        Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken);
+        Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queue, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt, CancellationToken cancellationToken);
 
         /// <summary>
         /// Extends the lease of the given jobs, by primary key, if they are still leased by <paramref name="leaser"/>.

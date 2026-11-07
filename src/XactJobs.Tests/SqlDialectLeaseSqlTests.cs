@@ -10,6 +10,7 @@ public class SqlDialectLeaseSqlTests
 
     private static readonly Guid Leaser = Guid.NewGuid();
     private static readonly DateTime ScheduledAt = new(2026, 1, 2, 3, 4, 5, 678, DateTimeKind.Utc);
+    private static readonly DateTime ClaimedAt = new(2026, 1, 2, 3, 4, 6, 123, DateTimeKind.Utc);
 
     private static readonly XactJob[] Jobs =
     [
@@ -171,7 +172,7 @@ public class SqlDialectLeaseSqlTests
     [Fact]
     public void Oracle_ContinuationClaimLocksAtMostMaxJobsRowsInIdOrder_ThenLeasesThem()
     {
-        var (sql, parameters) = new OracleDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration);
+        var (sql, parameters) = new OracleDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration, ClaimedAt);
 
         AssertFullyParameterized(sql, parameters);
         Assert.Contains("SELECT /*+ INDEX_ASC(c (QUEUE, SCHEDULED_AT, ID)) */ ROWIDTOCHAR(c.ROWID)", sql);
@@ -179,7 +180,8 @@ public class SqlDialectLeaseSqlTests
         Assert.DoesNotContain("ROWNUM", sql);
         Assert.Contains("BULK COLLECT INTO claimed LIMIT {2}", sql);
         Assert.Contains("SET LEASER = HEXTORAW({3})", sql);
-        Assert.Equal(["queue-a", XactJobBase.AwaitingBatchScheduledAt, 10, Leaser.ToString("N"), LeaseDuration], parameters);
+        Assert.Contains("NUMTODSINTERVAL({4}, 'SECOND'),\n        ORIGINALLY_SCHEDULED_AT = COALESCE(ORIGINALLY_SCHEDULED_AT, {5})\n    WHERE ROWID", sql);
+        Assert.Equal(["queue-a", XactJobBase.AwaitingBatchScheduledAt, 10, Leaser.ToString("N"), LeaseDuration, ClaimedAt], parameters);
     }
 
     [Fact]
@@ -188,6 +190,64 @@ public class SqlDialectLeaseSqlTests
         var (_, parameters) = new OracleDialect().GetFetchJobsSql("queue-a", int.MaxValue, Leaser, LeaseDuration);
 
         Assert.Equal(32767, parameters[1]); // SYS.ODCIVARCHAR2LIST is a VARRAY(32767)
+    }
+
+    // the continuation claim saves the claim time as the original time, if it isn't set yet, in the statement that leases the rows
+    public static TheoryData<string, string> ContinuationClaims => new()
+    {
+        { "postgresql", "originally_scheduled_at = COALESCE(xact_jobs.job.originally_scheduled_at, {5})" },
+        { "sqlserver", "[OriginallyScheduledAt] = COALESCE(target.[OriginallyScheduledAt], {5})" },
+        { "sqlite", "originally_scheduled_at = COALESCE(originally_scheduled_at, {5})" },
+        { "mysql", "originally_scheduled_at = COALESCE(originally_scheduled_at, {2})" },
+        { "oracle", "ORIGINALLY_SCHEDULED_AT = COALESCE(ORIGINALLY_SCHEDULED_AT, {5})" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ContinuationClaims))]
+    public void ContinuationClaim_SetsTheOriginalTimeToTheClaimTime_IfItIsntSet(string dialect, string expectedSet)
+    {
+        var (sql, parameters) = dialect switch
+        {
+            "postgresql" => new PostgreSqlDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration, ClaimedAt),
+            "sqlserver" => new SqlServerDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration, ClaimedAt),
+            "sqlite" => new SqliteDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration, ClaimedAt),
+            "mysql" => new MySqlDialect().GetLeaseJobsSql(Leaser, Jobs, LeaseDuration, ClaimedAt),
+            "oracle" => new OracleDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration, ClaimedAt),
+            _ => throw new ArgumentOutOfRangeException(nameof(dialect))
+        };
+
+        AssertFullyParameterized(sql, parameters);
+        Assert.Contains(expectedSet, sql);
+
+        var index = int.Parse(System.Text.RegularExpressions.Regex.Match(expectedSet, @"\{(\d+)\}").Groups[1].Value);
+
+        Assert.Equal(ClaimedAt, parameters[index]);
+    }
+
+    [Fact]
+    public void MySql_ContinuationLease_NumbersTheJobKeysAfterTheClaimTime()
+    {
+        var (sql, parameters) = new MySqlDialect().GetLeaseJobsSql(Leaser, Jobs, LeaseDuration, ClaimedAt);
+
+        Assert.Contains("queue = {3} AND scheduled_at = {4} AND id = {5}", sql);
+        Assert.Equal([Leaser.ToString(), LeaseDuration, ClaimedAt, "queue-a", ScheduledAt, 11L, "queue-b", ScheduledAt, 22L], parameters);
+    }
+
+    // the claims of jobs keep the column as it is: a job's scheduled time doesn't change between two claims of its row
+    [Fact]
+    public void JobClaims_DontSetTheOriginalTime()
+    {
+        string[] statements =
+        [
+            new PostgreSqlDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration).Sql,
+            new SqlServerDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration).Sql,
+            new SqliteDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration).Sql,
+            new MySqlDialect().GetLockJobsSql("queue-a", 10).Sql,
+            new MySqlDialect().GetLeaseJobsSql(Leaser, Jobs, LeaseDuration).Sql,
+            new OracleDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration).Sql,
+        ];
+
+        Assert.All(statements, sql => Assert.DoesNotContain("originally", sql, StringComparison.OrdinalIgnoreCase));
     }
 
     private static void AssertFullyParameterized(string sql, object[] parameters)

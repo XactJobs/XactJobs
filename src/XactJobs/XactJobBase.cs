@@ -86,7 +86,8 @@ namespace XactJobs
 
         /// <summary>
         /// <see cref="OriginallyScheduledAt"/>, or else the scheduled time. A continuation's first attempt waits at the reserved
-        /// <see cref="AwaitingBatchScheduledAt"/>, so it gets the time it was claimed instead.
+        /// <see cref="AwaitingBatchScheduledAt"/>, so it gets the time of its first claim instead: the continuation claim saves it,
+        /// and <paramref name="claimedAt"/> is that time when the row came back without it (MySQL and Oracle, on the first claim).
         /// </summary>
         internal DateTime GetOriginallyScheduledAt(DateTime claimedAt)
         {

@@ -122,7 +122,7 @@ public abstract class MySqlIntegrationTests(MySqlFixtureBase fixture) : Database
     {
         var leased = await AddJobsAsync(continuations: true);
 
-        var (claimed, insertTimedOut, deleteTimedOut) = await WriteDuringClaimAsync(leased, (db, ct) => Dialect.ClaimContinuationsAsync(db, LockQueue, 10, Guid.NewGuid(), 60, ct));
+        var (claimed, insertTimedOut, deleteTimedOut) = await WriteDuringClaimAsync(leased, (db, ct) => Dialect.ClaimContinuationsAsync(db, LockQueue, 10, Guid.NewGuid(), 60, DateTime.UtcNow, ct));
 
         Assert.Single(claimed);
         Assert.False(insertTimedOut, "The insert of a new job waited for the claim");
