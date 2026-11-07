@@ -158,6 +158,10 @@ XactJobs is a .NET library for background job processing with full database tran
 - `periodic_job_id`, only the rows of periodic jobs: a partial or filtered index (`IS NOT NULL`) on PostgreSQL, SQL Server and SQLite, a plain one on Oracle (which leaves out the rows where all its columns are null), none on MySQL (no filtered indexes, and a full one would be written by every job)
 - A new index adds a write to every job's insert and delete, unless it's filtered. On PostgreSQL, a claim must not change an indexed column, so it stays a HOT update
 
+### Shutdown
+
+- Once the stopping token (or a job's token) is cancelled, an exception counts as that cancellation, not only an `OperationCanceledException`: SqlClient throws a `SqlException` ("Operation cancelled by user") for a cancelled command. So a stop doesn't log errors (the poll loop, the lease timer, the cron scheduler), and a job cancelled by it runs again without a failed attempt, unless it threw `XactJobCancelException`. `SqliteShutdownCancellationTests` simulates such a provider
+
 ### Database Entities
 
 - **XactJob** - Main job queue (status, payload, scheduled time, retry info)

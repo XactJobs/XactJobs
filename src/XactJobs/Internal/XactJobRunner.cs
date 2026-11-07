@@ -183,7 +183,8 @@ namespace XactJobs.Internal
                 {
                     failedPolls++;
 
-                    if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                    // when stopping, a cancelled command can also throw the provider's own exception (SqlClient's SqlException)
+                    if (!stoppingToken.IsCancellationRequested)
                     {
                         _logger.LogError(ex, "{Queue}: Processing jobs failed. Retrying in {RetryIn} seconds",
                             GetQueueDisplayName(), _options.PollingIntervalInSeconds * Math.Min(failedPolls, 5));
@@ -747,6 +748,10 @@ namespace XactJobs.Internal
             }
             catch (Exception ex)
             {
+                // not only an OperationCanceledException: a cancelled command can throw the provider's own exception (SqlClient's SqlException).
+                // Read before the rollback, so that a failure isn't taken for the shutdown if the shutdown only starts meanwhile
+                var isCancelledByShutdown = stoppingToken.IsCancellationRequested && XactJobCancelException.Find(ex) == null;
+
                 if (dbContext.Database.CurrentTransaction != null)
                 {
                     // try to roll back always, even if stopping
@@ -754,7 +759,7 @@ namespace XactJobs.Internal
                         .ConfigureAwait(false);
                 }
 
-                if (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+                if (!isCancelledByShutdown)
                 {
                     throw;
                 }
