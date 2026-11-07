@@ -53,9 +53,9 @@ namespace XactJobs.Internal
 
                     await _callback(token).ConfigureAwait(false);
                 }
-                catch (OperationCanceledException)
+                catch (Exception) when (token.IsCancellationRequested)
                 {
-                    // expected on cancellation
+                    // stopped: a cancelled command can also throw the provider's own exception (SqlClient's SqlException)
                     break;
                 }
                 catch (Exception ex)

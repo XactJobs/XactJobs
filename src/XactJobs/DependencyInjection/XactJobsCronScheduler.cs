@@ -55,8 +55,9 @@ namespace XactJobs.DependencyInjection
                     await Task.Delay(ReconciliationInterval, stoppingToken)
                         .ConfigureAwait(false);
                 }
-                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                catch (Exception) when (stoppingToken.IsCancellationRequested)
                 {
+                    // stopping: a cancelled command can also throw the provider's own exception (SqlClient's SqlException)
                     return;
                 }
                 catch (Exception ex)
