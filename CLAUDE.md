@@ -103,7 +103,7 @@ XactJobs is a .NET library for background job processing with full database tran
 
 **Internal/**
 - `XactJobRunner.cs` - Core polling loop and job execution. A worker holds (claims, leases) at most `BatchSize` jobs, by default twice `MaxDegreeOfParallelism`, and runs `MaxDegreeOfParallelism` of them at once (`_runSlots`). With a batch larger than the parallelism, during a backlog it claims again only when fewer jobs wait than it can run; at or below it, a worker only claims jobs it can start. A job of a batch counts as running once it has a slot, and doesn't start if the worker is stopping; it stays in flight, so its lease is cleared on shutdown
-- `XactJobSerializer.cs` - Lambda expression serialization (adapted from Hangfire). The method name is stored with its parameter types, e.g. `Send(System.String, System.Int32)`, so overloads can be jobs. To run a job, the runner looks for the overload with that signature, or, if there isn't one, the only method with that name and parameter count (jobs from before 0.1.7 have no signature)
+- `XactJobSerializer.cs` - Lambda expression serialization: the job's type, its method and its arguments as JSON, the strings a job is stored as. They must never change (existing rows, and periodic jobs are compared with their definition by them): `Golden/SerializerFormatTests` has the exact strings. Common argument expressions are evaluated without compiling them, the others with `ExpressionUtil/CachedExpressionCompiler`. The method name is stored with its parameter types, e.g. `Send(System.String, System.Int32)`, so overloads can be jobs. To run a job, the runner looks for the overload with that signature, or, if there isn't one, the only method with that name and parameter count (jobs from before 0.1.7 have no signature)
 - `XactJobCompiler.cs` - Expression compilation to executable delegates
 - `SqlDialects/` - Database-specific SQL (SqlServer, PostgreSQL, MySQL, Oracle, SQLite). Oracle claims in one PL/SQL block that limits the rows on the server (`BULK COLLECT ... LIMIT`): `ROWNUM` is applied before locked rows are skipped, and ODP.NET's prefetch ignores `FetchSize` on a statement's first execution on a connection, so limiting the rows read on the client still locks most of a backlog
 
@@ -200,6 +200,5 @@ XactJobs is a .NET library for background job processing with full database tran
 
 ## Third-Party Code
 
-- `Internal/XactJobSerializer.cs` - Adapted from Hangfire (LGPL-3.0)
 - `Internal/ExpressionUtil/` - Copied from ASP.NET MVC (Apache 2.0)
 - `XactJobs.UI/Assets/lib/` - Bootstrap, Bootstrap Icons, Chart.js, htmx (MIT, license files next to them)
