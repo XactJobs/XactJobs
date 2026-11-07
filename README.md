@@ -334,6 +334,20 @@ And then create the migration like you normally would:
 dotnet ef migrations add XactJobsTables
 ```
 
+## Several Apps in One Database
+On PostgreSQL and SQL Server, XactJobs' tables are in their own schema: `xact_jobs` on PostgreSQL, `XactJobs` on SQL Server. Apps that
+share a database each need their own tables, or their workers would run each other's jobs. Give each app a schema of its own:
+
+```csharp
+modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, schema: "app_b");
+```
+
+The workers take the schema from the model. With the SQL scripts, replace `xact_jobs` (or `XactJobs`) with your schema before you run
+them; EF migrations use it on their own. On PostgreSQL the name must be lowercase.
+
+On MySQL, Oracle and SQLite there's no schema option: give each app its own database (on Oracle, its own user), which already has its
+own tables.
+
 # Jobs
 
 A job is simply a public method. It can be either a static or an instance method, but it must be public and:

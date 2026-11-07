@@ -20,9 +20,15 @@ namespace XactJobs.Internal.SqlDialects
 {
     public class SqlServerDialect : ISqlDialect
     {
+        /// <param name="schema">The schema of XactJobs' tables, XactJobs by default.</param>
+        public SqlServerDialect(string? schema = null)
+        {
+            XactJobSchema = SqlDialectExtensions.CheckSchemaName(schema, "XactJobs", @"^[A-Za-z_][A-Za-z0-9_]{0,127}$");
+        }
+
         public bool HasSchemaSupport { get; } = true;
 
-        public string XactJobSchema { get; } = "XactJobs";
+        public string XactJobSchema { get; }
         public string XactJobTable { get; } = "Job";
         public string XactJobHistoryTable { get; } = "JobHistory";
         public string XactJobPeriodicTable { get; } = "JobPeriodic";

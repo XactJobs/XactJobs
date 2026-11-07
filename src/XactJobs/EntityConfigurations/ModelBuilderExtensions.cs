@@ -19,11 +19,15 @@ namespace Microsoft.EntityFrameworkCore
 {
     public static class ModelBuilderExtensions
     {
-        public static void ApplyXactJobsConfigurations(this ModelBuilder modelBuilder, string? providerName, bool excludeFromMigrations = true)
+        /// <param name="schema">
+        /// The schema of XactJobs' tables, on PostgreSQL and SQL Server: e.g. one per app, for apps that share a database.
+        /// By default xact_jobs on PostgreSQL (lowercase only), XactJobs on SQL Server. The workers find it in the model.
+        /// </param>
+        public static void ApplyXactJobsConfigurations(this ModelBuilder modelBuilder, string? providerName, bool excludeFromMigrations = true, string? schema = null)
         {
-            modelBuilder.ApplyConfiguration(new XactJobEntityConfiguration(providerName, excludeFromMigrations));
-            modelBuilder.ApplyConfiguration(new XactJobHistoryEntityConfiguration(providerName, excludeFromMigrations));
-            modelBuilder.ApplyConfiguration(new XactJobPeriodicEntityConfiguration(providerName, excludeFromMigrations));
+            modelBuilder.ApplyConfiguration(new XactJobEntityConfiguration(providerName, excludeFromMigrations, schema));
+            modelBuilder.ApplyConfiguration(new XactJobHistoryEntityConfiguration(providerName, excludeFromMigrations, schema));
+            modelBuilder.ApplyConfiguration(new XactJobPeriodicEntityConfiguration(providerName, excludeFromMigrations, schema));
         }
     }
 }

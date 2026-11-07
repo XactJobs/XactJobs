@@ -339,7 +339,7 @@ namespace XactJobs.Internal
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+            var dialect = dbContext.GetSqlDialect();
 
             foreach (var chunk in jobs.Chunk(SqlDialectExtensions.MaxJobsPerStatement))
             {
@@ -359,7 +359,7 @@ namespace XactJobs.Internal
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
 
-            var dialect = dbContext.Database.ProviderName.ToSqlDialect();
+            var dialect = dbContext.GetSqlDialect();
 
             var jobs = new List<XactJob>();
 

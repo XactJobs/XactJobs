@@ -20,7 +20,13 @@ namespace XactJobs.Internal.SqlDialects
 {
     public class PostgreSqlDialect : ISqlDialect
     {
-        public string XactJobSchema { get; } = "xact_jobs";
+        /// <param name="schema">The schema of XactJobs' tables, xact_jobs by default. Lowercase: the SQL doesn't quote it.</param>
+        public PostgreSqlDialect(string? schema = null)
+        {
+            XactJobSchema = SqlDialectExtensions.CheckSchemaName(schema, "xact_jobs", @"^[a-z_][a-z0-9_]{0,62}$");
+        }
+
+        public string XactJobSchema { get; }
         public string XactJobTable { get; } = "job";
         public string XactJobHistoryTable { get; } = "job_history";
         public string XactJobPeriodicTable { get; } = "job_periodic";

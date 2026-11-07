@@ -135,6 +135,11 @@ XactJobs is a .NET library for background job processing with full database tran
 - `XactJobSaveCheck` (`WithSaveOutsideTransaction`, all the queues): `Warn` logs once per job type and method, per dispatcher (the runners share one checker); `Throw` throws `InvalidOperationException` from the event, so nothing is saved and the job is retried; `Ignore` doesn't subscribe. In `Warn` mode a job method that was already warned about isn't subscribed again
 - Only `SaveChanges` on that context is seen: not other DbContext instances, `ExecuteUpdate`/`ExecuteDelete`, raw SQL, or a transaction the job commits itself
 
+### Schema of XactJobs' Tables
+
+- PostgreSQL and SQL Server only: `ApplyXactJobsConfigurations(..., schema: "app_b")`, for apps that share a database. The dialects take it in their constructor and write it into their SQL, so it must be a plain identifier (lowercase on PostgreSQL, whose unquoted names fold to lowercase while EF quotes them)
+- The runtime finds it in the model: `DbContext.GetSqlDialect()` (never `ProviderName.ToSqlDialect()` alone, which gives the default schema). `SchemaIntegrationTests` runs two apps' tables in one database
+
 ### SQL Scripts
 
 - `sql/v<version>/xact-jobs-<database>-v<version>.sql` - one per schema change and database, to upgrade an installation. Released ones never change
