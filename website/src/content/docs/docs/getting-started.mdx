@@ -1,0 +1,197 @@
+---
+title: Getting started
+description: Install XactJobs, create its tables, register it, and enqueue a job that commits with your data.
+---
+
+import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+XactJobs lets you schedule and run background jobs **with full database transaction support** using Entity Framework Core.
+Jobs are saved alongside your business data and only execute if your transaction commits: no "ghost" jobs on rollback.
+
+It supports **SQL Server, PostgreSQL, MySQL, Oracle and SQLite**, on .NET 8, 9 and 10. XactJobs uses EF Core 9 on .NET 8 and 9,
+and EF Core 10 on .NET 10, so your database provider has to support that version. For MySQL, see [which provider to use](../databases/#mysql).
+
+## 1. Install the package
+
+```bash
+dotnet add package XactJobs
+```
+
+Your app also needs the EF Core provider of its database, registered as usual. The provider isn't part of XactJobs:
+
+<Tabs syncKey="db">
+<TabItem label="SQL Server">
+
+```csharp
+// Microsoft.EntityFrameworkCore.SqlServer
+builder.Services.AddDbContext<UserDbContext>(options =>
+    options.UseSqlServer(connectionString));
+```
+
+</TabItem>
+<TabItem label="PostgreSQL">
+
+```csharp
+// Npgsql.EntityFrameworkCore.PostgreSQL
+builder.Services.AddDbContext<UserDbContext>(options =>
+    options.UseNpgsql(connectionString));
+```
+
+</TabItem>
+<TabItem label="MySQL">
+
+```csharp
+// .NET 9 and 10: MySql.EntityFrameworkCore
+builder.Services.AddDbContext<UserDbContext>(options =>
+    options.UseMySQL(connectionString));
+
+// .NET 8 and 9: Pomelo.EntityFrameworkCore.MySql
+builder.Services.AddDbContext<UserDbContext>(options =>
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+```
+
+With the official provider, `SaveChanges` doesn't start a transaction on its own. See [MySQL](../databases/#mysql) before you go further.
+
+</TabItem>
+<TabItem label="Oracle">
+
+```csharp
+// Oracle.EntityFrameworkCore
+builder.Services.AddDbContext<UserDbContext>(options =>
+    options.UseOracle(connectionString));
+```
+
+</TabItem>
+<TabItem label="SQLite">
+
+```csharp
+// Microsoft.EntityFrameworkCore.Sqlite
+builder.Services.AddDbContext<UserDbContext>(options =>
+    options.UseSqlite(connectionString));
+```
+
+</TabItem>
+</Tabs>
+
+## 2. Create the tables
+
+For a new installation, run the install script for your database. It creates the latest schema: the job table, the history and the periodic jobs.
+
+<Tabs syncKey="db">
+<TabItem label="SQL Server">
+
+[sql/install/xact-jobs-sqlserver.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-sqlserver.sql) creates the tables in the `XactJobs` schema.
+
+Run it with `QUOTED_IDENTIFIER` and `ANSI_NULLS` on, which are SqlClient's and SSMS's defaults (`sqlcmd` needs `-I`): the job table has a filtered index.
+
+</TabItem>
+<TabItem label="PostgreSQL">
+
+[sql/install/xact-jobs-postgresql.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-postgresql.sql) creates the tables in the `xact_jobs` schema.
+
+The job table is a high-churn queue: see the [autovacuum settings](../databases/#postgresql) recommended for it.
+
+</TabItem>
+<TabItem label="MySQL">
+
+[sql/install/xact-jobs-mysql.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-mysql.sql) creates the `xact_jobs_` tables. XactJobs needs MySQL 8.0 or later.
+
+</TabItem>
+<TabItem label="Oracle">
+
+[sql/install/xact-jobs-oracle.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-oracle.sql) creates the `XACT_JOBS_` tables. XactJobs needs Oracle 12c or later.
+
+</TabItem>
+<TabItem label="SQLite">
+
+[sql/install/xact-jobs-sqlite.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-sqlite.sql) creates the `xact_jobs_` tables.
+
+</TabItem>
+</Tabs>
+
+All the scripts are in [sql/](https://github.com/XactJobs/XactJobs/tree/main/sql). To upgrade an existing installation, run the versioned scripts instead: see [Upgrading](../upgrading/).
+
+### Or use EF migrations
+
+Instead of the scripts, you can include the XactJobs entities in your EF migrations:
+
+```csharp
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName,
+        excludeFromMigrations: false); // <--- key part here
+
+    // Apply your entity configurations...
+}
+```
+
+And then create the migration like you normally would:
+
+```bash
+dotnet ef migrations add XactJobsTables
+```
+
+## 3. Configure startup
+
+Add the entity configurations to your `DbContext`:
+
+```csharp
+public class UserDbContext : DbContext
+{
+    public UserDbContext(DbContextOptions<UserDbContext> options) : base(options)
+    {
+    }
+
+    // Your DbSets...
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName);
+
+        // Apply your entity configurations...
+    }
+}
+```
+
+Register XactJobs in `Program.cs`. The workers run as hosted services in your app:
+
+```csharp
+// This registers 2 workers for the default queue
+builder.Services.AddXactJobs<UserDbContext>(options =>
+{
+    options.WithPriorityQueue();     // optional (2 additional workers)
+    options.WithLongRunningQueue();  // optional (2 additional workers)
+});
+```
+
+All the options are in the [configuration reference](../configuration/).
+
+## 4. Enqueue a job
+
+A job is a public method. Enqueue it on your `DbContext`, next to your business data, and save. `JobEnqueue` and the other methods
+are extension methods in the `XactJobs` namespace (`using XactJobs;`):
+
+```csharp
+public static class Greeter
+{
+    public static void Say(string message) => Console.WriteLine(message);
+}
+```
+
+```csharp
+// ... other business logic
+dbContext.JobEnqueue(
+    () => Greeter.Say("Fire-and-forget!"));
+
+dbContext.SaveChanges();
+```
+
+The job is a row in the same transaction as your changes. If the transaction commits, a worker runs it; if it rolls back, the job doesn't exist.
+
+<Steps>
+
+1. Read [Jobs](../jobs/) for what a job method can be, and how instance methods get their dependencies.
+2. Read [A job is a unit of work](../unit-of-work/): **the worker saves a job's database changes, not the job.**
+3. Add the [dashboard](../dashboard/) to see and manage the jobs.
+
+</Steps>

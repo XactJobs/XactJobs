@@ -1,0 +1,104 @@
+---
+import { Font } from 'astro:assets';
+import '../styles/theme.css';
+import '../styles/landing.css';
+import logoLight from '../assets/logo-light.svg?url';
+import logoDark from '../assets/logo-dark.svg?url';
+import { GITHUB_URL, NUGET_URL, NUGET_UI_URL } from '../../site.config.mjs';
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const canonical = new URL(Astro.url.pathname, Astro.site).href;
+---
+
+<!doctype html>
+<html lang="en" dir="ltr" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta name="theme-color" content="#0b1120" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <link rel="alternate" type="text/plain" title="llms.txt" href={`${base}llms.txt`} />
+    <Font cssVariable="--font-inter" preload />
+    <Font cssVariable="--font-mono" />
+    {/* the same key and attribute as the docs (Starlight), so the choice carries over; inline to avoid a flash */}
+    <script is:inline>
+      (() => {
+        let stored = null;
+        try { stored = localStorage.getItem('starlight-theme'); } catch {}
+        const theme = stored || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+        document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href={base} aria-label="XactJobs home">
+          <img class="logo logo-light" src={logoLight} alt="XactJobs" width="187" height="38" />
+          <img class="logo logo-dark" src={logoDark} alt="XactJobs" width="187" height="38" />
+        </a>
+        <nav class="header-nav" aria-label="Main">
+          <a href={`${base}docs/getting-started/`}>Docs</a>
+          <a href={GITHUB_URL} class="icon-link" aria-label="XactJobs on GitHub">
+            <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          </a>
+          <button class="theme-toggle" type="button" aria-label="Switch to the light theme" data-theme-toggle>
+            <svg class="icon-sun" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="none" stroke="currentColor" stroke-width="2"/><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <div class="footer-brand">
+          <img class="logo logo-light" src={logoLight} alt="XactJobs" width="140" height="28" loading="lazy" />
+          <img class="logo logo-dark" src={logoDark} alt="XactJobs" width="140" height="28" loading="lazy" />
+          <p>Background jobs that commit with your data.</p>
+        </div>
+        <nav class="footer-nav" aria-label="Footer">
+          <a href={`${base}docs/getting-started/`}>Docs</a>
+          <a href={GITHUB_URL}>GitHub</a>
+          <a href={NUGET_URL}>NuGet: XactJobs</a>
+          <a href={NUGET_UI_URL}>NuGet: XactJobs.UI</a>
+          <a href={`${GITHUB_URL}/blob/main/COPYING.LESSER`}>License: LGPL-3.0-or-later</a>
+        </nav>
+      </div>
+    </footer>
+
+    <script>
+      const toggle = document.querySelector<HTMLButtonElement>('[data-theme-toggle]');
+      const label = () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        toggle?.setAttribute('aria-label', `Switch to the ${next} theme`);
+      };
+      label();
+      toggle?.addEventListener('click', () => {
+        const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        document.documentElement.dataset.theme = next;
+        try { localStorage.setItem('starlight-theme', next); } catch {}
+        label();
+      });
+    </script>
+  </body>
+</html>

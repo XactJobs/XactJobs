@@ -1,0 +1,360 @@
+---
+import { Picture } from 'astro:assets';
+import Landing from '../layouts/Landing.astro';
+import TxDiagram from '../components/TxDiagram.astro';
+import DbTabs from '../components/DbTabs.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+import FeatureIcon from '../components/FeatureIcon.astro';
+import { GITHUB_URL } from '../../site.config.mjs';
+
+import dashboard from '../../../docs/images/dashboard.png';
+import scheduled from '../../../docs/images/scheduled.png';
+import failedJob from '../../../docs/images/failed-job.png';
+import periodic from '../../../docs/images/periodic.png';
+import batches from '../../../docs/images/batches.png';
+import batch from '../../../docs/images/batch.png';
+import dashboardDark from '../../../docs/images/dashboard-dark.png';
+import scheduledDark from '../../../docs/images/scheduled-dark.png';
+import failedJobDark from '../../../docs/images/failed-job-dark.png';
+import periodicDark from '../../../docs/images/periodic-dark.png';
+import batchesDark from '../../../docs/images/batches-dark.png';
+import batchDark from '../../../docs/images/batch-dark.png';
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+const docs = (slug: string) => `${base}docs/${slug}/`;
+const sql = (db: string) => `${GITHUB_URL}/blob/main/sql/install/xact-jobs-${db}.sql`;
+
+const createTables = [
+  {
+    label: 'SQL Server',
+    lang: 'bash' as const,
+    code: 'sqlcmd -I -d <db> -i xact-jobs-sqlserver.sql',
+    note: `<a href="${sql('sqlserver')}">xact-jobs-sqlserver.sql</a>, with <code>QUOTED_IDENTIFIER</code> on (<code>-I</code>).`,
+  },
+  {
+    label: 'PostgreSQL',
+    lang: 'bash' as const,
+    code: 'psql -d <db> -f xact-jobs-postgresql.sql',
+    note: `<a href="${sql('postgresql')}">xact-jobs-postgresql.sql</a>, in the <code>xact_jobs</code> schema.`,
+  },
+  {
+    label: 'MySQL',
+    lang: 'bash' as const,
+    code: 'mysql <db> < xact-jobs-mysql.sql',
+    note: `<a href="${sql('mysql')}">xact-jobs-mysql.sql</a>, MySQL 8.0 or later.`,
+  },
+  {
+    label: 'Oracle',
+    lang: 'bash' as const,
+    code: 'sqlplus <user>@<db> @xact-jobs-oracle.sql',
+    note: `<a href="${sql('oracle')}">xact-jobs-oracle.sql</a>, Oracle 12c or later.`,
+  },
+  {
+    label: 'SQLite',
+    lang: 'bash' as const,
+    code: 'sqlite3 app.db < xact-jobs-sqlite.sql',
+    note: `<a href="${sql('sqlite')}">xact-jobs-sqlite.sql</a>.`,
+  },
+];
+
+const configure = `
+// UserDbContext.OnModelCreating
+modelBuilder
+    .ApplyXactJobsConfigurations(
+        Database.ProviderName);
+
+// Program.cs: 2 workers
+builder.Services
+    .AddXactJobs<UserDbContext>();
+`;
+
+const enqueue = `
+db.Orders.Add(order);
+
+db.JobEnqueue<Mailer>(x =>
+    x.SendConfirmation(order.Number));
+
+// one transaction: order and job
+await db.SaveChangesAsync();
+`;
+
+const features = [
+  {
+    icon: 'tx' as const,
+    title: 'Transactional enqueue',
+    text: '<code>JobEnqueue</code> adds a row to your DbContext. Your <code>SaveChanges</code> or transaction commits it with your data, or rolls both back.',
+    href: docs('scheduling'),
+  },
+  {
+    icon: 'once' as const,
+    title: 'Exactly-once database effects',
+    text: 'A job is a unit of work: the worker saves its changes in the transaction that completes it. If two workers run it, only one commits.',
+    href: docs('unit-of-work'),
+  },
+  {
+    icon: 'retry' as const,
+    title: 'Retries and cancellation',
+    text: 'A job that throws runs again, up to 10 times by default, waiting longer each time. <code>XactJobCancelException</code> stops it without retries.',
+    href: docs('failures-and-retries'),
+  },
+  {
+    icon: 'batch' as const,
+    title: 'Batches and continuations',
+    text: '<code>ContinueWith</code> a job or a whole batch, <code>OnSuccess</code>, <code>OnFailure</code> or <code>OnFinish</code>. Continuations can have their own.',
+    href: docs('batches-and-continuations'),
+  },
+  {
+    icon: 'cron' as const,
+    title: 'Periodic jobs, safe on many nodes',
+    text: 'Cron schedules defined at startup, which the nodes ensure in turns under a lock. Each node also reschedules a periodic job that lost its pending run.',
+    href: docs('scheduling') + '#periodic-jobs',
+  },
+  {
+    icon: 'queues' as const,
+    title: 'Isolated queues and QuickPoll',
+    text: 'Priority, long-running and your own queues, each with its own workers. QuickPoll starts a job without waiting for the next poll.',
+    href: docs('queues-and-polling'),
+  },
+  {
+    icon: 'dashboard' as const,
+    title: 'Dashboard and REST API',
+    text: 'XactJobs.UI shows the pending, finished and periodic jobs and the batches, with run now, retry, pause and trigger. It works without internet access.',
+    href: docs('dashboard'),
+  },
+  {
+    icon: 'db' as const,
+    title: 'Five databases, no extra server',
+    text: 'SQL Server, PostgreSQL, MySQL, Oracle and SQLite, on .NET 8, 9 and 10. The jobs live in your database, the workers in your app.',
+    href: docs('databases'),
+  },
+];
+
+const shots = [
+  { id: 'dashboard', label: 'Dashboard', image: dashboard, dark: dashboardDark, path: '/XactJobs', alt: 'The dashboard: due, running, succeeded and failed jobs, and the jobs processed per hour' },
+  { id: 'scheduled', label: 'Scheduled', image: scheduled, dark: scheduledDark, path: '/XactJobs/Scheduled', alt: 'Scheduled jobs: running, scheduled and retrying jobs, with their queues' },
+  { id: 'failed', label: 'Failed job', image: failedJob, dark: failedJobDark, path: '/XactJobs/History', alt: "A failed job's error message and stack trace" },
+  { id: 'periodic', label: 'Periodic', image: periodic, dark: periodicDark, path: '/XactJobs/Periodic', alt: 'Periodic jobs: their cron expressions and next runs, one of them paused' },
+  { id: 'batches', label: 'Batches', image: batches, dark: batchesDark, path: '/XactJobs/Batches', alt: 'Active batches: their progress, failed jobs and waiting continuations' },
+  { id: 'batch', label: 'Batch', image: batch, dark: batchDark, path: '/XactJobs/Batch', alt: 'A batch: its jobs left, the continuations that wait for it, and its history' },
+];
+---
+
+<Landing
+  title="XactJobs: background jobs that commit with your data"
+  description="XactJobs runs background jobs for EF Core that are saved in the same transaction as your business data: if it commits, the job runs; if it rolls back, the job never existed. SQL Server, PostgreSQL, MySQL, Oracle and SQLite."
+>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id="xj-ic-grad" x1="0" y1="0" x2="1" y2="1">
+        <stop class="ic-bg-a" offset="0" />
+        <stop class="ic-bg-b" offset="1" />
+      </linearGradient>
+    </defs>
+  </svg>
+
+  <section class="hero">
+    <div class="container hero-grid">
+      <div>
+        <ul class="hero-meta" aria-label="At a glance">
+          <li>EF Core</li>
+          <li>.NET 8, 9 and 10</li>
+          <li>Open source, LGPL-3.0</li>
+        </ul>
+        <h1>Background jobs that <span class="accent">commit with your data</span></h1>
+        <p class="lead">
+          XactJobs saves a job in the same EF Core transaction as your business data: if it commits, a worker runs the job, and if it
+          rolls back, the job never existed.
+        </p>
+        <div class="actions">
+          <a class="btn btn-primary" href={docs('getting-started')}>
+            Get started
+            <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 10h11m-4.5-5 5 5-5 5" /></svg>
+          </a>
+          <a class="btn btn-secondary" href={GITHUB_URL}>
+            <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            GitHub
+          </a>
+        </div>
+        <p class="install"><span class="prompt" aria-hidden="true">$</span><code>dotnet add package XactJobs</code></p>
+      </div>
+      <div class="hero-art">
+        <TxDiagram />
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" aria-labelledby="start-title">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Getting started</p>
+        <h2 id="start-title">Three steps</h2>
+        <p class="lead">Tables in your database, two lines at startup, and jobs next to your data.</p>
+      </div>
+      <ol class="steps" role="list">
+        <li class="step">
+          <span class="step-num" aria-hidden="true">1</span>
+          <h3>Create the tables</h3>
+          <p>Run the install script for your database, from <a href={`${GITHUB_URL}/tree/main/sql`}>sql/</a>.</p>
+          <DbTabs id="create" tabs={createTables} />
+          <p>Or include them in your EF migrations, with <code>ApplyXactJobsConfigurations(..., excludeFromMigrations: false)</code>.</p>
+          <a class="step-more" href={docs('getting-started') + '#2-create-the-tables'}>Install and upgrade scripts</a>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">2</span>
+          <h3>Configure startup</h3>
+          <p>Add the entity configurations to your DbContext, and register the workers.</p>
+          <CodeBlock code={configure} lang="csharp" label="Configure startup: ApplyXactJobsConfigurations and AddXactJobs" />
+          <a class="step-more" href={docs('configuration')}>All the options</a>
+        </li>
+        <li class="step">
+          <span class="step-num" aria-hidden="true">3</span>
+          <h3>Fire away</h3>
+          <p>Enqueue on your DbContext and save. The job runs when your transaction commits.</p>
+          <CodeBlock code={enqueue} lang="csharp" label="Enqueue a job with your data and save" />
+          <a class="step-more" href={docs('jobs')}>Writing jobs</a>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="features-title">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Features</p>
+        <h2 id="features-title">Jobs as part of your data</h2>
+        <p class="lead">Everything runs in your app and your database, with the transactions you already have.</p>
+      </div>
+      <div class="features">
+        {features.map((feature) => (
+          <article class="feature">
+            <FeatureIcon name={feature.icon} />
+            <h3><a href={feature.href}>{feature.title}</a></h3>
+            <p set:html={feature.text} />
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt" aria-labelledby="dashboard-title">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Dashboard</p>
+        <h2 id="dashboard-title">See and manage the jobs</h2>
+        <p class="lead">The <code>XactJobs.UI</code> package adds a dashboard and a REST API, local requests only until you choose who can use it.</p>
+      </div>
+      <div class="shot-tabs" role="tablist" aria-label="Dashboard screenshots" data-shots>
+        {shots.map((shot, i) => (
+          <button type="button" role="tab" id={`shot-tab-${shot.id}`} aria-controls={`shot-${shot.id}`} aria-selected={i === 0 ? 'true' : 'false'} tabindex={i === 0 ? 0 : -1}>
+            {shot.label}
+          </button>
+        ))}
+      </div>
+      <div class="browser">
+        <div class="browser-bar" aria-hidden="true">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="address" data-address>{`https://your-app${shots[0].path}`}</div>
+        </div>
+        <div class="shots">
+          {shots.map((shot, i) => (
+            <figure id={`shot-${shot.id}`} role="tabpanel" aria-labelledby={`shot-tab-${shot.id}`} hidden={i !== 0} data-path={shot.path}>
+              {/* the dashboard in the page's theme: the other one isn't shown, so the browser doesn't load it */}
+              <Picture
+                class="shot-light"
+                src={shot.image}
+                alt={shot.alt}
+                widths={[480, 800, 1200, 1600]}
+                sizes="(min-width: 72rem) 69rem, calc(100vw - 2rem)"
+                formats={['avif']}
+                fallbackFormat="webp"
+                loading="lazy"
+              />
+              <Picture
+                class="shot-dark"
+                src={shot.dark}
+                alt={shot.alt}
+                widths={[480, 800, 1200, 1600]}
+                sizes="(min-width: 72rem) 69rem, calc(100vw - 2rem)"
+                formats={['avif']}
+                fallbackFormat="webp"
+                loading="lazy"
+              />
+            </figure>
+          ))}
+        </div>
+      </div>
+      <p class="shot-caption" data-caption>{shots[0].alt}</p>
+      <p><a class="step-more" href={docs('dashboard')}>Pages, actions and the API</a></p>
+    </div>
+  </section>
+
+  <section class="section" aria-labelledby="numbers-title">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">Measured</p>
+        <h2 id="numbers-title">Throughput and status</h2>
+      </div>
+      <div class="split">
+        <div class="panel">
+          <h3>Throughput</h3>
+          <p class="metric">2,300–2,600 <small>no-op jobs per second</small></p>
+          <p>
+            Draining 20,000 jobs on a Hetzner Cloud CX33 (4 shared vCPUs, 8 GB), with PostgreSQL 16 on the same machine, .NET 10, 2 workers,
+            <code>MaxDegreeOfParallelism</code> 4 and <code>WithBatchSize(100)</code>. Each job is still its own transaction. With real jobs,
+            their own work sets the pace.
+          </p>
+          <a class="link" href={docs('throughput')}>The benchmark, to run on your machine</a>
+        </div>
+        <div class="panel status">
+          <h3>Status: pre-1.0</h3>
+          <p>
+            The core is tested on all five databases, with an integration test suite running against each one (SQLite in-process, the
+            others in containers): transactional enqueue, claiming and leasing, retries, batches and continuations, and periodic jobs.
+          </p>
+          <ul>
+            <li><strong>The API can still change</strong> between minor versions (0.x). Breaking changes are listed in the release notes, with how to migrate.</li>
+            <li><strong>Schema changes ship as SQL scripts</strong>, one per version and database. Existing data is always kept.</li>
+            <li><strong>1.0 freezes the API and the schema</strong> under semantic versioning.</li>
+          </ul>
+          <p>
+            Feedback and issue reports are very welcome, especially from production use. XactJobs was started in 2025, and written without
+            AI. Newer releases are developed with AI, and the changes are reviewed by a human.
+          </p>
+          <p>Licensed under the <a href={`${GITHUB_URL}/blob/main/COPYING.LESSER`}>GNU Lesser General Public License 3.0 or later</a>.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+</Landing>
+
+<script>
+  // The screenshots: one shown at a time, with the address bar and the caption following it.
+  const tablist = document.querySelector('[data-shots]');
+  if (tablist) {
+    const tabs = [...tablist.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = tabs.map((tab) => document.getElementById(tab.getAttribute('aria-controls')!)!);
+    const address = document.querySelector('[data-address]');
+    const caption = document.querySelector('[data-caption]');
+
+    const select = (index: number, focus = false) => {
+      tabs.forEach((tab, i) => {
+        tab.setAttribute('aria-selected', String(i === index));
+        tab.tabIndex = i === index ? 0 : -1;
+        panels[i].hidden = i !== index;
+      });
+      if (address) address.textContent = `https://your-app${panels[index].dataset.path}`;
+      if (caption) caption.textContent = panels[index].querySelector('img')?.alt ?? '';
+      if (focus) tabs[index].focus();
+    };
+
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => select(i));
+      tab.addEventListener('keydown', (event) => {
+        const next = event.key === 'ArrowRight' ? i + 1 : event.key === 'ArrowLeft' ? i - 1 : null;
+        if (next === null) return;
+        event.preventDefault();
+        select((next + tabs.length) % tabs.length, true);
+      });
+    });
+  }
+</script>

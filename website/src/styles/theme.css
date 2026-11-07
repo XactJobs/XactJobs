@@ -1,0 +1,68 @@
+/*
+ * One accent (teal) and slate neutrals, shared by the docs (Starlight's variables), the landing page and the illustrations.
+ * Starlight's dark theme is the default, :root[data-theme='light'] the light one.
+ */
+:root {
+  --xj-accent-50: #f0fdfa;
+  --xj-accent-100: #ccfbf1;
+  --xj-accent-200: #99f6e4;
+  --xj-accent-300: #5eead4;
+  --xj-accent-400: #2dd4bf;
+  --xj-accent-500: #14b8a6;
+  --xj-accent-600: #0d9488;
+  --xj-accent-700: #0f766e;
+  --xj-accent-800: #115e59;
+  --xj-accent-900: #134e4a;
+  --xj-accent-950: #042f2e;
+
+  /* --font-inter and --font-mono come from the fonts in astro.config.mjs, with their fallbacks */
+  --xj-font-sans: var(--font-inter);
+  --xj-font-mono: var(--font-mono);
+
+  --sl-font: var(--xj-font-sans);
+  --sl-font-mono: var(--xj-font-mono);
+
+  /* dark */
+  --sl-color-accent-low: #0b2f2c;
+  --sl-color-accent: var(--xj-accent-500);
+  --sl-color-accent-high: var(--xj-accent-200);
+  --sl-color-white: #ffffff;
+  --sl-color-gray-1: #e2e8f0;
+  --sl-color-gray-2: #cbd5e1;
+  --sl-color-gray-3: #94a3b8;
+  --sl-color-gray-4: #64748b;
+  --sl-color-gray-5: #334155;
+  --sl-color-gray-6: #1e293b;
+  --sl-color-black: #0b1120;
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: var(--xj-accent-100);
+  --sl-color-accent: var(--xj-accent-700);
+  --sl-color-accent-high: var(--xj-accent-900);
+  --sl-color-white: #0b1120;
+  --sl-color-gray-1: #1e293b;
+  --sl-color-gray-2: #334155;
+  --sl-color-gray-3: #475569;
+  --sl-color-gray-4: #64748b;
+  --sl-color-gray-5: #cbd5e1;
+  --sl-color-gray-6: #e8edf3;
+  --sl-color-gray-7: #f5f7fa;
+  --sl-color-black: #ffffff;
+}
+
+/* no ligatures in code: => and != stay as typed */
+code, pre, kbd, .expressive-code {
+  font-variant-ligatures: none;
+  font-feature-settings: 'liga' 0, 'calt' 0;
+}
+
+.sl-markdown-content :is(h2, h3) {
+  letter-spacing: -0.01em;
+}
+
+/* screenshots in the docs */
+.sl-markdown-content img {
+  border-radius: 0.6rem;
+  border: 1px solid var(--sl-color-gray-5);
+}

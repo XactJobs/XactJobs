@@ -1,0 +1,80 @@
+---
+import CodeBlock from './CodeBlock.astro';
+
+interface Tab {
+  label: string;
+  code: string;
+  lang: 'csharp' | 'bash' | 'sql';
+  note?: string;
+}
+
+interface Props {
+  id: string;
+  tabs: Tab[];
+}
+
+const { id, tabs } = Astro.props;
+---
+
+<div class="tabs" data-tabs>
+  <div class="tablist" role="tablist" aria-label="Database">
+    {tabs.map((tab, i) => (
+      <button
+        type="button"
+        role="tab"
+        id={`${id}-tab-${i}`}
+        aria-controls={`${id}-panel-${i}`}
+        aria-selected={i === 0 ? 'true' : 'false'}
+        tabindex={i === 0 ? 0 : -1}
+        data-label={tab.label}
+      >
+        {tab.label}
+      </button>
+    ))}
+  </div>
+  {tabs.map((tab, i) => (
+    <div class="tabpanel" role="tabpanel" id={`${id}-panel-${i}`} aria-labelledby={`${id}-tab-${i}`} hidden={i !== 0}>
+      <CodeBlock code={tab.code} lang={tab.lang} label={`${tab.label}: ${tab.note ?? 'code'}`} />
+      {tab.note && <p class="tab-note" set:html={tab.note} />}
+    </div>
+  ))}
+</div>
+
+<script>
+  // Arrow keys move between the tabs; a choice is remembered for the docs' database tabs too (Starlight's syncKey "db").
+  const STORAGE_KEY = 'starlight-synced-tabs__db';
+
+  function select(group: Element, index: number, focus = false) {
+    const tabs = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+    const panels = [...group.querySelectorAll<HTMLElement>('[role="tabpanel"]')];
+    tabs.forEach((tab, i) => {
+      tab.setAttribute('aria-selected', String(i === index));
+      tab.tabIndex = i === index ? 0 : -1;
+      panels[i].hidden = i !== index;
+    });
+    if (focus) tabs[index].focus();
+  }
+
+  document.querySelectorAll('[data-tabs]').forEach((group) => {
+    const tabs = [...group.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const index = tabs.findIndex((tab) => tab.dataset.label === saved);
+      if (index >= 0) select(group, index);
+    } catch {}
+
+    tabs.forEach((tab, i) => {
+      tab.addEventListener('click', () => {
+        select(group, i);
+        try { localStorage.setItem(STORAGE_KEY, tab.dataset.label ?? ''); } catch {}
+      });
+      tab.addEventListener('keydown', (event) => {
+        const next = event.key === 'ArrowRight' ? i + 1 : event.key === 'ArrowLeft' ? i - 1 : null;
+        if (next === null) return;
+        event.preventDefault();
+        select(group, (next + tabs.length) % tabs.length, true);
+      });
+    });
+  });
+</script>
