@@ -15,6 +15,12 @@ public record JobDto
     public Guid? AwaitsBatchId { get; init; }
     public XactJobContinuation? ContinuationCondition { get; init; }
 
+    /// <summary>
+    /// The time the job was originally scheduled for, if it differs from <see cref="ScheduledAt"/>: a retry, or a run moved to now.
+    /// The job gets it as XactJobContext.OriginallyScheduledAt.
+    /// </summary>
+    public DateTime? OriginallyScheduledAt { get; init; }
+
     /// <summary>For a continuation that waits for its batch: the jobs left in the batch.</summary>
     public int? BatchJobsLeft { get; init; }
 

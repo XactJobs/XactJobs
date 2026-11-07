@@ -51,6 +51,22 @@ public class SqlitePeriodicJobTests : IDisposable
         Assert.Equal(jobId, savedPeriodicJob.Id);
     }
 
+    [Theory]
+    [InlineData("* * * * * *")]
+    [InlineData("0 */5 * * * *")]
+    [InlineData("0 0 0 * * *")]
+    public async Task JobEnsurePeriodicAsync_SchedulesTheRunAtAWholeSecond(string cronExpression)
+    {
+        // a run's cron slot is its XactJobContext.OriginallyScheduledAt: it must not keep a fraction of the current second
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "whole-second", cronExpression, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        var run = await _context.Jobs.SingleAsync();
+
+        Assert.Equal(0, run.ScheduledAt.Ticks % TimeSpan.TicksPerSecond);
+        Assert.True(run.ScheduledAt > DateTime.UtcNow);
+    }
+
     [Fact]
     public async Task JobEnsurePeriodicAsync_WithCustomQueue_CreatesPeriodicJobInQueue()
     {

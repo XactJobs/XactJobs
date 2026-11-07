@@ -57,6 +57,7 @@ namespace XactJobs.Internal
         string ColBatchId { get; }
         string ColAwaitsBatchId { get; }
         string ColContinuationCondition { get; }
+        string ColOriginallyScheduledAt { get; }
 
         string DateTimeColumnType { get; }
 

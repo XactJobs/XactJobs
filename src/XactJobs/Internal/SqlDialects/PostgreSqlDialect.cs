@@ -52,6 +52,7 @@ namespace XactJobs.Internal.SqlDialects
         public string ColBatchId { get; } = "batch_id";
         public string ColAwaitsBatchId { get; } = "awaits_batch_id";
         public string ColContinuationCondition { get; } = "continuation_condition";
+        public string ColOriginallyScheduledAt { get; } = "originally_scheduled_at";
 
         public bool HasSchemaSupport { get; } = true;
 

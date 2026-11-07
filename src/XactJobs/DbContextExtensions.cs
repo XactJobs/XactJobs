@@ -325,7 +325,10 @@ namespace XactJobs
             return true;
         }
 
-        internal static XactJob Reschedule(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount)
+        /// <summary>
+        /// Adds the retry of a job. It keeps the time the job was originally scheduled for: see <see cref="XactJobBase.GetOriginallyScheduledAt"/>.
+        /// </summary>
+        internal static XactJob Reschedule(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount, DateTime originallyScheduledAt)
         {
             var newJob = new XactJob(0,
                                      scheduledAt,
@@ -341,7 +344,8 @@ namespace XactJobs
                 // a retry stays in its batch, and a retry of a continuation is still one, but doesn't wait anymore
                 BatchId = job.BatchId,
                 AwaitsBatchId = job.AwaitsBatchId,
-                ContinuationCondition = job.ContinuationCondition
+                ContinuationCondition = job.ContinuationCondition,
+                OriginallyScheduledAt = originallyScheduledAt
             };
 
             dbContext.Set<XactJob>().Add(newJob);

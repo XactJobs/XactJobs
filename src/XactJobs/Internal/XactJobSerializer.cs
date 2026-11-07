@@ -284,8 +284,9 @@ namespace XactJobs.Internal
                 ? constantExpression.Value
                 : Microsoft.Web.Mvc.CachedExpressionCompiler.Evaluate(expression);
 
-            return value?.GetType() == typeof(CancellationToken) 
-                ? null 
+            // the worker passes its own (see XactJobCompiler)
+            return value is CancellationToken or XactJobContext
+                ? null
                 : value;
         }
     }

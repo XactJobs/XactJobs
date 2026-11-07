@@ -360,7 +360,8 @@ namespace XactJobs.Internal
                 }
             }
 
-            var claimedAt = DateTime.UtcNow;
+            // in whole microseconds, which every database stores exactly: a continuation's retries get it as their original time
+            var claimedAt = TruncateToMicroseconds(DateTime.UtcNow);
 
             foreach (var job in jobs)
             {
@@ -629,7 +630,9 @@ namespace XactJobs.Internal
                         dbContext.Attach(periodicJob);
                     }
 
-                    await XactJobCompiler.CompileAndRunJobAsync(scope, job, stoppingToken)
+                    var context = new XactJobContext(job.GetOriginallyScheduledAt(claimedAt));
+
+                    await XactJobCompiler.CompileAndRunJobAsync(scope, job, context, stoppingToken)
                         .ConfigureAwait(false);
 
                     // detached means the job deleted its own periodic job and saved that, so there's no next run to schedule
@@ -804,7 +807,7 @@ namespace XactJobs.Internal
 
                 if (nextRunTimeUtc.HasValue)
                 {
-                    dbContext.Reschedule(job, nextRunTimeUtc.Value, errorCount);
+                    dbContext.Reschedule(job, nextRunTimeUtc.Value, errorCount, job.GetOriginallyScheduledAt(claimedAt));
                 }
                 else
                 {
@@ -855,6 +858,11 @@ namespace XactJobs.Internal
             }
 
             return XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, innerMostEx?.Message ?? message, ex?.StackTrace, scheduledAt);
+        }
+
+        private static DateTime TruncateToMicroseconds(DateTime value)
+        {
+            return new DateTime(value.Ticks - value.Ticks % 10, value.Kind);
         }
 
         private string GetQueueDisplayName()

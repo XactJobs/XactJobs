@@ -54,6 +54,7 @@ namespace XactJobs.Internal.SqlDialects
         public string ColBatchId { get; } = "BatchId";
         public string ColAwaitsBatchId { get; } = "AwaitsBatchId";
         public string ColContinuationCondition { get; } = "ContinuationCondition";
+        public string ColOriginallyScheduledAt { get; } = "OriginallyScheduledAt";
 
         public string DateTimeColumnType { get; } = "datetime2";
 

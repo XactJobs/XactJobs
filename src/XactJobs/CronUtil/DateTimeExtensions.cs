@@ -100,9 +100,12 @@ namespace XactJobs.CronUtil
             return result;
         }
 
-        public static DateTime TruncateMs(this DateTime dateTime)
+        /// <summary>
+        /// Drops the fraction of a second: the milliseconds, and the ticks below them, so the times that follow are whole seconds.
+        /// </summary>
+        public static DateTime TruncateToSeconds(this DateTime dateTime)
         {
-            return dateTime.AddMilliseconds(-dateTime.Millisecond);
+            return new DateTime(dateTime.Ticks - dateTime.Ticks % TimeSpan.TicksPerSecond, dateTime.Kind);
         }
     }
 }

@@ -25,7 +25,7 @@ namespace XactJobs.Internal
     {
         private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, ParameterInfo[])> _compiledJobs = new();
         
-        public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, CancellationToken stoppingToken)
+        public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
             var jsonArgs = JsonDocument.Parse(job.MethodArgs);
 
@@ -45,6 +45,10 @@ namespace XactJobs.Internal
                 if (parameters[i].ParameterType == typeof(CancellationToken))
                 {
                     args[i] = stoppingToken;
+                }
+                else if (parameters[i].ParameterType == typeof(XactJobContext))
+                {
+                    args[i] = context;
                 }
                 else if (jsonArgs.RootElement[i].ValueKind == JsonValueKind.Null)
                 {

@@ -107,6 +107,12 @@ XactJobs is a .NET library for background job processing with full database tran
 - The history cleanup keeps the history of batches that a waiting continuation needs
 - Dashboard: the Batches page groups the job table and the history by `BatchId` (active: jobs left; finished: history only). Waiting continuations are shown by `JobDto.IsAwaitingBatch`, never by their placeholder date
 
+### Original Scheduled Time
+
+- `XactJobBase.OriginallyScheduledAt`: the time a job was originally scheduled for, null when it's the same as `ScheduledAt`. Retries (`Reschedule`), the dashboard's Run now (and Trigger, which uses it) and the dashboard's Retry from the history set it, the history rows copy it. Cron slots are whole seconds (`CronSequenceGenerator` drops the whole fraction of the current second)
+- `GetOriginallyScheduledAt(claimedAt)` gives the effective value: for a continuation's first attempt, which waits at the reserved time, it's the claim time (`claimedAt`, in whole microseconds, so every database stores the retries' copy exactly). Never copy 9999-12-31
+- Jobs get it as `XactJobContext.OriginallyScheduledAt`: a job method can take an `XactJobContext` parameter, which `XactJobSerializer` stores as null and `XactJobCompiler` fills in, like a `CancellationToken`
+
 ### Database Entities
 
 - **XactJob** - Main job queue (status, payload, scheduled time, retry info)

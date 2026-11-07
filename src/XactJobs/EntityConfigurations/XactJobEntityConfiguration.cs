@@ -85,6 +85,9 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.AwaitsBatchId).HasColumnName(_sqlDialect.ColAwaitsBatchId);
             builder.Property(x => x.ContinuationCondition).HasColumnName(_sqlDialect.ColContinuationCondition);
 
+            builder.Property(x => x.OriginallyScheduledAt).HasColumnName(_sqlDialect.ColOriginallyScheduledAt)
+                .HasColumnType(_sqlDialect.DateTimeColumnType);
+
             // to check if a batch has jobs left
             builder.HasIndex(x => x.BatchId)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColBatchId}");

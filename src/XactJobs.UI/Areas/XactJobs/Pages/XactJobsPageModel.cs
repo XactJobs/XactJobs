@@ -71,6 +71,19 @@ public abstract class XactJobsPageModel : PageModel
         return new HtmlString($"<time class=\"text-nowrap\" datetime=\"{iso}\" title=\"{text}\">{text}</time>");
     }
 
+    /// <summary>
+    /// Below a scheduled time: the time the job was originally scheduled for, if it differs (a retry, or a run moved to now).
+    /// </summary>
+    public static IHtmlContent OriginalTime(DateTime? originallyScheduledAt)
+    {
+        if (!originallyScheduledAt.HasValue) return HtmlString.Empty;
+
+        return new HtmlContentBuilder()
+            .AppendHtml("<div class=\"small text-muted text-nowrap\" title=\"Originally scheduled for: its retries keep this time\">originally ")
+            .AppendHtml(Time(originallyScheduledAt))
+            .AppendHtml("</div>");
+    }
+
     public static string DisplayQueue(string queue) => DisplayNames.Queue(queue);
 
     protected abstract Task LoadAsync(CancellationToken ct);
