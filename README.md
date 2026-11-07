@@ -300,6 +300,7 @@ once all the workers run v0.2.0: a worker of an older version that retries a job
 
 For v0.3.0, run the script first: it adds the column for the time a job was originally scheduled for, which v0.3.0 needs. Then upgrade the workers.
 A worker of an older version that retries a job leaves the column empty, so that retry sees its own retry time as `XactJobContext.OriginallyScheduledAt`.
+On SQLite, the script also adds an index on the queue and the scheduled time, for the claims: without it, every claim reads and sorts the whole job table.
 
 ## Using EF Migrations
 Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:

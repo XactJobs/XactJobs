@@ -80,10 +80,15 @@ public class SqliteDialectTests
         // Act
         var indexes = context.Model.FindEntityType(typeof(XactJob))!.GetIndexes();
 
-        // Assert: only the batch columns are indexed
+        // Assert: only the batch columns, and the queue with the scheduled time for the claims (the primary key is only the id)
         Assert.Equal(
-            [nameof(XactJob.AwaitsBatchId), nameof(XactJob.BatchId)],
+            [nameof(XactJob.AwaitsBatchId), nameof(XactJob.BatchId), nameof(XactJob.Queue), nameof(XactJob.ScheduledAt)],
             indexes.SelectMany(i => i.Properties).Select(p => p.Name).Order());
+
+        var claimIndex = Assert.Single(indexes, i => i.Properties.Count == 2);
+
+        Assert.Equal([nameof(XactJob.Queue), nameof(XactJob.ScheduledAt)], claimIndex.Properties.Select(p => p.Name));
+        Assert.Equal("ix_job_queue_scheduled_at", claimIndex.GetDatabaseName());
     }
 
     [Fact]

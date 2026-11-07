@@ -51,6 +51,11 @@ namespace XactJobs.EntityConfigurations
                 // Sqlite only supports autoincrement for INTEGER PRIMARY KEY
                 builder.HasKey(x => x.Id)
                     .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobTable}");
+
+                // the claims look for a queue's due jobs, oldest first: the other databases use their primary key for it,
+                // without this index every claim would read and sort the whole table
+                builder.HasIndex(x => new { x.Queue, x.ScheduledAt })
+                    .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColQueue}_{_sqlDialect.ColScheduledAt}");
             }
             else
             {

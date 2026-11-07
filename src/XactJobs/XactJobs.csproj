@@ -39,6 +39,11 @@
 		</PackageReference>
 	</ItemGroup>
 
+	<ItemGroup>
+		<!-- the benchmarks measure the serializer, the compiler and the save check directly -->
+		<InternalsVisibleTo Include="XactJobs.Benchmarks" />
+	</ItemGroup>
+
 	<!-- EF Core 10 only targets net10.0, and EF Core 9 targets net8.0 -->
 	<ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
 		<PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.14" />

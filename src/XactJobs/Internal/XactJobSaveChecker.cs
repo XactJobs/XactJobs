@@ -46,11 +46,17 @@ namespace XactJobs.Internal
 
             if (_mode == XactJobSaveCheck.Warn && _warned.ContainsKey((job.TypeName, job.MethodName))) return null;
 
-            EventHandler<SavingChangesEventArgs> handler = (sender, _) => OnSavingChanges((DbContext)sender!, job, logger, queue);
+            var handler = CreateHandler(job, logger, queue);
 
             dbContext.SavingChanges += handler;
 
             return handler;
+        }
+
+        // A method of its own: a lambda in Subscribe would allocate its closure when Subscribe starts, also when it returns null
+        private EventHandler<SavingChangesEventArgs> CreateHandler(XactJob job, ILogger logger, string queue)
+        {
+            return (sender, _) => OnSavingChanges((DbContext)sender!, job, logger, queue);
         }
 
         public static void Unsubscribe(DbContext dbContext, EventHandler<SavingChangesEventArgs>? handler)
