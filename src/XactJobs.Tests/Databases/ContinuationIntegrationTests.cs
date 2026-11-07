@@ -289,7 +289,7 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
     [DockerFact]
     public async Task HistoryCleanup_KeepsTheHistoryOfBatchesThatContinuationsWaitFor()
     {
-        var host = CreateHost();
+        var host = CreateHost(options => options.WithHistoryRetentionPeriodInDays(30));
 
         var waited = Guid.NewGuid();
         var finished = Guid.NewGuid();

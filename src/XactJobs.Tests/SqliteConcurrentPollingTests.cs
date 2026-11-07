@@ -135,10 +135,13 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
         await WaitForAsync(() => Task.FromResult(_state.QuickCount == jobs), "the backlog to finish");
     }
 
+    /// <summary>
+    /// Without a batch (BatchSize at the parallelism), a worker only claims jobs it can start immediately.
+    /// </summary>
     [Fact]
-    public async Task NeverClaimsMoreThanCapacity_AndClaimsAgainWhenASlotFrees()
+    public async Task WithoutABatch_NeverClaimsMoreThanCapacity_AndClaimsAgainWhenASlotFrees()
     {
-        await CreateHostAsync(capacity: 2);
+        await CreateHostAsync(capacity: 2, batchSize: 2);
 
         await WithDbAsync(db =>
         {
@@ -166,6 +169,118 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
 
         Assert.Equal(2, await WithDbAsync(db => db.Jobs.CountAsync(j => j.PeriodicJobId == null && j.Leaser != null)));
     }
+
+    /// <summary>
+    /// By default a worker holds twice its parallelism: each slot has a job waiting for it.
+    /// </summary>
+    [Fact]
+    public async Task ByDefault_HoldsTwiceTheParallelism_AndRunsAtTheParallelism()
+    {
+        await CreateHostAsync(capacity: 2);
+
+        await WithDbAsync(db =>
+        {
+            for (var i = 0; i < 6; i++)
+            {
+                db.JobEnqueue<PollingJob>(x => x.BlockUntilReleasedAsync());
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 2), "two jobs to start");
+        await WaitForAsync(async () => await CountLeasedAsync() == 4, "twice the parallelism to be claimed");
+
+        // more than one polling interval
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(2, _state.BlockedCount);
+        Assert.Equal(4, await CountLeasedAsync());
+    }
+
+    /// <summary>
+    /// A batch larger than the parallelism: the worker holds the batch, and runs as many as its parallelism. During a backlog it
+    /// claims again once fewer jobs wait than it can run, not each time one finishes.
+    /// </summary>
+    [Fact]
+    public async Task Batch_IsClaimedTogether_RunsAtTheParallelism_AndIsRefilledWhenFewJobsWait()
+    {
+        await CreateHostAsync(capacity: 2, batchSize: 5);
+
+        await WithDbAsync(db =>
+        {
+            for (var i = 0; i < 8; i++)
+            {
+                db.JobEnqueue<PollingJob>(x => x.BlockUntilReleasedAsync());
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 2), "two jobs to start");
+        await WaitForAsync(async () => await CountLeasedAsync() == 5, "the batch to be claimed");
+
+        // more than one polling interval: still 2 running, and the batch held
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(2, _state.BlockedCount);
+        Assert.Equal(5, await CountLeasedAsync());
+
+        // one finishes: a waiting one starts, and 2 still wait, as many as can run: no claim
+        _state.ReleaseOne();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 3), "a waiting job to start");
+        await WaitForAsync(async () => await CountLeasedAsync() == 4, "the finished job's row to be deleted");
+
+        await Task.Delay(TimeSpan.FromSeconds(2));
+
+        Assert.Equal(4, await CountLeasedAsync());
+
+        // another one finishes: only 1 waits, fewer than can run, so the worker claims up to the batch again
+        _state.ReleaseOne();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 4), "the last waiting job to start");
+        await WaitForAsync(async () => await CountLeasedAsync() == 5, "the batch to be refilled");
+
+        Assert.Equal(4, _state.BlockedCount);
+    }
+
+    /// <summary>
+    /// The jobs of a batch that wait for a slot don't start when the worker stops, and their leases are cleared, like the running job's.
+    /// </summary>
+    [Fact]
+    public async Task Stop_WithABatch_DoesntStartTheWaitingJobs_AndClearsTheirLeases()
+    {
+        await CreateHostAsync(capacity: 1, batchSize: 3, shutdownTimeout: 0);
+
+        await WithDbAsync(db =>
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                db.JobEnqueue<PollingJob>(x => x.BlockUntilCancelledAsync(CancellationToken.None));
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 1), "a job to start");
+        await WaitForAsync(async () => await CountLeasedAsync() == 3, "the batch to be claimed");
+
+        await _host.StopAsync();
+
+        Assert.Equal(1, _state.BlockedCount);
+        Assert.Equal(0, await CountLeasedAsync());
+        Assert.Equal(3, await WithDbAsync(db => db.Jobs.CountAsync(j => j.PeriodicJobId == null)));
+        Assert.Equal(0, await WithDbAsync(db => db.JobHistory.CountAsync()));
+    }
+
+    private Task<int> CountLeasedAsync() => WithDbAsync(db => db.Jobs.CountAsync(j => j.PeriodicJobId == null && j.Leaser != null));
 
     [Fact]
     public async Task QuickPoll_WakesAnIdleWorker()
@@ -344,7 +459,7 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
         Assert.Null((await WithDbAsync(db => db.Jobs.AsNoTracking().SingleAsync(j => j.Id == jobId))).Leaser);
     }
 
-    private async Task CreateHostAsync(int capacity, int pollingInterval = 1, int shutdownTimeout = 0)
+    private async Task CreateHostAsync(int capacity, int pollingInterval = 1, int shutdownTimeout = 0, int? batchSize = null)
     {
         var builder = Host.CreateApplicationBuilder();
 
@@ -360,6 +475,11 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
                 .WithPollingInterval(pollingInterval)
                 .WithShutdownTimeout(shutdownTimeout)
                 .WithMaxDegreeOfParallelism(capacity);
+
+            if (batchSize != null)
+            {
+                options.WithBatchSize(batchSize.Value);
+            }
         });
 
         builder.Services.AddSingleton(_state);

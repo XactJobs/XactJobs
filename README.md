@@ -189,7 +189,7 @@ A batch id that doesn't exist is a finished batch without jobs, so its continuat
   The check is one query, which looks at every continuation of the queue that's still waiting, so keep it in mind with many thousands of them.
 - A continuation that waits for its batch is stored with the scheduled time 9999-12-31, so the poll for due jobs never reaches it.
 - With QuickPoll, `JobBatch()` registers the jobs of the batch for the notification. Their continuations don't need it.
-- The history cleanup keeps the history of the batches that continuations still wait for, since it tells if their jobs failed.
+- The history cleanup, if you turn it on (see [Configuration](#configuration)), keeps the history of the batches that continuations still wait for, since it tells if their jobs failed.
 
 ### Transactions
 Jobs participate in DbContext transactions, just like the regular entities in EFCore.
@@ -459,12 +459,13 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
     options
         .WithWorkerCount(2)                         // workers polling the queue
         .WithMaxDegreeOfParallelism(8)              // jobs running at the same time, per worker (default: processor count)
+     // .WithBatchSize(16)                          // jobs a worker claims and holds at a time (default: twice MaxDegreeOfParallelism, see Polling)
         .WithPollingInterval(6)                     // seconds between polls, per worker
         .WithLeaseDuration(120)                     // seconds, extended automatically while a job is running
         .WithShutdownTimeout(10)                    // seconds running jobs get to finish on stop, before they are cancelled
         .WithPeriodicJobReconciliationInterval(300) // seconds between the checks for periodic jobs without a pending run
-        .WithHistoryRetentionPeriodInDays(30)
         .WithSaveOutsideTransaction(XactJobSaveCheck.Warn); // when a job saves without a transaction: Warn, Throw or Ignore (all the queues)
+     // .WithHistoryRetentionPeriodInDays(30)       // deletes the older history every hour (default: the history is kept)
 
     // isolated queues have their own settings
     options.WithLongRunningQueue(queue => queue.WithMaxDegreeOfParallelism(2));
@@ -472,6 +473,11 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 ```
 
 The values above are the defaults, except for `WithMaxDegreeOfParallelism`.
+
+By default the history is kept, and XactJobs deletes nothing. `WithHistoryRetentionPeriodInDays` adds a periodic job, `xj_history_cleanup`,
+which deletes the older history every hour, except the history of the batches that continuations still wait for. Set it the same on
+every node: a node without it removes the cleanup job when it starts. Versions before 0.3.0 always added it, with 30 days: to keep that,
+call `WithHistoryRetentionPeriodInDays(30)`.
 
 # Dashboard
 
@@ -576,11 +582,19 @@ Without the queue and the scheduled time, these routes answer `400`.
 # How Jobs Run
 
 ## Polling
-A worker only claims jobs it can start immediately, up to `MaxDegreeOfParallelism` at a time, so claimed jobs never wait behind a slow job while another
-worker is free. A slow job only occupies its own slot, and the worker keeps claiming jobs for the other slots.
+A worker runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of claimed (leased) jobs: by default twice as many, so that each
+slot has a job waiting for it. A free slot takes the next job the worker holds, oldest first, without waiting for a claim. A slow job only
+occupies its own slot.
 
-If a poll fills all the free slots there is likely a backlog, so the worker polls again as soon as a slot frees up. Otherwise it waits for
-the polling interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own queue.
+If a poll fills the batch there is likely a backlog, so the worker claims again as soon as fewer jobs wait than it can run, instead of once
+for each job that finishes. Otherwise it waits for the polling interval or a QuickPoll notification. Polling can stop only if all the slots
+are occupied, so long-running jobs are best kept in their own queue.
+
+`WithBatchSize` changes the batch. A larger one saves claims, which helps short jobs: on PostgreSQL, 2 workers running 4 no-op jobs at a
+time each drained a backlog about twice as fast with a batch of 100 as with no batch. The cost is that the jobs a worker holds wait for its
+slots, also when another worker is idle, and wait for their leases to expire if the worker crashes. At or below `MaxDegreeOfParallelism`,
+there's no batch: a worker only claims jobs it can start immediately, so they never wait behind a slow job while another worker is free.
+When the worker stops, the jobs it holds that haven't started are released right away, for the other workers.
 
 ## Failures and Retries
 

@@ -39,13 +39,16 @@ public static class DrainBenchmark
         var settings = new DrainSettings(
             Workers: GetOption(args, "--workers", 1),
             Parallelism: GetOption(args, "--parallelism", 1),
-            Postgres: GetString(args, "--postgres"));
+            BatchSize: args.Contains("--batch-size") ? GetOption(args, "--batch-size", 1) : null,
+            Postgres: GetString(args, "--postgres"),
+            Log: args.Contains("--log"));
         var listSql = args.Contains("--sql");
         var only = GetOnly(args);
 
         if (jobs < 2) throw new ArgumentException("--jobs needs at least 2: the first one only starts the measurement");
 
-        Console.WriteLine($"Drain: {jobs} jobs, {settings.Workers} worker(s) running {settings.Parallelism} at a time each, median of {runs} runs after a warm-up");
+        Console.WriteLine($"Drain: {jobs} jobs, {settings.Workers} worker(s) running {settings.Parallelism} at a time each" +
+                          $"{(settings.BatchSize != null ? $", claiming batches of {settings.BatchSize}" : "")}, median of {runs} runs after a warm-up");
         Console.WriteLine($".NET {Environment.Version}, EF Core {GetVersion(typeof(DbContext))}, XactJobs {GetVersion(typeof(XactJob))}, " +
                           $"{(settings.Postgres != null ? "PostgreSQL" : "SQLite in memory")}, {Environment.ProcessorCount} processors");
 #if DEBUG
@@ -105,13 +108,27 @@ public static class DrainBenchmark
 
         builder.Logging.ClearProviders();
 
+        if (settings.Log)
+        {
+            // XactJobs' warnings and errors, e.g. a job that failed
+            builder.Logging.AddSimpleConsole(o => o.SingleLine = true).SetMinimumLevel(LogLevel.Warning);
+        }
+
         builder.Services.AddDbContext<BenchDbContext>(options => database.Configure(options).AddInterceptors(completed, commands));
 
-        builder.Services.AddXactJobs<BenchDbContext>(options => options
-            .WithWorkerCount(settings.Workers)
-            .WithMaxDegreeOfParallelism(settings.Parallelism)
-            .WithPollingInterval(PollingIntervalInSeconds)
-            .WithShutdownTimeout(0));
+        builder.Services.AddXactJobs<BenchDbContext>(options =>
+        {
+            options
+                .WithWorkerCount(settings.Workers)
+                .WithMaxDegreeOfParallelism(settings.Parallelism)
+                .WithPollingInterval(PollingIntervalInSeconds)
+                .WithShutdownTimeout(0);
+
+            if (settings.BatchSize != null)
+            {
+                options.WithBatchSize(settings.BatchSize.Value);
+            }
+        });
 
         using var host = builder.Build();
 
@@ -126,6 +143,9 @@ public static class DrainBenchmark
         await host.StopAsync();
 
         await database.AssertDrainedAsync(jobs);
+
+        if (completed.FailedAttempts > 0) Console.WriteLine($"  XactJobs: {completed.FailedAttempts} failed attempt(s), retried (--log shows why)");
+        if (completed.PeriodicRuns > 0) Console.WriteLine($"  XactJobs: its own periodic job ran {completed.PeriodicRuns} time(s) during the drain (not counted)");
 
         if (listSql) commands.Print("XactJobs", measurement.Jobs);
 
@@ -153,6 +173,8 @@ public static class DrainBenchmark
         await slots;
 
         await database.AssertDrainedAsync(jobs);
+
+        if (completed.FailedAttempts > 0) Console.WriteLine($"  plain EF: {completed.FailedAttempts} failed attempt(s)");
 
         if (listSql) commands.Print("plain EF", measurement.Jobs);
 
@@ -230,7 +252,8 @@ public static class DrainBenchmark
         return args[index + 1];
     }
 
-    private sealed record DrainSettings(int Workers, int Parallelism, string? Postgres);
+    // the plain EF baseline doesn't batch: each of its slots claims one job
+    private sealed record DrainSettings(int Workers, int Parallelism, int? BatchSize, string? Postgres, bool Log);
 
     private static int GetOption(string[] args, string name, int defaultValue)
     {
@@ -255,10 +278,22 @@ public static class DrainBenchmark
         private readonly TaskCompletionSource _allCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         private int _count;
+        private int _failedAttempts;
+        private int _periodicRuns;
 
         public int Expected => expected;
 
         public int Count => Volatile.Read(ref _count);
+
+        /// <summary>
+        /// History rows of the other statuses, e.g. a failed attempt: its retry is still to run. --log shows why it failed.
+        /// </summary>
+        public int FailedAttempts => Volatile.Read(ref _failedAttempts);
+
+        /// <summary>
+        /// Runs of XactJobs' own periodic jobs, e.g. the history cleanup, every hour on the hour: not the benchmark's jobs, not counted.
+        /// </summary>
+        public int PeriodicRuns => Volatile.Read(ref _periodicRuns);
 
         public Task FirstCompleted => _firstCompleted.Task;
 
@@ -266,11 +301,22 @@ public static class DrainBenchmark
 
         public override ValueTask<int> SavedChangesAsync(SaveChangesCompletedEventData eventData, int result, CancellationToken cancellationToken = default)
         {
-            var historyRows = eventData.Context!.ChangeTracker.Entries<XactJobHistory>().Count();
+            var allHistoryRows = eventData.Context!.ChangeTracker.Entries<XactJobHistory>().ToList();
 
-            if (historyRows > 0)
+            // the benchmark's jobs: a run of XactJobs' own periodic jobs (e.g. the hourly history cleanup, if it's turned on) would end
+            // the drain one job early otherwise
+            var historyRows = allHistoryRows.Where(e => e.Entity.PeriodicJobId == null).ToList();
+
+            Interlocked.Add(ref _periodicRuns, allHistoryRows.Count - historyRows.Count);
+
+            // only the completions end the drain: a failed attempt's retry is still to run
+            var completedRows = historyRows.Count(e => e.Entity.Status == XactJobStatus.Completed);
+
+            Interlocked.Add(ref _failedAttempts, historyRows.Count - completedRows);
+
+            if (completedRows > 0)
             {
-                var count = Interlocked.Add(ref _count, historyRows);
+                var count = Interlocked.Add(ref _count, completedRows);
 
                 _firstCompleted.TrySetResult();
 
@@ -443,12 +489,25 @@ public static class DrainBenchmark
         {
             await using var db = CreateDb();
 
-            // the host adds XactJobs' own periodic job (the history cleanup), and its next run
+            // XactJobs' own periodic jobs, e.g. the history cleanup if it's turned on, aren't the benchmark's
             var left = await db.Jobs.CountAsync(j => j.PeriodicJobId == null);
             var completed = await db.JobHistory.CountAsync(h => h.PeriodicJobId == null && h.Status == XactJobStatus.Completed);
 
             if (left != 0 || completed != jobs)
             {
+                var leftRows = await db.Jobs.AsNoTracking().Where(j => j.PeriodicJobId == null).Take(5).ToListAsync();
+                var otherHistory = await db.JobHistory.AsNoTracking().Where(h => h.PeriodicJobId == null && h.Status != XactJobStatus.Completed).Take(5).ToListAsync();
+
+                foreach (var j in leftRows)
+                {
+                    Console.WriteLine($"  left: id={j.Id} scheduled_at={j.ScheduledAt:O} errors={j.ErrorCount} leased_until={j.LeasedUntil:O} originally={j.OriginallyScheduledAt:O}");
+                }
+
+                foreach (var h in otherHistory)
+                {
+                    Console.WriteLine($"  history: id={h.Id} status={h.Status} processed_at={h.ProcessedAt:O} error={h.ErrorMessage}");
+                }
+
                 throw new InvalidOperationException($"Expected {jobs} completed jobs and none left, but {completed} completed and {left} are left");
             }
         }

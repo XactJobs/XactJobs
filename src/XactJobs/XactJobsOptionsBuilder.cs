@@ -34,6 +34,20 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
+        /// <summary>
+        /// The most jobs a worker claims and holds at a time, running <see cref="XactJobsOptionsBase{TDbContext}.MaxDegreeOfParallelism"/>
+        /// of them at once. Default: twice MaxDegreeOfParallelism, so each slot has a job waiting for it. At or below MaxDegreeOfParallelism,
+        /// a worker only claims jobs it can start immediately. A larger batch means fewer claims, but the jobs a worker holds wait for its
+        /// free slots, also when another worker is idle.
+        /// </summary>
+        public TBuilder WithBatchSize(int batchSize)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(batchSize, 1);
+
+            Options.BatchSize = batchSize;
+            return (this as TBuilder)!;
+        }
+
         public TBuilder WithWorkerCount(int workerCount)
         {
             Options.WorkerCount = workerCount;
@@ -101,6 +115,10 @@ namespace XactJobs
     public class XactJobsOptionsBuilder<TDbContext>: XactJobsOptionsBuilderBase<TDbContext, XactJobsOptions<TDbContext>, XactJobsOptionsBuilder<TDbContext>>
         where TDbContext : DbContext
     {
+        /// <summary>
+        /// Deletes the history older than this many days, every hour, with a periodic job (xj_history_cleanup). By default the history is
+        /// kept. Set it the same on every node: a node without it removes the cleanup job.
+        /// </summary>
         public XactJobsOptionsBuilder<TDbContext> WithHistoryRetentionPeriodInDays(int days)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(days, 1);

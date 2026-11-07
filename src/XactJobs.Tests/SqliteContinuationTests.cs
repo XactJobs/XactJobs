@@ -12,6 +12,7 @@ public class SqliteContinuationTests : IAsyncLifetime
     private const string NotPolled = "not-polled";
     private const string Reports = "reports";
     private const string CleanupJobId = "xj_history_cleanup";
+    private const string EnsuredJobId = "ensured";
 
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(30);
 
@@ -364,7 +365,7 @@ public class SqliteContinuationTests : IAsyncLifetime
     [Fact]
     public async Task HistoryCleanup_KeepsTheHistoryOfBatchesThatContinuationsWaitFor()
     {
-        await CreateHostAsync();
+        await CreateHostAsync(historyRetentionPeriodInDays: 30);
 
         var waited = Guid.NewGuid();
         var finished = Guid.NewGuid();
@@ -392,6 +393,57 @@ public class SqliteContinuationTests : IAsyncLifetime
         await WaitForHistoryAsync(db => db.JobHistory.Where(h => h.PeriodicJobId == CleanupJobId), 1);
 
         Assert.Equal([1001, 1004], await WithDbAsync(db => db.JobHistory.Where(h => h.PeriodicJobId == null).Select(h => h.Id).OrderBy(id => id).ToListAsync()));
+    }
+
+    /// <summary>
+    /// Without a retention period, the history is kept: no cleanup job deletes it.
+    /// </summary>
+    [Fact]
+    public async Task ByDefault_NoHistoryCleanupJobIsAdded()
+    {
+        await CreateHostAsync();
+
+        await StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(db => db.PeriodicJobs.AnyAsync(p => p.Id == EnsuredJobId)));
+
+        Assert.False(await WithDbAsync(db => db.PeriodicJobs.AnyAsync(p => p.Id == CleanupJobId)));
+        Assert.False(await WithDbAsync(db => db.Jobs.AnyAsync(j => j.PeriodicJobId == CleanupJobId)));
+    }
+
+    /// <summary>
+    /// Versions before 0.3.0 always added the cleanup, with a retention of 30 days: without a retention period, it's removed at start.
+    /// </summary>
+    [Fact]
+    public async Task WithoutARetentionPeriod_TheCleanupJobOfAnOlderVersionIsRemoved()
+    {
+        await CreateHostAsync();
+
+        // stands for the old cleanup job: only its id matters
+        await WithDbAsync(async db =>
+        {
+            await db.JobEnsurePeriodicAsync<BatchJobs>(x => x.Record("old cleanup"), CleanupJobId, Cron.HourInterval(1), CancellationToken.None);
+
+            return await db.SaveChangesAsync();
+        });
+
+        await StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(db => db.PeriodicJobs.AnyAsync(p => p.Id == EnsuredJobId)));
+
+        Assert.False(await WithDbAsync(db => db.PeriodicJobs.AnyAsync(p => p.Id == CleanupJobId)));
+    }
+
+    [Fact]
+    public async Task WithARetentionPeriod_TheCleanupJobIsAdded()
+    {
+        await CreateHostAsync(historyRetentionPeriodInDays: 7);
+
+        await StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(db => db.PeriodicJobs.AnyAsync(p => p.Id == CleanupJobId)));
+
+        Assert.True(await WithDbAsync(db => db.Jobs.AnyAsync(j => j.PeriodicJobId == CleanupJobId)));
     }
 
     [Fact]
@@ -486,7 +538,7 @@ public class SqliteContinuationTests : IAsyncLifetime
         };
     }
 
-    private async Task CreateHostAsync(int pollingIntervalInSeconds = 1, bool useSqlScripts = false)
+    private async Task CreateHostAsync(int pollingIntervalInSeconds = 1, bool useSqlScripts = false, int? historyRetentionPeriodInDays = null)
     {
         var builder = Host.CreateApplicationBuilder();
 
@@ -494,11 +546,21 @@ public class SqliteContinuationTests : IAsyncLifetime
 
         builder.Services.AddDbContext<TestDbContext>(options => options.UseSqlite(_connectionString));
 
-        builder.Services.AddXactJobs<TestDbContext>(options => options
-            .WithWorkerCount(1)
-            .WithPollingInterval(pollingIntervalInSeconds)
-            .WithRetryStrategy(new QuickRetry())
-            .WithIsolatedQueue(Reports, q => q.WithWorkerCount(1).WithPollingInterval(pollingIntervalInSeconds)));
+        builder.Services.AddXactJobs<TestDbContext>(options =>
+        {
+            options
+                .WithWorkerCount(1)
+                .WithPollingInterval(pollingIntervalInSeconds)
+                .WithRetryStrategy(new QuickRetry())
+                .WithIsolatedQueue(Reports, q => q.WithWorkerCount(1).WithPollingInterval(pollingIntervalInSeconds))
+                // the scheduler's cycle has run once this exists
+                .WithPeriodicJob<BatchJobs>(x => x.Record("ensured"), EnsuredJobId, "0 0 0 1 1 *");
+
+            if (historyRetentionPeriodInDays != null)
+            {
+                options.WithHistoryRetentionPeriodInDays(historyRetentionPeriodInDays.Value);
+            }
+        });
 
         builder.Services.AddSingleton(_log);
         builder.Services.AddScoped<BatchJobs>();

@@ -30,9 +30,17 @@ namespace XactJobs
 
         /// <summary>
         /// The most jobs running at the same time per worker. Default -1 (means ProcessorCount).
-        /// A worker only claims jobs it can start immediately, so this is also the most jobs it claims at a time.
+        /// A worker also holds jobs waiting for a slot: see <see cref="BatchSize"/>, by default twice this.
         /// </summary>
         public int MaxDegreeOfParallelism { get; set; } = -1;
+
+        /// <summary>
+        /// The most jobs a worker claims and holds at a time, running <see cref="MaxDegreeOfParallelism"/> of them at once.
+        /// Default -1 (means twice MaxDegreeOfParallelism: each slot has a job waiting for it). At or below MaxDegreeOfParallelism,
+        /// a worker only claims jobs it can start immediately.
+        /// A larger batch means fewer claims, but the jobs a worker holds wait for its free slots, also when another worker is idle.
+        /// </summary>
+        public int BatchSize { get; set; } = -1;
 
         /// <summary>
         /// Default 120 (jobs runner will prolong the lease every 3/4 of this time)
@@ -77,11 +85,11 @@ namespace XactJobs
     public class XactJobsOptions<TDbContext>: XactJobsOptionsBase<TDbContext> where TDbContext: DbContext
     {
         /// <summary>
-        /// Gets or sets the number of days for which historical data is retained.
+        /// How many days the history is kept. Default null: the history is kept, and nothing is deleted.
+        /// When it's set, a periodic job (xj_history_cleanup) deletes the older history every hour, except the history of the batches
+        /// that continuations still wait for. Set it the same on every node: a node without it removes the cleanup job.
         /// </summary>
-        /// <remarks>Adjust this value to control how long historical data is kept. Setting a lower value
-        /// may reduce storage usage,  while a higher value retains data for longer periods.</remarks>
-        public int HistoryRetentionPeriodInDays { get; set; } = 30;
+        public int? HistoryRetentionPeriodInDays { get; set; }
 
         /// <summary>
         /// How often each node looks for active periodic jobs without a pending run, and schedules their next run.

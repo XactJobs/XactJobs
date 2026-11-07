@@ -30,7 +30,10 @@ namespace XactJobs.Internal
 
         public async Task CleanupJobHistoryAsync(CancellationToken cancellationToken)
         {
-            var deleteBeforeUtc = DateTime.UtcNow.Subtract(TimeSpan.FromDays(_options.HistoryRetentionPeriodInDays));
+            // a run scheduled by another node, on a node without a retention period: nothing to delete
+            if (_options.HistoryRetentionPeriodInDays is not { } days) return;
+
+            var deleteBeforeUtc = DateTime.UtcNow.Subtract(TimeSpan.FromDays(days));
 
             var jobs = _db.Set<XactJob>();
 
