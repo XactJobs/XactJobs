@@ -42,6 +42,8 @@ public class SerializerValidationTests : IDisposable
         ("method of another instance", db => db.JobEnqueue<InstanceJobs>(x => new InstanceJobs().Run())),
         ("instance method from a static lambda", db => db.JobEnqueue(() => new InstanceJobs().Run())),
         ("periodic generic method", db => db.JobEnsurePeriodic<InvalidJobs>(x => x.Generic(1), "golden_invalid", Cron.Daily())),
+        ("local scheduled time", db => db.JobScheduleAt(() => StaticJobs.NoArgs(), new DateTime(2026, 3, 14, 15, 9, 26, DateTimeKind.Local))),
+        ("unspecified scheduled time", db => db.JobScheduleAt(() => StaticJobs.NoArgs(), new DateTime(2026, 3, 14, 15, 9, 26, DateTimeKind.Unspecified))),
     ];
 
     /// <summary>The exception each case is rejected with, or null if it's accepted.</summary>
@@ -57,6 +59,8 @@ public class SerializerValidationTests : IDisposable
         ["method of another instance"] = null, // stored as InstanceJobs.Run(): the worker creates its own instance
         ["instance method from a static lambda"] = null, // the same
         ["periodic generic method"] = null, // the same gap
+        ["local scheduled time"] = typeof(System.ArgumentException),
+        ["unspecified scheduled time"] = typeof(System.ArgumentException),
     };
 
     public static TheoryData<string> CaseNames()
