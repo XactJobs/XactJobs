@@ -6,6 +6,30 @@ Supports **SQL Server, PostgreSQL, MySQL, Oracle and SQLite**, on .NET 8, 9 and 
 
 XactJobs uses EF Core 9 on .NET 8 and 9, and EF Core 10 on .NET 10, so your database provider has to support that version. For MySQL, see [which provider to use](#mysql).
 
+## A Job Is a Unit of Work
+**The worker saves a job's database changes, not the job.** Changes a job makes through the injected `TDbContext` are saved when the job finishes, in the same transaction that marks it as completed:
+
+- **Exactly once.** If a lease expires and another worker runs the job again, only one of the runs can commit, so the changes happen once.
+- **No transaction stays open while the job runs**, unless the job opens one. The changes wait in EF's change tracker, and are written at the end in one short transaction.
+- **Don't call `SaveChanges` in a job**, or call it only inside a transaction you open and don't commit: the worker commits it. Changes saved any other way are permanent right away, even if the job then fails.
+- **Returning saves.** Returning normally, even early, saves the pending changes and records the job as completed. A job that wants to stop without saving must throw instead.
+- **Throwing discards.** Any exception discards the pending changes, and the job is retried. To stop a job that can never succeed, e.g. because the data it works on is gone, throw `XactJobCancelException`: its changes are discarded too, but it isn't retried, and it moves to the history as cancelled, with the exception's message.
+
+```csharp
+public class InvoiceJob(UserDbContext db)
+{
+    public async Task CreateInvoiceAsync(int orderId)
+    {
+        var order = await db.Orders.FindAsync(orderId)
+            ?? throw new XactJobCancelException($"Order {orderId} doesn't exist anymore");
+
+        db.Invoices.Add(new Invoice(order.Id)); // no SaveChanges: the worker saves it when the job finishes
+    }
+}
+```
+
+The details are in [Exactly-Once Database Effects](#exactly-once-database-effects), and for `XactJobCancelException` in [Failures and Retries](#failures-and-retries).
+
 ## Status
 XactJobs is pre-1.0. The core is tested on all five databases, with an integration test suite running against each one (SQLite in-process, the others in containers): transactional enqueue, claiming and leasing, retries, batches and continuations, and periodic jobs.
 
@@ -545,7 +569,7 @@ the polling interval or a QuickPoll notification. Polling can stop only if all t
 
 ## Failures and Retries
 
-When a job throws, its database writes are rolled back, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to an hour), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
+When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to an hour), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
 
 A job that finds it can never succeed, e.g. because the data it works on is gone, throws `XactJobCancelException` to stop without retries:
 
@@ -559,7 +583,7 @@ public async Task SendInvoiceAsync(int orderId)
 }
 ```
 
-The job moves to the history as cancelled right away, with the exception's message as the error. As with any failure, its database writes are rolled back. The exception is also found when it's wrapped in other exceptions. For a periodic job, only the current run is cancelled: the next one is scheduled as usual.
+The job moves to the history as cancelled right away, with the exception's message as the error. As with any failure, its pending database changes are discarded. The exception is also found when it's wrapped in other exceptions. For a periodic job, only the current run is cancelled: the next one is scheduled as usual.
 
 A job that has nothing to do should just return: it's recorded as completed.
 
@@ -579,16 +603,7 @@ A job that ignores the cancellation token may still be running when its lease is
 A lease can expire while a job is still running, for example if a node loses its database connection for a while. Another worker can then run the same job. For the database writes
 this is safe, as long as the job uses the scoped `TDbContext` injected into its class and does one of these two things:
 
-- **Doesn't save its changes.** The worker saves them when the job finishes:
-  ```csharp
-  public class InvoiceJob(UserDbContext db)
-  {
-      public void CreateInvoice(int orderId)
-      {
-          db.Invoices.Add(new Invoice(orderId));
-      }
-  }
-  ```
+- **Doesn't save its changes.** The worker saves them when the job finishes, as in the [example above](#a-job-is-a-unit-of-work).
 - **Saves its changes inside a transaction it doesn't commit.** The worker commits it when the job finishes:
   ```csharp
   public async Task CreateInvoiceAsync(int orderId, CancellationToken cancellationToken)
