@@ -60,6 +60,48 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
         }
     }
 
+    /// <summary>
+    /// The claim saves the claim time as the continuation's original time, and a second claim, after the lease expired, keeps it.
+    /// PostgreSQL, SQL Server and SQLite return the rows after the lease, so they have it at once. MySQL and Oracle return them
+    /// as they were before this claim's lease: null on the first claim (the worker then uses its claim time, the value it saved),
+    /// and the saved value on the second one, which reads the first claim's committed rows.
+    /// </summary>
+    [DockerFact]
+    public async Task Claim_SavesTheClaimTime_AndASecondClaimAfterTheLeaseExpiredKeepsIt()
+    {
+        var host = CreateHost();
+
+        var continuation = await WithDbAsync(host, async db =>
+        {
+            var continuation = NewContinuation("q", Guid.NewGuid());
+
+            db.Jobs.Add(continuation);
+
+            await db.SaveChangesAsync();
+
+            return continuation;
+        });
+
+        var claimedA = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc).AddTicks(1234560);
+        var claimedB = claimedA.AddSeconds(5);
+
+        var first = Assert.Single(await ClaimContinuationsAsync(host, "q", 10, Guid.NewGuid(), claimedA));
+
+        bool returnsRowsBeforeTheLease = fixture.Dialect is XactJobs.Internal.SqlDialects.MySqlDialect or XactJobs.Internal.SqlDialects.OracleDialect;
+
+        Assert.Equal(returnsRowsBeforeTheLease ? null : claimedA, first.OriginallyScheduledAt);
+        Assert.Equal(claimedA, await GetOriginallyScheduledAtAsync(host, continuation.Id));
+
+        await WithDbAsync(host, db => db.Jobs
+            .Where(j => j.Id == continuation.Id)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.LeasedUntil, DateTime.UtcNow.AddMinutes(-1))));
+
+        var second = Assert.Single(await ClaimContinuationsAsync(host, "q", 10, Guid.NewGuid(), claimedB));
+
+        Assert.Equal(claimedA, second.OriginallyScheduledAt);
+        Assert.Equal(claimedA, await GetOriginallyScheduledAtAsync(host, continuation.Id));
+    }
+
     [DockerFact]
     public async Task Claim_TakesOnlyTheContinuationsOfFinishedBatches_OnTheQueue()
     {
@@ -375,13 +417,18 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
         return host;
     }
 
-    private async Task<List<XactJob>> ClaimContinuationsAsync(IHost host, string queue, int maxJobs, Guid leaser)
+    private async Task<List<XactJob>> ClaimContinuationsAsync(IHost host, string queue, int maxJobs, Guid leaser, DateTime? claimedAt = null)
     {
         using var scope = host.Services.CreateScope();
 
         DbContext db = scope.ServiceProvider.GetRequiredService<TestDbContext>();
 
-        return await fixture.Dialect.ClaimContinuationsAsync(db, queue, maxJobs, leaser, 60, CancellationToken.None);
+        return await fixture.Dialect.ClaimContinuationsAsync(db, queue, maxJobs, leaser, 60, claimedAt ?? DateTime.UtcNow, CancellationToken.None);
+    }
+
+    private static Task<DateTime?> GetOriginallyScheduledAtAsync(IHost host, long jobId)
+    {
+        return WithDbAsync(host, db => db.Jobs.AsNoTracking().Where(j => j.Id == jobId).Select(j => j.OriginallyScheduledAt).SingleAsync());
     }
 
     private TestDbContext CreateDb()

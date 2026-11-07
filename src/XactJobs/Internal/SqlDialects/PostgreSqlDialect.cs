@@ -86,13 +86,14 @@ WHERE -- we need to join on all these, since these are the PK
 RETURNING {XactJobSchema}.{XactJobTable}.*
 ", [queueName ?? QueueNames.Default, maxJobs, leaser, leaseDurationInSeconds]);
 
-        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt, CancellationToken cancellationToken)
         {
-            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
+            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds, claimedAt), cancellationToken);
         }
 
-        // the batch's jobs are read without locking them (FOR UPDATE OF c), so a job that's being retried can't be skipped
-        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
+        // The batch's jobs are read without locking them (FOR UPDATE OF c), so a job that's being retried can't be skipped.
+        // The original time isn't indexed, so setting it keeps the claim a HOT update.
+        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt) => ($@"
 WITH cte AS (
   SELECT c.{ColId}, c.{ColQueue}, c.{ColScheduledAt}
   FROM {XactJobSchema}.{XactJobTable} AS c
@@ -106,14 +107,15 @@ WITH cte AS (
   LIMIT {{2}}
 )
 UPDATE {XactJobSchema}.{XactJobTable}
-SET {ColLeaser} = {{3}}, {ColLeasedUntil} = current_timestamp + make_interval(secs => {{4}}::double precision)
+SET {ColLeaser} = {{3}}, {ColLeasedUntil} = current_timestamp + make_interval(secs => {{4}}::double precision),
+    {ColOriginallyScheduledAt} = COALESCE({XactJobSchema}.{XactJobTable}.{ColOriginallyScheduledAt}, {{5}})
 FROM cte
 WHERE
     {XactJobSchema}.{XactJobTable}.{ColId} = cte.{ColId}
     AND {XactJobSchema}.{XactJobTable}.{ColQueue} = cte.{ColQueue}
     AND {XactJobSchema}.{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
 RETURNING {XactJobSchema}.{XactJobTable}.*
-", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs, leaser, leaseDurationInSeconds]);
+", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs, leaser, leaseDurationInSeconds, claimedAt]);
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds) => ($@"
 UPDATE {XactJobSchema}.{XactJobTable} AS j

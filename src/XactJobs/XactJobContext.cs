@@ -34,7 +34,8 @@ namespace XactJobs
         /// <item>A job: the time it was scheduled for, also when it runs late, when the dashboard's Run now moved it to now,
         /// or when it's retried from the dashboard's history.</item>
         /// <item>A run of a periodic job: its cron slot.</item>
-        /// <item>A continuation: the time its first attempt was claimed, once its batch was finished.</item>
+        /// <item>A continuation: the time its first attempt was claimed, once its batch was finished. The claim saves it,
+        /// so a second run of that attempt, after its lease expired, gets the same time.</item>
         /// </list>
         /// </summary>
         public DateTime OriginallyScheduledAt { get; }

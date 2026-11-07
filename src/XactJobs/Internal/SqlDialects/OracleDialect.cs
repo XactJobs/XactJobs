@@ -78,17 +78,17 @@ namespace XactJobs.Internal.SqlDialects
     ORDER BY {ColScheduledAt}
     FOR UPDATE SKIP LOCKED", [queueName ?? QueueNames.Default], ColScheduledAt, maxJobs, leaser, leaseDurationInSeconds);
 
-        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt, CancellationToken cancellationToken)
         {
             // BULK COLLECT needs a positive LIMIT
             if (maxJobs <= 0) return Task.FromResult(new List<XactJob>());
 
-            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
+            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds, claimedAt), cancellationToken);
         }
 
         // the continuations whose batch has no jobs left, in id order (see GetFetchSql). Only the rows of the outer query are locked:
         // the batch's jobs are a consistent read, which doesn't skip rows.
-        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => GetFetchSql($@"
+        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt) => GetFetchSql($@"
     SELECT /*+ INDEX_ASC(c ({ColQueue}, {ColScheduledAt}, {ColId})) */ ROWIDTOCHAR(c.ROWID)
     FROM {Table} c
     WHERE c.{ColQueue} = {{0}}
@@ -97,7 +97,7 @@ namespace XactJobs.Internal.SqlDialects
       AND (c.{ColLeasedUntil} IS NULL OR c.{ColLeasedUntil} < SYS_EXTRACT_UTC(systimestamp))
       AND NOT EXISTS (SELECT 1 FROM {Table} b WHERE b.{ColBatchId} = c.{ColAwaitsBatchId})
     ORDER BY c.{ColId}
-    FOR UPDATE SKIP LOCKED", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt], ColId, maxJobs, leaser, leaseDurationInSeconds);
+    FOR UPDATE SKIP LOCKED", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt], ColId, maxJobs, leaser, leaseDurationInSeconds, claimedAt);
 
         // SYS.ODCIVARCHAR2LIST, which holds the claimed rows, is a VARRAY(32767)
         private const int MaxJobsPerClaim = 32767;
@@ -117,12 +117,26 @@ namespace XactJobs.Internal.SqlDialects
         /// before the lease, so it reads the rows as they were then (like the other dialects that lock, then lease).
         /// DBMS_SQL.RETURN_RESULT needs Oracle 12c or later.
         /// </para>
+        /// <para>
+        /// For continuations, <paramref name="claimedAt"/> sets their original time, if it isn't set yet (see ISqlDialect.ClaimContinuationsAsync).
+        /// The result has the value of an earlier claim: the cursor reads the committed rows.
+        /// </para>
         /// </summary>
-        private (string Sql, object[] Parameters) GetFetchSql(string lockRows, object[] lockParameters, string orderBy, int maxJobs, Guid leaser, int leaseDurationInSeconds)
+        private (string Sql, object[] Parameters) GetFetchSql(string lockRows, object[] lockParameters, string orderBy, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime? claimedAt = null)
         {
             var limit = lockParameters.Length;
             var leaserParameter = limit + 1;
             var durationParameter = limit + 2;
+            var claimedAtParameter = limit + 3;
+
+            var setOriginallyScheduledAt = claimedAt.HasValue
+                ? $@",
+        {ColOriginallyScheduledAt} = COALESCE({ColOriginallyScheduledAt}, {{{claimedAtParameter}}})"
+                : "";
+
+            object[] parameters = claimedAt.HasValue
+                ? [.. lockParameters, Math.Min(maxJobs, MaxJobsPerClaim), leaser.ToString("N"), leaseDurationInSeconds, claimedAt.Value]
+                : [.. lockParameters, Math.Min(maxJobs, MaxJobsPerClaim), leaser.ToString("N"), leaseDurationInSeconds];
 
             return ($@"
 DECLARE
@@ -143,11 +157,11 @@ BEGIN
   FORALL i IN 1 .. claimed.COUNT
     UPDATE {Table}
     SET {ColLeaser} = HEXTORAW({{{leaserParameter}}}),
-        {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + NUMTODSINTERVAL({{{durationParameter}}}, 'SECOND')
+        {ColLeasedUntil} = SYS_EXTRACT_UTC(systimestamp) + NUMTODSINTERVAL({{{durationParameter}}}, 'SECOND'){setOriginallyScheduledAt}
     WHERE ROWID = CHARTOROWID(claimed(i));
 
   DBMS_SQL.RETURN_RESULT(result);
-END;", [.. lockParameters, Math.Min(maxJobs, MaxJobsPerClaim), leaser.ToString("N"), leaseDurationInSeconds]);
+END;", parameters);
         }
 
         private string Table => $"{XactJobSchema}_{XactJobTable}";

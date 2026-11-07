@@ -74,12 +74,12 @@ RETURNING *
 ", [queueName ?? QueueNames.Default, maxJobs, leaser.ToString(), leaseDurationInSeconds]);
 
         // The primary key is just the id on Sqlite (see XactJobEntityConfiguration).
-        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt, CancellationToken cancellationToken)
         {
-            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
+            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds, claimedAt), cancellationToken);
         }
 
-        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
+        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt) => ($@"
 WITH cte AS (
   SELECT c.{ColId}
   FROM {XactJobSchema}_{XactJobTable} AS c
@@ -93,11 +93,12 @@ WITH cte AS (
 )
 UPDATE {XactJobSchema}_{XactJobTable}
 SET {ColLeaser} = {{3}},
-    {ColLeasedUntil} = datetime('subsec', '+' || {{4}} || ' seconds')
+    {ColLeasedUntil} = datetime('subsec', '+' || {{4}} || ' seconds'),
+    {ColOriginallyScheduledAt} = COALESCE({ColOriginallyScheduledAt}, {{5}})
 FROM cte
 WHERE {XactJobSchema}_{XactJobTable}.{ColId} = cte.{ColId}
 RETURNING *
-", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs, leaser.ToString(), leaseDurationInSeconds]);
+", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs, leaser.ToString(), leaseDurationInSeconds, claimedAt]);
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {

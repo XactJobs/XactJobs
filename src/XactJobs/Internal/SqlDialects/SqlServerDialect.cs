@@ -85,14 +85,14 @@ INNER JOIN cte ON -- we need to join on the entire PK
     AND target.[{ColScheduledAt}] = cte.[{ColScheduledAt}]
 ", [maxJobs, queueName ?? QueueNames.Default, leaser, leaseDurationInSeconds]);
 
-        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, CancellationToken cancellationToken)
+        public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt, CancellationToken cancellationToken)
         {
-            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
+            return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds, claimedAt), cancellationToken);
         }
 
         // The batch's jobs are read without READPAST, so a job that's being retried is waited for instead of skipped.
         // Without snapshot isolation, a reader can miss a row inserted behind it: so a retry is inserted before the failed attempt is deleted.
-        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
+        public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt) => ($@"
 WITH cte AS (
     SELECT TOP ({{0}}) c.[{ColId}], c.[{ColQueue}], c.[{ColScheduledAt}]
     FROM [{XactJobSchema}].[{XactJobTable}] AS c WITH (UPDLOCK, READPAST, ROWLOCK)
@@ -105,14 +105,15 @@ WITH cte AS (
 )
 UPDATE target
 SET [{ColLeaser}] = {{3}},
-    [{ColLeasedUntil}] = DATEADD(SECOND, {{4}}, SYSUTCDATETIME())
+    [{ColLeasedUntil}] = DATEADD(SECOND, {{4}}, SYSUTCDATETIME()),
+    [{ColOriginallyScheduledAt}] = COALESCE(target.[{ColOriginallyScheduledAt}], {{5}})
 OUTPUT inserted.*
 FROM [{XactJobSchema}].[{XactJobTable}] AS target
 INNER JOIN cte ON
     target.[{ColId}] = cte.[{ColId}]
     AND target.[{ColQueue}] = cte.[{ColQueue}]
     AND target.[{ColScheduledAt}] = cte.[{ColScheduledAt}]
-", [maxJobs, queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, leaser, leaseDurationInSeconds]);
+", [maxJobs, queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, leaser, leaseDurationInSeconds, claimedAt]);
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {

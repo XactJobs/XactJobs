@@ -150,6 +150,99 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
     }
 
     /// <summary>
+    /// The first attempt of a continuation keeps the time of its first claim: when its lease expires while it runs,
+    /// and another worker runs it again, both runs see the same time, and so build the same idempotency key.
+    /// </summary>
+    public async Task Continuation_RunAgainAfterItsLeaseExpired_SeesTheTimeOfTheFirstClaim()
+    {
+        // one job at a time, so that worker A can't claim the continuation again itself
+        var workerA = CreateHost(options => options.WithMaxDegreeOfParallelism(1));
+
+        var continuationId = await WithDbAsync(workerA, async db =>
+        {
+            var continuation = db.JobBatch()
+                .Enqueue<ScheduleJob>(x => x.Run("lease-batch", 0, null!))
+                .ContinueWith<ScheduleJob>(x => x.BlockAsync("lease-continuation", null!, CancellationToken.None));
+
+            await db.SaveChangesAsync();
+
+            return continuation.Id;
+        });
+
+        await workerA.StartAsync();
+
+        await WaitForAsync(() => _state.RunsOf("lease-continuation").Count == 1, "worker A to run the continuation");
+
+        // A's lease expires while the continuation still runs (A extends it only after 3/4 of its duration)
+        await WithDbAsync(workerA, db => db.Jobs
+            .Where(j => j.Id == continuationId)
+            .ExecuteUpdateAsync(s => s.SetProperty(j => j.LeasedUntil, DateTime.UtcNow.AddMinutes(-1))));
+
+        var workerB = CreateHost();
+
+        await workerB.StartAsync();
+
+        await WaitForAsync(() => _state.RunsOf("lease-continuation").Count == 2, "worker B to run the continuation again");
+
+        var runs = _state.RunsOf("lease-continuation");
+
+        Assert.NotEqual(XactJobBase.AwaitingBatchScheduledAt, runs[0]);
+        Assert.Equal(runs[0], runs[1]);
+
+        // the time of A's claim is stored in the row
+        var stored = await WithDbAsync(workerB, db => db.Jobs.AsNoTracking().Where(j => j.Id == continuationId).Select(j => j.OriginallyScheduledAt).SingleAsync());
+
+        Assert.Equal(runs[0], stored);
+    }
+
+    /// <summary>
+    /// The claims of regular jobs and periodic runs don't set the column: it stays null, or keeps the value of a retry.
+    /// </summary>
+    public async Task RegularAndPeriodicClaims_DontSetTheColumn()
+    {
+        var host = CreateHost(options => options.WithMaxDegreeOfParallelism(4));
+
+        var at = WholeSeconds(DateTime.UtcNow.AddMinutes(-1));
+        var original = WholeSeconds(DateTime.UtcNow.AddMinutes(-10));
+
+        await WithDbAsync(host, db =>
+        {
+            var template = db.JobEnqueue<ScheduleJob>(x => x.BlockAsync("retry", null!, CancellationToken.None));
+
+            db.ChangeTracker.Clear();
+
+            db.Jobs.Add(new XactJob(0, at, template.TypeName, template.MethodName, template.MethodArgs, template.Queue, errorCount: 1) { OriginallyScheduledAt = original });
+
+            db.JobScheduleAt<ScheduleJob>(x => x.BlockAsync("regular", null!, CancellationToken.None), at);
+
+            db.JobEnsurePeriodic<ScheduleJob>(x => x.BlockAsync("periodic", null!, CancellationToken.None), "blocking_periodic", "* * * * * *");
+
+            return db.SaveChangesAsync();
+        });
+
+        await host.StartAsync();
+
+        await WaitForAsync(() => new[] { "regular", "retry", "periodic" }.All(name => _state.RunsOf(name).Count == 1), "the three jobs to run");
+
+        // claimed and running
+        var rows = await WithDbAsync(host, db => db.Jobs.AsNoTracking().Where(j => j.LeasedUntil > DateTime.UtcNow).ToListAsync());
+
+        Assert.Equal(3, rows.Count);
+
+        var regular = Assert.Single(rows, j => j.MethodArgs.StartsWith("[\"regular\""));
+        var retry = Assert.Single(rows, j => j.MethodArgs.StartsWith("[\"retry\""));
+        var periodic = Assert.Single(rows, j => j.PeriodicJobId == "blocking_periodic");
+
+        Assert.Null(regular.OriginallyScheduledAt);
+        Assert.Equal(original, retry.OriginallyScheduledAt);
+        Assert.Null(periodic.OriginallyScheduledAt);
+
+        Assert.Equal([at], _state.RunsOf("regular"));
+        Assert.Equal([original], _state.RunsOf("retry"));
+        Assert.Equal([periodic.ScheduledAt], _state.RunsOf("periodic"));
+    }
+
+    /// <summary>
     /// Run now and Trigger make a pending run due now, and the run keeps the time it was scheduled for.
     /// After the triggered run, the periodic job's next run is scheduled for the same cron slot again (the current behavior).
     /// </summary>
@@ -335,7 +428,7 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
         Assert.Equal([at], _state.RunsOf("enqueued-context"));
     }
 
-    private IHost CreateHost()
+    private IHost CreateHost(Action<XactJobsOptionsBuilder<TestDbContext>>? configureOptions = null)
     {
         var builder = Host.CreateApplicationBuilder();
 
@@ -343,11 +436,16 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
 
         builder.Services.AddDbContext<TestDbContext>(configure);
 
-        builder.Services.AddXactJobs<TestDbContext>(options => options
-            .WithWorkerCount(1)
-            .WithPollingInterval(1)
-            .WithShutdownTimeout(0)
-            .WithRetryStrategy(new QuickRetry()));
+        builder.Services.AddXactJobs<TestDbContext>(options =>
+        {
+            options
+                .WithWorkerCount(1)
+                .WithPollingInterval(1)
+                .WithShutdownTimeout(0)
+                .WithRetryStrategy(new QuickRetry());
+
+            configureOptions?.Invoke(options);
+        });
 
         builder.Services.AddSingleton(_state);
         builder.Services.AddScoped<ScheduleJob>();
@@ -391,6 +489,18 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
         }
     }
 
+    private static async Task WaitForAsync(Func<bool> condition, string description)
+    {
+        var deadline = DateTime.UtcNow + WaitTimeout;
+
+        while (!condition())
+        {
+            Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting for {description}");
+
+            await Task.Delay(50);
+        }
+    }
+
     private static async Task<T> WithDbAsync<T>(IHost host, Func<TestDbContext, Task<T>> action)
     {
         using var scope = host.Services.CreateScope();
@@ -428,6 +538,16 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
             {
                 throw new InvalidOperationException($"Attempt of '{name}' fails");
             }
+        }
+
+        /// <summary>
+        /// Records the context, and runs until the worker stops.
+        /// </summary>
+        public async Task BlockAsync(string name, XactJobContext context, CancellationToken cancellationToken)
+        {
+            state.Record(name, context.OriginallyScheduledAt);
+
+            await Task.Delay(Timeout.Infinite, cancellationToken);
         }
 
         public void FailFirstAttemptOfEachRun(XactJobContext context)

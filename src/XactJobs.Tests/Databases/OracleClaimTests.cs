@@ -79,13 +79,13 @@ public sealed class OracleClaimTests(OracleFixture fixture) : IAsyncLifetime
 
         await using var transactionA = await dbA.Database.BeginTransactionAsync();
 
-        var claimedByA = await Dialect.ClaimContinuationsAsync(dbA, Queue, 3, Guid.NewGuid(), 60, CancellationToken.None);
+        var claimedByA = await Dialect.ClaimContinuationsAsync(dbA, Queue, 3, Guid.NewGuid(), 60, DateTime.UtcNow, CancellationToken.None);
 
         List<XactJob> claimedByB;
 
         await using (var dbB = CreateDb())
         {
-            claimedByB = await Dialect.ClaimContinuationsAsync(dbB, Queue, 3, Guid.NewGuid(), 60, CancellationToken.None);
+            claimedByB = await Dialect.ClaimContinuationsAsync(dbB, Queue, 3, Guid.NewGuid(), 60, DateTime.UtcNow, CancellationToken.None);
         }
 
         var (lockedByC, lockedByOthers) = await TryLockWithoutWaitingAsync(continuations.Where(j => !claimedByB.Any(b => b.Id == j.Id)));
@@ -158,7 +158,7 @@ public sealed class OracleClaimTests(OracleFixture fixture) : IAsyncLifetime
 
         await using var claimDb = CreateDb();
 
-        var claimed = await Dialect.ClaimContinuationsAsync(claimDb, Queue, 4, Guid.NewGuid(), 60, CancellationToken.None);
+        var claimed = await Dialect.ClaimContinuationsAsync(claimDb, Queue, 4, Guid.NewGuid(), 60, DateTime.UtcNow, CancellationToken.None);
 
         Assert.Equal(continuations.Take(4).Select(j => j.Id), claimed.Select(j => j.Id));
     }
