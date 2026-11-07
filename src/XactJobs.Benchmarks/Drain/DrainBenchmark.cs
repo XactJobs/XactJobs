@@ -9,7 +9,8 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using XactJobs.Internal.SqlDialects;
+using Npgsql;
+using XactJobs.Internal;
 
 namespace XactJobs.Benchmarks.Drain;
 
@@ -35,15 +36,18 @@ public static class DrainBenchmark
     {
         var jobs = GetOption(args, "--jobs", 5000);
         var runs = GetOption(args, "--runs", 5);
-        var parallelism = GetOption(args, "--parallelism", 1);
+        var settings = new DrainSettings(
+            Workers: GetOption(args, "--workers", 1),
+            Parallelism: GetOption(args, "--parallelism", 1),
+            Postgres: GetString(args, "--postgres"));
         var listSql = args.Contains("--sql");
         var only = GetOnly(args);
 
         if (jobs < 2) throw new ArgumentException("--jobs needs at least 2: the first one only starts the measurement");
 
-        Console.WriteLine($"Drain: {jobs} jobs, {parallelism} at a time, median of {runs} runs after a warm-up");
-        Console.WriteLine($".NET {Environment.Version}, EF Core {GetVersion(typeof(DbContext))}, XactJobs {GetVersion(typeof(XactJob))}, SQLite in memory, " +
-                          $"{Environment.ProcessorCount} processors");
+        Console.WriteLine($"Drain: {jobs} jobs, {settings.Workers} worker(s) running {settings.Parallelism} at a time each, median of {runs} runs after a warm-up");
+        Console.WriteLine($".NET {Environment.Version}, EF Core {GetVersion(typeof(DbContext))}, XactJobs {GetVersion(typeof(XactJob))}, " +
+                          $"{(settings.Postgres != null ? "PostgreSQL" : "SQLite in memory")}, {Environment.ProcessorCount} processors");
 #if DEBUG
         Console.WriteLine("WARNING: a Debug build. Run with -c Release.");
 #endif
@@ -53,8 +57,8 @@ public static class DrainBenchmark
         var runEf = only is null or "ef";
 
         // warm-up: JIT, EF's model and query caches
-        if (runXactJobs) await DrainWithXactJobsAsync(Math.Min(jobs, 500), parallelism, listSql: false);
-        if (runEf) await DrainWithEfAsync(Math.Min(jobs, 500), parallelism, listSql: false);
+        if (runXactJobs) await DrainWithXactJobsAsync(Math.Min(jobs, 500), settings, listSql: false);
+        if (runEf) await DrainWithEfAsync(Math.Min(jobs, 500), settings, listSql: false);
 
         List<Measurement> xactJobs = [];
         List<Measurement> ef = [];
@@ -62,8 +66,8 @@ public static class DrainBenchmark
         for (var run = 0; run < runs; run++)
         {
             // alternated, so that a slower moment of the machine doesn't hit only one of them
-            if (runXactJobs) xactJobs.Add(await DrainWithXactJobsAsync(jobs, parallelism, listSql && run == 0));
-            if (runEf) ef.Add(await DrainWithEfAsync(jobs, parallelism, listSql && run == 0));
+            if (runXactJobs) xactJobs.Add(await DrainWithXactJobsAsync(jobs, settings, listSql && run == 0));
+            if (runEf) ef.Add(await DrainWithEfAsync(jobs, settings, listSql && run == 0));
 
             Console.WriteLine($"  run {run + 1}:" +
                               (runXactJobs ? $" XactJobs {xactJobs[^1].Wall.TotalMilliseconds:F0} ms" : "") +
@@ -88,9 +92,11 @@ public static class DrainBenchmark
         return 0;
     }
 
-    private static async Task<Measurement> DrainWithXactJobsAsync(int jobs, int parallelism, bool listSql)
+    private const int PollingIntervalInSeconds = 1;
+
+    private static async Task<Measurement> DrainWithXactJobsAsync(int jobs, DrainSettings settings, bool listSql)
     {
-        await using var database = await InMemoryDatabase.CreateAsync(jobs);
+        await using var database = await BenchDatabase.CreateAsync(settings, jobs);
 
         var completed = new CompletedJobCounter(jobs);
         var commands = new CommandCounter();
@@ -99,19 +105,23 @@ public static class DrainBenchmark
 
         builder.Logging.ClearProviders();
 
-        builder.Services.AddDbContext<BenchDbContext>(options => options.UseSqlite(database.ConnectionString).AddInterceptors(completed, commands));
+        builder.Services.AddDbContext<BenchDbContext>(options => database.Configure(options).AddInterceptors(completed, commands));
 
         builder.Services.AddXactJobs<BenchDbContext>(options => options
-            .WithWorkerCount(1)
-            .WithMaxDegreeOfParallelism(parallelism)
-            .WithPollingInterval(1)
+            .WithWorkerCount(settings.Workers)
+            .WithMaxDegreeOfParallelism(settings.Parallelism)
+            .WithPollingInterval(PollingIntervalInSeconds)
             .WithShutdownTimeout(0));
 
         using var host = builder.Build();
 
         await host.StartAsync();
 
-        var measurement = await Measurement.MeasureAsync(completed, commands);
+        // the last worker starts after its share of the polling interval, and its first poll waits for the interval:
+        // measured once all of them poll
+        var allPolling = Task.Delay(TimeSpan.FromSeconds(PollingIntervalInSeconds) * (1 + (settings.Workers - 1.0) / settings.Workers) + TimeSpan.FromMilliseconds(200));
+
+        var measurement = await Measurement.MeasureAsync(completed, commands, allPolling);
 
         await host.StopAsync();
 
@@ -122,20 +132,21 @@ public static class DrainBenchmark
         return measurement;
     }
 
-    private static async Task<Measurement> DrainWithEfAsync(int jobs, int parallelism, bool listSql)
+    private static async Task<Measurement> DrainWithEfAsync(int jobs, DrainSettings settings, bool listSql)
     {
-        await using var database = await InMemoryDatabase.CreateAsync(jobs);
+        await using var database = await BenchDatabase.CreateAsync(settings, jobs);
 
         var completed = new CompletedJobCounter(jobs);
         var commands = new CommandCounter();
 
         await using var services = new ServiceCollection()
-            .AddDbContext<BenchDbContext>(options => options.UseSqlite(database.ConnectionString).AddInterceptors(completed, commands))
+            .AddDbContext<BenchDbContext>(options => database.Configure(options).AddInterceptors(completed, commands))
             .BuildServiceProvider();
 
         var leaser = Guid.NewGuid();
 
-        var slots = Task.WhenAll(Enumerable.Range(0, parallelism).Select(_ => Task.Run(() => RunSlotAsync(services, leaser))));
+        // as many slots as the workers have in all
+        var slots = Task.WhenAll(Enumerable.Range(0, settings.Workers * settings.Parallelism).Select(_ => Task.Run(() => RunSlotAsync(services, leaser))));
 
         var measurement = await Measurement.MeasureAsync(completed, commands);
 
@@ -153,8 +164,6 @@ public static class DrainBenchmark
     /// </summary>
     private static async Task RunSlotAsync(IServiceProvider services, Guid leaser)
     {
-        var dialect = new SqliteDialect();
-
         while (true)
         {
             List<XactJob> claimed;
@@ -162,6 +171,9 @@ public static class DrainBenchmark
             using (var scope = services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<BenchDbContext>();
+
+                // the worker's claim, with its locking (FOR UPDATE SKIP LOCKED on PostgreSQL)
+                var dialect = db.Database.ProviderName.ToSqlDialect();
 
                 claimed = await dialect.ClaimJobsAsync(db, QueueNames.Default, 1, leaser, LeaseDurationInSeconds, CancellationToken.None);
             }
@@ -206,6 +218,19 @@ public static class DrainBenchmark
 
         return args[index + 1];
     }
+
+    private static string? GetString(string[] args, string name)
+    {
+        var index = Array.IndexOf(args, name);
+
+        if (index < 0) return null;
+
+        if (index + 1 >= args.Length) throw new ArgumentException($"{name} needs a value");
+
+        return args[index + 1];
+    }
+
+    private sealed record DrainSettings(int Workers, int Parallelism, string? Postgres);
 
     private static int GetOption(string[] args, string name, int defaultValue)
     {
@@ -328,9 +353,13 @@ public static class DrainBenchmark
     /// </summary>
     private readonly record struct Measurement(int Jobs, TimeSpan Wall, double WallPerJob, double CpuPerJob, double KBPerJob, double CommandsPerJob, double SqlPerJob)
     {
-        public static async Task<Measurement> MeasureAsync(CompletedJobCounter completed, CommandCounter commands)
+        public static async Task<Measurement> MeasureAsync(CompletedJobCounter completed, CommandCounter commands, Task? startAfter = null)
         {
             await completed.FirstCompleted;
+
+            if (startAfter != null) await startAfter;
+
+            if (completed.Count >= completed.Expected) throw new InvalidOperationException("The backlog was drained before the measurement started: use more jobs");
 
             var process = Process.GetCurrentProcess();
 
@@ -375,49 +404,40 @@ public static class DrainBenchmark
     }
 
     /// <summary>
-    /// A shared in-memory database with the schema from the SQL scripts, and the backlog of jobs, due now.
+    /// A database with the schema, and the backlog of jobs, due now. A new one for each drain.
     /// </summary>
-    private sealed class InMemoryDatabase : IAsyncDisposable
+    private abstract class BenchDatabase : IAsyncDisposable
     {
-        // keeps the database alive
-        private readonly SqliteConnection _connection;
-
-        private InMemoryDatabase(string connectionString)
+        public static async Task<BenchDatabase> CreateAsync(DrainSettings settings, int jobs)
         {
-            ConnectionString = connectionString;
-            _connection = new SqliteConnection(connectionString);
-        }
+            BenchDatabase database = settings.Postgres != null ? new PostgresDatabase(settings.Postgres) : new InMemoryDatabase();
 
-        public string ConnectionString { get; }
+            await database.CreateSchemaAsync();
 
-        public static async Task<InMemoryDatabase> CreateAsync(int jobs)
-        {
-            var database = new InMemoryDatabase($"Data Source=bench-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;");
-
-            await database._connection.OpenAsync();
-
-            foreach (var script in GetSqliteScripts())
+            await using (var db = database.CreateDb())
             {
-                await using var command = database._connection.CreateCommand();
+                var dueAt = DateTime.UtcNow.AddMinutes(-1);
 
-                command.CommandText = await File.ReadAllTextAsync(script);
+                for (var i = 0; i < jobs; i++)
+                {
+                    db.JobScheduleAt(() => BenchmarkJobs.Noop(), dueAt);
+                }
 
-                await command.ExecuteNonQueryAsync();
+                await db.SaveChangesAsync();
             }
 
-            await using var db = database.CreateDb();
-
-            var dueAt = DateTime.UtcNow.AddMinutes(-1);
-
-            for (var i = 0; i < jobs; i++)
-            {
-                db.JobScheduleAt(() => BenchmarkJobs.Noop(), dueAt);
-            }
-
-            await db.SaveChangesAsync();
+            await database.AnalyzeAsync();
 
             return database;
         }
+
+        public abstract DbContextOptionsBuilder Configure(DbContextOptionsBuilder options);
+
+        protected abstract Task CreateSchemaAsync();
+
+        protected virtual Task AnalyzeAsync() => Task.CompletedTask;
+
+        public abstract ValueTask DisposeAsync();
 
         public async Task AssertDrainedAsync(int jobs)
         {
@@ -433,26 +453,93 @@ public static class DrainBenchmark
             }
         }
 
-        public ValueTask DisposeAsync() => _connection.DisposeAsync();
+        protected BenchDbContext CreateDb() => new((DbContextOptions<BenchDbContext>)Configure(new DbContextOptionsBuilder<BenchDbContext>()).Options);
 
-        private BenchDbContext CreateDb() => new(new DbContextOptionsBuilder<BenchDbContext>().UseSqlite(ConnectionString).Options);
-
-        private static IEnumerable<string> GetSqliteScripts()
+        protected static string GetScript(params string[] path)
         {
             var directory = new DirectoryInfo(AppContext.BaseDirectory);
 
-            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "sql", "v0.1.0")))
+            while (directory != null && !Directory.Exists(Path.Combine(directory.FullName, "sql", "install")))
             {
                 directory = directory.Parent;
             }
 
             if (directory == null) throw new DirectoryNotFoundException("The sql folder of the repository wasn't found");
 
-            return new DirectoryInfo(Path.Combine(directory.FullName, "sql"))
-                .GetDirectories("v*")
-                .OrderBy(d => Version.Parse(d.Name[1..]))
-                .Select(d => Path.Combine(d.FullName, $"xact-jobs-sqlite-{d.Name}.sql"))
-                .Where(File.Exists);
+            return Path.Combine([directory.FullName, "sql", .. path]);
+        }
+    }
+
+    /// <summary>
+    /// A shared in-memory SQLite database, with the schema from the install script.
+    /// </summary>
+    private sealed class InMemoryDatabase : BenchDatabase
+    {
+        private readonly string _connectionString = $"Data Source=bench-{Guid.NewGuid():N};Mode=Memory;Cache=Shared;";
+
+        // keeps the database alive
+        private readonly SqliteConnection _connection;
+
+        public InMemoryDatabase()
+        {
+            _connection = new SqliteConnection(_connectionString);
+        }
+
+        public override DbContextOptionsBuilder Configure(DbContextOptionsBuilder options) => options.UseSqlite(_connectionString);
+
+        protected override async Task CreateSchemaAsync()
+        {
+            await _connection.OpenAsync();
+
+            await using var command = _connection.CreateCommand();
+
+            command.CommandText = await File.ReadAllTextAsync(GetScript("install", "xact-jobs-sqlite.sql"));
+
+            await command.ExecuteNonQueryAsync();
+        }
+
+        public override ValueTask DisposeAsync() => _connection.DisposeAsync();
+    }
+
+    /// <summary>
+    /// A new PostgreSQL database on the server of the connection string, with the schema from the install script, and fresh statistics.
+    /// Dropped afterwards, with its pool cleared: each database has a pool of its own.
+    /// </summary>
+    private sealed class PostgresDatabase(string serverConnectionString) : BenchDatabase
+    {
+        private readonly string _name = $"bench_{Guid.NewGuid():N}";
+
+        private string ConnectionString => new NpgsqlConnectionStringBuilder(serverConnectionString) { Database = _name }.ConnectionString;
+
+        public override DbContextOptionsBuilder Configure(DbContextOptionsBuilder options) => options.UseNpgsql(ConnectionString);
+
+        protected override async Task CreateSchemaAsync()
+        {
+            await ExecuteAsync(serverConnectionString, $"CREATE DATABASE {_name}");
+            await ExecuteAsync(ConnectionString, await File.ReadAllTextAsync(GetScript("install", "xact-jobs-postgresql.sql")));
+        }
+
+        protected override Task AnalyzeAsync() => ExecuteAsync(ConnectionString, "ANALYZE");
+
+        public override async ValueTask DisposeAsync()
+        {
+            await using (var connection = new NpgsqlConnection(ConnectionString))
+            {
+                NpgsqlConnection.ClearPool(connection);
+            }
+
+            await ExecuteAsync(serverConnectionString, $"DROP DATABASE IF EXISTS {_name} WITH (FORCE)");
+        }
+
+        private static async Task ExecuteAsync(string connectionString, string sql)
+        {
+            await using var connection = new NpgsqlConnection(connectionString);
+
+            await connection.OpenAsync();
+
+            await using var command = new NpgsqlCommand(sql, connection);
+
+            await command.ExecuteNonQueryAsync();
         }
     }
 }

@@ -49,4 +49,14 @@ XactJobs overhead                    ...
 - `SQL` and `SQL µs` are the SQL commands per job and the time EF measured for them. They should be the same in both: if XactJobs runs more SQL, it shows here.
 - `--sql` lists each command, with its count and time per job.
 - `--only xactjobs` or `--only ef` runs one of them, e.g. to profile it with `dotnet-trace`.
-- `--parallelism N` runs N jobs at a time. On SQLite the claims and the saves then wait for each other, so this measures SQLite's single writer more than XactJobs.
+- `--workers N` runs N workers, and `--parallelism N` N jobs at a time per worker. Plain EF gets as many slots in all, each claiming one job when it's free. On SQLite the claims and the saves then wait for each other, so this measures SQLite's single writer more than XactJobs: use PostgreSQL.
+- `--postgres <connection string>` drains on PostgreSQL instead: a new database on that server for each drain, with the schema from the install script and fresh statistics, dropped afterwards. With several workers, XactJobs is measured once all of them poll (each one's first poll waits for its polling interval). For example, with a container:
+
+  ```bash
+  docker run -d --name xactjobs-bench-pg -e POSTGRES_PASSWORD=bench -p 127.0.0.1:55432:5432 postgres:16
+  dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 10 \
+      --postgres "Host=127.0.0.1;Port=55432;Username=postgres;Password=bench;Database=postgres"
+  docker rm -f xactjobs-bench-pg
+  ```
+
+  The database's CPU time isn't in `CPU µs`, which is the benchmark process's only.
