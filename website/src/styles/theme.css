@@ -1,19 +1,22 @@
 /*
- * One accent (teal) and slate neutrals, shared by the docs (Starlight's variables), the landing page and the illustrations.
+ * The logo's colors: its green as the one accent, its navy for the text, and slate neutrals, shared by the docs (Starlight's
+ * variables), the landing page and the illustrations.
  * Starlight's dark theme is the default, :root[data-theme='light'] the light one.
  */
 :root {
-  --xj-accent-50: #f0fdfa;
-  --xj-accent-100: #ccfbf1;
-  --xj-accent-200: #99f6e4;
-  --xj-accent-300: #5eead4;
-  --xj-accent-400: #2dd4bf;
-  --xj-accent-500: #14b8a6;
-  --xj-accent-600: #0d9488;
-  --xj-accent-700: #0f766e;
-  --xj-accent-800: #115e59;
-  --xj-accent-900: #134e4a;
-  --xj-accent-950: #042f2e;
+  /* 700 is the logo's green */
+  --xj-accent-50: #effaf5;
+  --xj-accent-100: #d8f3e6;
+  --xj-accent-200: #b3e6cf;
+  --xj-accent-300: #7fd3b0;
+  --xj-accent-400: #4cbb8e;
+  --xj-accent-500: #2f9e74;
+  --xj-accent-600: #23805e;
+  --xj-accent-700: #23634b;
+  --xj-accent-800: #1d4f3d;
+  --xj-accent-900: #183f32;
+  --xj-accent-950: #0b231b;
+  --xj-navy: #0c2b43;
 
   /* --font-inter and --font-mono come from the fonts in astro.config.mjs, with their fallbacks */
   --xj-font-sans: var(--font-inter);
@@ -23,7 +26,7 @@
   --sl-font-mono: var(--xj-font-mono);
 
   /* dark */
-  --sl-color-accent-low: #0b2f2c;
+  --sl-color-accent-low: #0e2a20;
   --sl-color-accent: var(--xj-accent-500);
   --sl-color-accent-high: var(--xj-accent-200);
   --sl-color-white: #ffffff;
@@ -40,7 +43,7 @@
   --sl-color-accent-low: var(--xj-accent-100);
   --sl-color-accent: var(--xj-accent-700);
   --sl-color-accent-high: var(--xj-accent-900);
-  --sl-color-white: #0b1120;
+  --sl-color-white: var(--xj-navy);
   --sl-color-gray-1: #1e293b;
   --sl-color-gray-2: #334155;
   --sl-color-gray-3: #475569;

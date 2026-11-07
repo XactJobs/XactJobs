@@ -29,31 +29,31 @@ const createTables = [
     label: 'SQL Server',
     lang: 'bash' as const,
     code: 'sqlcmd -I -d <db> -i xact-jobs-sqlserver.sql',
-    note: `<a href="${sql('sqlserver')}">xact-jobs-sqlserver.sql</a>, with <code>QUOTED_IDENTIFIER</code> on (<code>-I</code>).`,
+    note: `<a href="${sql('sqlserver')}">xact-jobs-sqlserver.sql</a>`,
   },
   {
     label: 'PostgreSQL',
     lang: 'bash' as const,
     code: 'psql -d <db> -f xact-jobs-postgresql.sql',
-    note: `<a href="${sql('postgresql')}">xact-jobs-postgresql.sql</a>, in the <code>xact_jobs</code> schema.`,
+    note: `<a href="${sql('postgresql')}">xact-jobs-postgresql.sql</a>`,
   },
   {
     label: 'MySQL',
     lang: 'bash' as const,
     code: 'mysql <db> < xact-jobs-mysql.sql',
-    note: `<a href="${sql('mysql')}">xact-jobs-mysql.sql</a>, MySQL 8.0 or later.`,
+    note: `<a href="${sql('mysql')}">xact-jobs-mysql.sql</a>`,
   },
   {
     label: 'Oracle',
     lang: 'bash' as const,
     code: 'sqlplus <user>@<db> @xact-jobs-oracle.sql',
-    note: `<a href="${sql('oracle')}">xact-jobs-oracle.sql</a>, Oracle 12c or later.`,
+    note: `<a href="${sql('oracle')}">xact-jobs-oracle.sql</a>`,
   },
   {
     label: 'SQLite',
     lang: 'bash' as const,
     code: 'sqlite3 app.db < xact-jobs-sqlite.sql',
-    note: `<a href="${sql('sqlite')}">xact-jobs-sqlite.sql</a>.`,
+    note: `<a href="${sql('sqlite')}">xact-jobs-sqlite.sql</a>`,
   },
 ];
 
@@ -82,43 +82,43 @@ const features = [
   {
     icon: 'tx' as const,
     title: 'Transactional enqueue',
-    text: '<code>JobEnqueue</code> adds a row to your DbContext. Your <code>SaveChanges</code> or transaction commits it with your data, or rolls both back.',
+    text: 'Enqueue a job on your DbContext, next to your data. If your transaction rolls back, the job never existed.',
     href: docs('scheduling'),
   },
   {
     icon: 'once' as const,
     title: 'Exactly-once database effects',
-    text: 'A job is a unit of work: the worker saves its changes in the transaction that completes it. If two workers run it, only one commits.',
+    text: 'A job is a unit of work: its database changes are saved together with its completion, exactly once.',
     href: docs('unit-of-work'),
   },
   {
     icon: 'retry' as const,
     title: 'Retries and cancellation',
-    text: 'A job that throws runs again, up to 10 times by default, waiting longer each time. <code>XactJobCancelException</code> stops it without retries.',
+    text: 'A failed job runs again, waiting longer each time. A job that can never succeed stops itself, without retries.',
     href: docs('failures-and-retries'),
   },
   {
     icon: 'batch' as const,
     title: 'Batches and continuations',
-    text: '<code>ContinueWith</code> a job or a whole batch, <code>OnSuccess</code>, <code>OnFailure</code> or <code>OnFinish</code>. Continuations can have their own.',
+    text: 'Run a job after another job, or after a whole batch: when it succeeds, fails or finishes.',
     href: docs('batches-and-continuations'),
   },
   {
     icon: 'cron' as const,
     title: 'Periodic jobs, safe on many nodes',
-    text: 'Cron schedules defined at startup, which the nodes ensure in turns under a lock. Each node also reschedules a periodic job that lost its pending run.',
+    text: 'Recurring jobs on cron schedules, defined in code, with any number of nodes running your app.',
     href: docs('scheduling') + '#periodic-jobs',
   },
   {
     icon: 'queues' as const,
     title: 'Isolated queues and QuickPoll',
-    text: 'Priority, long-running and your own queues, each with its own workers. QuickPoll starts a job without waiting for the next poll.',
+    text: 'Priority, long-running and your own queues, each with its own workers. QuickPoll starts a job right away.',
     href: docs('queues-and-polling'),
   },
   {
     icon: 'dashboard' as const,
     title: 'Dashboard and REST API',
-    text: 'XactJobs.UI shows the pending, finished and periodic jobs and the batches, with run now, retry, pause and trigger. It works without internet access.',
+    text: 'See the pending, finished and periodic jobs and the batches. Run, retry, pause and trigger them.',
     href: docs('dashboard'),
   },
   {
@@ -241,7 +241,7 @@ const shots = [
       <div class="section-head">
         <p class="eyebrow">Dashboard</p>
         <h2 id="dashboard-title">See and manage the jobs</h2>
-        <p class="lead">The <code>XactJobs.UI</code> package adds a dashboard and a REST API, local requests only until you choose who can use it.</p>
+        <p class="lead">The <code>XactJobs.UI</code> package adds a dashboard and a REST API to your app.</p>
       </div>
       <div class="shot-tabs" role="tablist" aria-label="Dashboard screenshots" data-shots>
         {shots.map((shot, i) => (
@@ -298,11 +298,7 @@ const shots = [
         <div class="panel">
           <h3>Throughput</h3>
           <p class="metric">2,300–2,600 <small>no-op jobs per second</small></p>
-          <p>
-            Draining 20,000 jobs on a Hetzner Cloud CX33 (4 shared vCPUs, 8 GB), with PostgreSQL 16 on the same machine, .NET 10, 2 workers,
-            <code>MaxDegreeOfParallelism</code> 4 and <code>WithBatchSize(100)</code>. Each job is still its own transaction. With real jobs,
-            their own work sets the pace.
-          </p>
+          <p>Draining 20,000 jobs on a Hetzner Cloud CX33 (4 shared vCPUs, 8 GB) with PostgreSQL 16, each job in its own transaction.</p>
           <a class="link" href={docs('throughput')}>The benchmark, to run on your machine</a>
         </div>
         <div class="panel status">
