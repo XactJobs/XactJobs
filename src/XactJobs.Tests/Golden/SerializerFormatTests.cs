@@ -79,6 +79,18 @@ public class SerializerFormatTests : IDisposable
         ("nested type", db => db.JobEnqueue(() => Outer.Nested.Run(1))),
         ("generic type", db => db.JobEnqueue(() => GenericHolder<string>.Run(1))),
         ("generic instance type", db => db.JobEnqueue<GenericInstance<int>>(x => x.Run(4))),
+        ("two generic arguments", db => db.JobEnqueue(() => GenericPair<int, string>.Run(1))),
+        ("generic argument that is generic", db => db.JobEnqueue(() => GenericHolder<List<int>>.Run(1))),
+        ("generic argument of a user type", db => db.JobEnqueue(() => GenericHolder<Address>.Run(1))),
+        ("nested in a generic type", db => db.JobEnqueue(() => GenericOuter<int>.Inner.Run(1))),
+        ("nested generic parameters", db => db.JobEnqueue(() => StaticJobs.NestedGenerics(
+            new List<List<int>> { new List<int> { 1 } },
+            new Dictionary<string, List<int>> { { "a", new List<int> { 2 } } },
+            new[] { new[] { 3 } },
+            new[] { new Address { Street = "S", Number = 1 } },
+            Priority.Low,
+            new byte[] { 1, 2, 255 },
+            new List<Outer.Box> { new Outer.Box { Value = 4 } }))),
         ("framework method", db => db.JobEnqueue(() => Console.WriteLine("hello"))),
         ("internal type", db => db.JobEnqueue(() => InternalJobs.Run())),
         ("queue", db => db.JobEnqueue(() => StaticJobs.NoArgs(), QueueNames.Priority)),
@@ -231,6 +243,26 @@ public class SerializerFormatTests : IDisposable
             "XactJobs.Tests.Golden.GenericInstance`1[[System.Int32, System.Private.CoreLib]], XactJobs.Tests",
             "Run(System.Int32)",
             "[4]"),
+        ["two generic arguments"] = (
+            "XactJobs.Tests.Golden.GenericPair`2[[System.Int32, System.Private.CoreLib],[System.String, System.Private.CoreLib]], XactJobs.Tests",
+            "Run(System.Int32)",
+            "[1]"),
+        ["generic argument that is generic"] = (
+            "XactJobs.Tests.Golden.GenericHolder`1[[System.Collections.Generic.List`1[[System.Int32, System.Private.CoreLib]], System.Private.CoreLib]], XactJobs.Tests",
+            "Run(System.Int32)",
+            "[1]"),
+        ["generic argument of a user type"] = (
+            "XactJobs.Tests.Golden.GenericHolder`1[[XactJobs.Tests.Golden.Address, XactJobs.Tests]], XactJobs.Tests",
+            "Run(System.Int32)",
+            "[1]"),
+        ["nested in a generic type"] = (
+            "XactJobs.Tests.Golden.GenericOuter`1+Inner[[System.Int32, System.Private.CoreLib]], XactJobs.Tests",
+            "Run(System.Int32)",
+            "[1]"),
+        ["nested generic parameters"] = (
+            "XactJobs.Tests.Golden.StaticJobs, XactJobs.Tests",
+            "NestedGenerics(System.Collections.Generic.List`1[System.Collections.Generic.List`1[System.Int32]], System.Collections.Generic.Dictionary`2[System.String, System.Collections.Generic.List`1[System.Int32]], System.Int32[][], XactJobs.Tests.Golden.Address[], System.Nullable`1[XactJobs.Tests.Golden.Priority], System.Byte[], System.Collections.Generic.List`1[XactJobs.Tests.Golden.Outer+Box])",
+            "[[[1]],{\"a\":[2]},[[3]],[{\"Street\":\"S\",\"Number\":1,\"Note\":null}],0,\"AQL/\",[{\"Value\":4}]]"),
         ["framework method"] = (
             "System.Console, System.Console",
             "WriteLine(System.String)",

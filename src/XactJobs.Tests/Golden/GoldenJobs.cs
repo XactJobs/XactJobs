@@ -34,6 +34,7 @@ public static class StaticJobs
     public static void Overload(int i) { }
     public static void Overload(string s, int i) { }
     public static int Compute(int x) => x * 21;
+    public static void NestedGenerics(List<List<int>> nested, Dictionary<string, List<int>> map, int[][] jagged, Address[] addresses, Priority? priority, byte[] bytes, List<Outer.Box> boxes) { }
 }
 
 public class InstanceJobs
@@ -59,6 +60,24 @@ public interface IJobService
 public static class Outer
 {
     public static class Nested
+    {
+        public static void Run(int x) { }
+    }
+
+    public sealed class Box
+    {
+        public int Value { get; set; }
+    }
+}
+
+public static class GenericPair<T1, T2>
+{
+    public static void Run(int x) { }
+}
+
+public static class GenericOuter<T>
+{
+    public static class Inner
     {
         public static void Run(int x) { }
     }
