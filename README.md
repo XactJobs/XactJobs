@@ -6,8 +6,15 @@ Supports **SQL Server, PostgreSQL, MySQL, Oracle and SQLite**, on .NET 8, 9 and 
 
 XactJobs uses EF Core 9 on .NET 8 and 9, and EF Core 10 on .NET 10, so your database provider has to support that version. For MySQL, see [which provider to use](#mysql).
 
-## Development Status
-This library is still in early development, but the users are invited to test and report issues.
+## Status
+XactJobs is pre-1.0. The core is tested on all five databases, with an integration test suite running against each one (SQLite in-process, the others in containers): transactional enqueue, claiming and leasing, retries, batches and continuations, and periodic jobs.
+
+Until 1.0:
+- **The API can still change** between minor versions (0.x). Breaking changes are listed in the release notes, with how to migrate.
+- **Schema changes ship as SQL scripts**, one per version and database, with [upgrade notes](#installation) in this README. Existing data is always kept.
+- **1.0 freezes the API and the schema** under semantic versioning.
+
+Feedback and issue reports are very welcome, especially from production use.
 
 ## Features
 The examples below use this simple job:
