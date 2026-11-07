@@ -1,0 +1,21 @@
+---
+import Landing from '../layouts/Landing.astro';
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+---
+
+<Landing title="Page not found | XactJobs" description="This page doesn't exist.">
+  <section class="section">
+    <div class="container">
+      <div class="section-head">
+        <p class="eyebrow">404</p>
+        <h1>Page not found</h1>
+        <p class="lead">This page doesn't exist, or it moved. The docs start with Getting started.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href={`${base}docs/getting-started/`}>Getting started</a>
+          <a class="btn btn-secondary" href={base}>Home</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Landing>

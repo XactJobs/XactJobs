@@ -1,0 +1,66 @@
+---
+// Small icons in one style: the accent gradient in a rounded square, with white strokes. The gradient (#xj-ic-grad) is
+// defined once on the page, in index.astro.
+type Name = 'tx' | 'once' | 'retry' | 'batch' | 'cron' | 'queues' | 'dashboard' | 'db';
+
+interface Props {
+  name: Name;
+}
+
+const { name } = Astro.props;
+---
+
+<svg viewBox="0 0 44 44" aria-hidden="true">
+  <rect width="44" height="44" rx="12" fill="url(#xj-ic-grad)" />
+  {name === 'tx' && (
+    <>
+      <rect class="ic" x="11" y="11" width="22" height="22" rx="6" />
+      <rect class="ic-fill" x="16" y="17" width="12" height="3" rx="1.5" />
+      <rect class="ic-soft" x="16" y="23.5" width="8" height="3" rx="1.5" />
+    </>
+  )}
+  {name === 'once' && (
+    <>
+      <circle class="ic" cx="22" cy="22" r="10.5" />
+      <path class="ic" d="M19.5 18.5 22.5 16.5v11" />
+    </>
+  )}
+  {name === 'retry' && (
+    <>
+      <path class="ic" d="M31 22a9 9 0 1 1-2.6-6.4" />
+      <path class="ic" d="M29.5 11.5v5h-5" />
+    </>
+  )}
+  {name === 'batch' && (
+    <>
+      <circle class="ic" cx="13.5" cy="14.5" r="3" />
+      <circle class="ic" cx="13.5" cy="29.5" r="3" />
+      <circle class="ic-fill" cx="31" cy="22" r="3.5" />
+      <path class="ic" d="M16.5 14.5c5.5 0 5.5 7.5 11 7.5M16.5 29.5c5.5 0 5.5-7.5 11-7.5" />
+    </>
+  )}
+  {name === 'cron' && (
+    <>
+      <circle class="ic" cx="22" cy="22" r="10.5" />
+      <path class="ic" d="M22 16v6l4 2.5" />
+    </>
+  )}
+  {name === 'queues' && (
+    <>
+      <path class="ic" d="M11 15h13M11 22h9M11 29h13" />
+      <path class="ic-fill" d="M31.5 12.5 26 23h4.5l-2 8.5L34 21h-4.5z" />
+    </>
+  )}
+  {name === 'dashboard' && (
+    <>
+      <rect class="ic" x="11" y="12" width="22" height="20" rx="4.5" />
+      <path class="ic" d="M15.5 27 19.5 22l3 3 5-6.5" />
+    </>
+  )}
+  {name === 'db' && (
+    <>
+      <ellipse class="ic" cx="22" cy="14.5" rx="9" ry="3.5" />
+      <path class="ic" d="M13 14.5v15c0 1.9 4 3.5 9 3.5s9-1.6 9-3.5v-15M13 22c0 1.9 4 3.5 9 3.5s9-1.6 9-3.5" />
+    </>
+  )}
+</svg>

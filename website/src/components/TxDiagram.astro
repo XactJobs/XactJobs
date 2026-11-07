@@ -1,0 +1,212 @@
+---
+// The hero illustration: one transaction holding your data and your job, which commit together,
+// and a rollback, after which neither exists. Colors come from the page's theme variables.
+---
+
+<div class="tx" role="img" aria-label="Two transactions. In the first, your business data (order 1042) and your job (SendInvoice for order 1042) are saved in one transaction that commits, so both exist and a worker runs the job. In the second, the transaction rolls back, and neither the data nor the job exists.">
+  <svg class="tx-panel tx-commit" viewBox="0 0 300 330" aria-hidden="true">
+    <defs>
+      <linearGradient id="tx-box-commit" x1="0" y1="0" x2="0" y2="1">
+        <stop class="stop-box-a" offset="0" />
+        <stop class="stop-box-b" offset="1" />
+      </linearGradient>
+      <linearGradient id="tx-bar-commit" x1="0" y1="0" x2="1" y2="0">
+        <stop class="stop-accent-a" offset="0" />
+        <stop class="stop-accent-b" offset="1" />
+      </linearGradient>
+      <filter id="tx-shadow" x="-20%" y="-30%" width="140%" height="170%">
+        <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity=".12" />
+      </filter>
+    </defs>
+
+    <rect class="box box-commit" x="8" y="22" width="284" height="240" rx="24" fill="url(#tx-box-commit)" />
+    <g class="chip">
+      <rect class="chip-bg" x="26" y="10" width="138" height="24" rx="12" />
+      <text class="chip-text" x="95" y="26" text-anchor="middle">BEGIN TRANSACTION</text>
+    </g>
+
+    <g class="card card-1" filter="url(#tx-shadow)">
+      <rect class="card-bg" x="28" y="52" width="244" height="66" rx="16" />
+      <g class="glyph" transform="translate(44 67)">
+        <rect class="glyph-bg" width="36" height="36" rx="10" />
+        <rect class="glyph-line" x="9" y="10" width="18" height="3.5" rx="1.75" />
+        <rect class="glyph-line" x="9" y="16.25" width="18" height="3.5" rx="1.75" />
+        <rect class="glyph-line" x="9" y="22.5" width="12" height="3.5" rx="1.75" />
+      </g>
+      <text class="title" x="94" y="82">Order #1042</text>
+      <text class="caption" x="94" y="100">your business data</text>
+    </g>
+
+    <g class="card card-2" filter="url(#tx-shadow)">
+      <rect class="card-bg" x="28" y="130" width="244" height="66" rx="16" />
+      <g class="glyph" transform="translate(44 145)">
+        <rect class="glyph-bg" width="36" height="36" rx="10" />
+        <circle class="glyph-stroke" cx="18" cy="18" r="8.5" />
+        <path class="glyph-stroke" d="M18 13.5V18l3 2.5" />
+      </g>
+      <text class="title mono" x="94" y="160">SendInvoice(1042)</text>
+      <text class="caption" x="94" y="178">your job</text>
+    </g>
+
+    <g class="bar bar-commit">
+      <rect x="28" y="212" width="244" height="34" rx="17" fill="url(#tx-bar-commit)" />
+      <path class="bar-icon" d="M128 229.5l5 5 9.5-10" />
+      <text class="bar-text" x="152" y="234">COMMIT</text>
+    </g>
+
+    <text class="result result-commit" x="150" y="294" text-anchor="middle">Both are saved.</text>
+    <text class="result-sub" x="150" y="314" text-anchor="middle">A worker runs the job.</text>
+  </svg>
+
+  <svg class="tx-panel tx-rollback" viewBox="0 0 300 330" aria-hidden="true">
+    <rect class="box box-rollback" x="8" y="22" width="284" height="240" rx="24" />
+    <g class="chip">
+      <rect class="chip-bg chip-muted" x="26" y="10" width="138" height="24" rx="12" />
+      <text class="chip-text chip-text-muted" x="95" y="26" text-anchor="middle">BEGIN TRANSACTION</text>
+    </g>
+
+    <g class="ghost ghost-1">
+      <rect class="card-ghost" x="28" y="52" width="244" height="66" rx="16" />
+      <rect class="glyph-ghost" x="44" y="67" width="36" height="36" rx="10" />
+      <text class="title muted" x="94" y="82">Order #1043</text>
+      <text class="caption" x="94" y="100">your business data</text>
+      <path class="strike" pathLength="1" d="M90 77H262" />
+    </g>
+
+    <g class="ghost ghost-2">
+      <rect class="card-ghost" x="28" y="130" width="244" height="66" rx="16" />
+      <rect class="glyph-ghost" x="44" y="145" width="36" height="36" rx="10" />
+      <text class="title mono muted" x="94" y="160">SendInvoice(1043)</text>
+      <text class="caption" x="94" y="178">your job</text>
+      <path class="strike" pathLength="1" d="M90 155H262" />
+    </g>
+
+    <g class="bar bar-rollback">
+      <rect class="bar-muted" x="28" y="212" width="244" height="34" rx="17" />
+      <path class="bar-icon-muted" d="M124 223.5l11 11m0-11-11 11" />
+      <text class="bar-text-muted" x="146" y="234">ROLLBACK</text>
+    </g>
+
+    <text class="result result-rollback" x="150" y="294" text-anchor="middle">Neither exists.</text>
+    <text class="result-sub" x="150" y="314" text-anchor="middle">No ghost job runs.</text>
+  </svg>
+</div>
+
+<style>
+  .tx {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+    width: 100%;
+  }
+
+  @media (max-width: 34rem) {
+    .tx {
+      grid-template-columns: 1fr;
+      max-width: 22rem;
+      margin-inline: auto;
+    }
+  }
+
+  .tx-panel {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    font-family: var(--xj-font-sans);
+  }
+
+  .stop-box-a { stop-color: var(--ill-box-a); }
+  .stop-box-b { stop-color: var(--ill-box-b); }
+  .stop-accent-a { stop-color: var(--xj-accent-400); }
+  .stop-accent-b { stop-color: var(--xj-accent-700); }
+
+  .box-commit { stroke: var(--ill-box-stroke); stroke-width: 1.5; }
+  .box-rollback {
+    fill: var(--ill-ghost-fill);
+    stroke: var(--ill-line);
+    stroke-width: 1.5;
+    stroke-dasharray: 6 6;
+  }
+
+  .chip-bg { fill: var(--ill-chip); }
+  .chip-muted { fill: var(--ill-ghost-chip); }
+  .chip-text {
+    font-family: var(--xj-font-mono);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    fill: var(--ill-chip-text);
+  }
+  .chip-text-muted { fill: var(--ill-muted); }
+
+  .card-bg { fill: var(--ill-surface); stroke: var(--ill-card-stroke); stroke-width: 1; }
+  .glyph-bg { fill: var(--ill-glyph-bg); }
+  .glyph-line { fill: var(--ill-glyph); }
+  .glyph-stroke { fill: none; stroke: var(--ill-glyph); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+  .title { font-size: 15px; font-weight: 650; fill: var(--ill-ink); }
+  .title.mono { font-family: var(--xj-font-mono); font-size: 13.5px; font-weight: 600; }
+  .caption { font-size: 12px; fill: var(--ill-muted); }
+  .muted { fill: var(--ill-muted); }
+
+  .card-ghost { fill: none; stroke: var(--ill-line); stroke-width: 1.5; stroke-dasharray: 5 5; }
+  .glyph-ghost { fill: var(--ill-ghost-chip); }
+  .strike { fill: none; stroke: var(--ill-muted); stroke-width: 1.5; stroke-linecap: round; }
+
+  .bar-icon { fill: none; stroke: #fff; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+  .bar-text { font-size: 12.5px; font-weight: 700; letter-spacing: 0.1em; fill: #fff; }
+  .bar-muted { fill: var(--ill-ghost-chip); }
+  .bar-icon-muted { fill: none; stroke: var(--ill-muted); stroke-width: 2.5; stroke-linecap: round; }
+  .bar-text-muted { font-size: 12.5px; font-weight: 700; letter-spacing: 0.1em; fill: var(--ill-muted); }
+
+  .result { font-size: 15px; font-weight: 650; }
+  .result-commit { fill: var(--ill-accent-ink); }
+  .result-rollback { fill: var(--ill-ink); }
+  .result-sub { font-size: 12.5px; fill: var(--ill-muted); }
+
+  /* once, on load: the commit fills the bar; the rollback draws the strikes and fades the cards */
+  @media (prefers-reduced-motion: no-preference) {
+    .card, .ghost { animation: tx-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+    .card-1, .ghost-1 { animation-delay: 0.15s; }
+    .card-2, .ghost-2 { animation-delay: 0.35s; }
+
+    .bar-commit { transform-box: fill-box; transform-origin: left center; animation: tx-fill 0.7s 0.8s cubic-bezier(0.3, 0.7, 0.2, 1) both; }
+    .bar-rollback { animation: tx-fade-in 0.5s 0.8s ease-out both; }
+
+    .strike { stroke-dasharray: 1; stroke-dashoffset: 1; animation: tx-strike 0.5s 1.35s ease-out forwards; }
+    .ghost { animation: tx-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both, tx-ghost 0.6s 1.35s ease-out forwards; }
+    .ghost-1 { animation-delay: 0.15s, 1.35s; }
+    .ghost-2 { animation-delay: 0.35s, 1.45s; }
+
+    .result, .result-sub { animation: tx-fade-in 0.6s 1.6s ease-out both; }
+
+    .bar-commit rect { animation: tx-glow 4s 2s ease-in-out infinite; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ghost { opacity: 0.55; }
+  }
+
+  @keyframes tx-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes tx-fill {
+    from { transform: scaleX(0.2); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+  @keyframes tx-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes tx-strike {
+    to { stroke-dashoffset: 0; }
+  }
+  @keyframes tx-ghost {
+    to { opacity: 0.55; }
+  }
+  @keyframes tx-glow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.86; }
+  }
+</style>

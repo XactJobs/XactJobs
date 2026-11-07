@@ -68,6 +68,16 @@ dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks --
 
 The library has `InternalsVisibleTo` for the benchmarks, which call the serializer, the compiler and the save check directly.
 
+## Website
+
+`website/` (see its README) is the landing page and the docs (Astro and Starlight), deployed to GitHub Pages by `.github/workflows/website.yml` on pushes to main that change it. Node.js 22.23 or later.
+
+```bash
+cd website && npm ci && npm run build
+```
+
+The docs pages (`website/src/content/docs/docs/`) follow the README and the code: a change to the API, an option, a default or a SQL script updates them too. Their code samples must compile against the current API.
+
 ## Code Quality
 
 - `TreatWarningsAsErrors` is enabled - all warnings fail the build
@@ -105,7 +115,7 @@ XactJobs is a .NET library for background job processing with full database tran
 - `Services/XactJobsUIService.cs` - queries and actions. Actions must follow the core's rules: never update a job row in place (the scheduled time is part of the primary key) nor touch a leased row, and never add a second pending run to a periodic job
 - `Api/XactJobsApiEndpoints.cs` - REST API, access (local requests only by default, or an authorization policy) and antiforgery checks
 - `Assets/` - the dashboard's scripts, styles and fonts, embedded in the assembly and served by `Api/XactJobsAssets.cs` under `{BasePath}/assets/`, with the pages' access and a content hash in the URL (not a `wwwroot`: static web assets would need the static files middleware, and only work unpublished in Development)
-- Light and dark theme: `Assets/js/xactjobs-theme.js`, loaded first in the layout's head (not deferred), sets Bootstrap's `data-bs-theme` from the navbar switch (localStorage) or `prefers-color-scheme`. Use Bootstrap's theme-aware classes and CSS variables (`bg-body-secondary`, `var(--bs-tertiary-bg)`), not fixed light colors (`bg-light text-dark`); the dark adjustments are at the end of `xactjobs.css`, and `xactjobs.js` gives the charts the theme's colors. `docs/images/` has a `<name>-dark.png` for each screenshot, so a new screenshot needs both
+- Light and dark theme: `Assets/js/xactjobs-theme.js`, loaded first in the layout's head (not deferred), sets Bootstrap's `data-bs-theme` from the navbar switch (localStorage) or `prefers-color-scheme`. Use Bootstrap's theme-aware classes and CSS variables (`bg-body-secondary`, `var(--bs-tertiary-bg)`), not fixed light colors (`bg-light text-dark`); the dark adjustments are at the end of `xactjobs.css`, and `xactjobs.js` gives the charts the theme's colors. The website shows `docs/images/<name>-dark.png` in its dark theme, so a new screenshot needs both
 - `Assets/lib/` - Bootstrap, Bootstrap Icons, Chart.js and htmx, copied from their npm packages (source map comments removed), so the dashboard needs no CDN. Times are rendered as UTC `<time>` elements and shown in the browser's time zone by `Assets/js/xactjobs.js`
 - Actions that replace a row insert the replacement before deleting the old row, and keep `BatchId`, `AwaitsBatchId` and `ContinuationCondition` (see below)
 - A pending job is found by its whole primary key (`JobKey`: queue, scheduled time, id; the API takes the queue and the time in the query string), never by its id alone: on PostgreSQL, SQL Server and Oracle the key is `(queue, scheduled_at, id)` and there's no index on the id. Other lookups of job rows go through an index too (the batch columns, the periodic job column): `QueryPlanScenarios` checks the plans on every database
