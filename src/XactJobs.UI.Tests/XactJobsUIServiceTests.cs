@@ -30,7 +30,7 @@ public class XactJobsUIServiceTests : IDisposable
     {
         var jobId = await AddJobAsync(DateTime.UtcNow.AddHours(1), errorCount: 2);
 
-        var result = await WithServiceAsync(s => s.CancelJobAsync(jobId, "alice"));
+        var result = await WithServiceAsync(s => s.CancelJobAsync(KeyOf(jobId), "alice"));
 
         Assert.Equal(ActionStatus.Done, result.Status);
 
@@ -58,7 +58,7 @@ public class XactJobsUIServiceTests : IDisposable
     {
         var jobId = await AddJobAsync(DateTime.UtcNow.AddMinutes(-1), leasedUntil: DateTime.UtcNow.AddMinutes(5));
 
-        var result = await WithServiceAsync(s => s.CancelJobAsync(jobId, null));
+        var result = await WithServiceAsync(s => s.CancelJobAsync(KeyOf(jobId), null));
 
         Assert.Equal(ActionStatus.Conflict, result.Status);
         Assert.Equal(1, await CountJobsAsync());
@@ -72,7 +72,7 @@ public class XactJobsUIServiceTests : IDisposable
 
         var run = await GetPeriodicRunAsync();
 
-        var result = await WithServiceAsync(s => s.CancelJobAsync(run.Id, null));
+        var result = await WithServiceAsync(s => s.CancelJobAsync(KeyOf(run.Id), null));
 
         Assert.Equal(ActionStatus.Conflict, result.Status);
         Assert.Contains("Pause", result.Message);
@@ -82,7 +82,7 @@ public class XactJobsUIServiceTests : IDisposable
     [Fact]
     public async Task Cancel_OfAMissingJob_IsNotFound()
     {
-        Assert.Equal(ActionStatus.NotFound, (await WithServiceAsync(s => s.CancelJobAsync(42, null))).Status);
+        Assert.Equal(ActionStatus.NotFound, (await WithServiceAsync(s => s.CancelJobAsync(new JobKey(QueueNames.Default, DateTime.UtcNow, 42), null))).Status);
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public class XactJobsUIServiceTests : IDisposable
     {
         var jobId = await AddJobAsync(DateTime.UtcNow.AddHours(1), errorCount: 1);
 
-        var result = await WithServiceAsync(s => s.RunJobNowAsync(jobId));
+        var result = await WithServiceAsync(s => s.RunJobNowAsync(KeyOf(jobId)));
 
         Assert.Equal(ActionStatus.Done, result.Status);
 
@@ -109,7 +109,7 @@ public class XactJobsUIServiceTests : IDisposable
         var scheduledAt = DateTime.UtcNow.AddHours(1);
         var jobId = await AddJobAsync(scheduledAt, leasedUntil: DateTime.UtcNow.AddMinutes(5));
 
-        var result = await WithServiceAsync(s => s.RunJobNowAsync(jobId));
+        var result = await WithServiceAsync(s => s.RunJobNowAsync(KeyOf(jobId)));
 
         Assert.Equal(ActionStatus.Conflict, result.Status);
 
@@ -362,7 +362,7 @@ public class XactJobsUIServiceTests : IDisposable
         Assert.Equal("on failure", waiting.DisplayCondition);
         Assert.All(jobs.Where(j => !j.IsAwaitingBatch), j => Assert.Equal(batch, j.BatchId));
 
-        Assert.Equal(2, (await WithServiceAsync(s => s.GetJobByIdAsync(continuation)))!.BatchJobsLeft);
+        Assert.Equal(2, (await WithServiceAsync(s => s.GetJobAsync(KeyOf(continuation))))!.BatchJobsLeft);
     }
 
     [Fact]
@@ -381,8 +381,8 @@ public class XactJobsUIServiceTests : IDisposable
     {
         var (batch, continuation) = await AddBatchAsync();
 
-        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RunJobNowAsync(continuation))).Status);
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.CancelJobAsync(continuation, null))).Status);
+        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RunJobNowAsync(KeyOf(continuation)))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.CancelJobAsync(KeyOf(continuation), null))).Status);
 
         await using var db = CreateDb();
 
@@ -538,6 +538,16 @@ public class XactJobsUIServiceTests : IDisposable
     private UiTestDbContext CreateDb()
     {
         return new UiTestDbContext(new DbContextOptionsBuilder<UiTestDbContext>().UseSqlite(_connection).Options);
+    }
+
+    /// <summary>
+    /// The primary key of a pending job, as the dashboard has it from the job's row.
+    /// </summary>
+    private JobKey KeyOf(long id)
+    {
+        using var db = CreateDb();
+
+        return JobKey.Of(db.Jobs.AsNoTracking().Single(j => j.Id == id));
     }
 
     private async Task<T> WithServiceAsync<T>(Func<IXactJobsUIService, Task<T>> action)

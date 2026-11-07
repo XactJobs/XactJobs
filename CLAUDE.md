@@ -107,6 +107,7 @@ XactJobs is a .NET library for background job processing with full database tran
 - `Assets/` - the dashboard's scripts, styles and fonts, embedded in the assembly and served by `Api/XactJobsAssets.cs` under `{BasePath}/assets/`, with the pages' access and a content hash in the URL (not a `wwwroot`: static web assets would need the static files middleware, and only work unpublished in Development)
 - `Assets/lib/` - Bootstrap, Bootstrap Icons, Chart.js and htmx, copied from their npm packages (source map comments removed), so the dashboard needs no CDN. Times are rendered as UTC `<time>` elements and shown in the browser's time zone by `Assets/js/xactjobs.js`
 - Actions that replace a row insert the replacement before deleting the old row, and keep `BatchId`, `AwaitsBatchId` and `ContinuationCondition` (see below)
+- A pending job is found by its whole primary key (`JobKey`: queue, scheduled time, id; the API takes the queue and the time in the query string), never by its id alone: on PostgreSQL, SQL Server and Oracle the key is `(queue, scheduled_at, id)` and there's no index on the id. Other lookups of job rows go through an index too (the batch columns, the periodic job column): `QueryPlanScenarios` checks the plans on every database
 - History categories: `Failed` in the history is an attempt the runner already rescheduled ("Retried"); a job that ran out of retries, or threw `XactJobCancelException`, is `Cancelled` with a stack trace ("Failed"); a job cancelled from the dashboard is `Cancelled` without one
 
 ### Batches and Continuations
@@ -133,6 +134,18 @@ XactJobs is a .NET library for background job processing with full database tran
 - `Database.CurrentTransaction` is null in the handler when the job didn't open a transaction: EF starts its own after the event (tested on every database in `SaveCheckScenarios`)
 - `XactJobSaveCheck` (`WithSaveOutsideTransaction`, all the queues): `Warn` logs once per job type and method, per dispatcher (the runners share one checker); `Throw` throws `InvalidOperationException` from the event, so nothing is saved and the job is retried; `Ignore` doesn't subscribe. In `Warn` mode a job method that was already warned about isn't subscribed again
 - Only `SaveChanges` on that context is seen: not other DbContext instances, `ExecuteUpdate`/`ExecuteDelete`, raw SQL, or a transaction the job commits itself
+
+### Periodic Job Scheduler
+
+- `XactJobsCronScheduler` ensures the periodic jobs from the options at start, and reconciles them every interval, in a transaction that holds a lock (`ISqlDialect.AcquireTableLockAsync`), so that nodes don't do it at the same time
+- The lock ends with the transaction on PostgreSQL and Oracle (`LOCK TABLE`) and SQL Server (`sp_getapplock`), and SQLite needs none. MySQL's `GET_LOCK` belongs to the session and to the whole server: it's named after the database (hashed, a name has at most 64 characters), and released in a `finally`, also when the cycle fails or is cancelled. Otherwise its connection goes back to the pool holding it (MySql.Data doesn't reset a pooled session; MySqlConnector only on reuse), and the other nodes' cycles wait 30 s for it and fail
+
+### Indexes of the Job Table
+
+- The claims, the leases and the worker's delete use the primary key: `(queue, scheduled_at, id)`, or on SQLite the id with `ix_job_queue_scheduled_at` (SQLite only generates ids for `INTEGER PRIMARY KEY`)
+- `batch_id` and `awaits_batch_id`, for batches and continuations
+- `periodic_job_id`, only the rows of periodic jobs: a partial or filtered index (`IS NOT NULL`) on PostgreSQL, SQL Server and SQLite, a plain one on Oracle (which leaves out the rows where all its columns are null), none on MySQL (no filtered indexes, and a full one would be written by every job)
+- A new index adds a write to every job's insert and delete, unless it's filtered. On PostgreSQL, a claim must not change an indexed column, so it stays a HOT update
 
 ### Database Entities
 

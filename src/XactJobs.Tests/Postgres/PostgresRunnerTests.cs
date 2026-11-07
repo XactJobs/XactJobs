@@ -42,9 +42,13 @@ public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetim
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        // no index on the lease columns: the batch columns are indexed, but a claim doesn't change them
+        // no index on the lease columns: the batch columns and the periodic job are indexed, but a claim doesn't change them
         await using var indexes = new NpgsqlCommand("SELECT string_agg(indexname, ',' ORDER BY indexname) FROM pg_indexes WHERE schemaname = 'xact_jobs' AND tablename = 'job'", connection);
-        Assert.Equal("ix_job_awaits_batch_id,ix_job_batch_id,pk_job", await indexes.ExecuteScalarAsync());
+        Assert.Equal("ix_job_awaits_batch_id,ix_job_batch_id,ix_job_periodic_job_id,pk_job", await indexes.ExecuteScalarAsync());
+
+        // only the rows of periodic jobs
+        await using var periodicIndex = new NpgsqlCommand("SELECT indexdef FROM pg_indexes WHERE schemaname = 'xact_jobs' AND indexname = 'ix_job_periodic_job_id'", connection);
+        Assert.EndsWith("(periodic_job_id) WHERE (periodic_job_id IS NOT NULL)", (string?)await periodicIndex.ExecuteScalarAsync());
 
         await using var options = new NpgsqlCommand("SELECT reloptions::text FROM pg_class WHERE oid = 'xact_jobs.job'::regclass", connection);
         Assert.Equal("{fillfactor=70}", await options.ExecuteScalarAsync());

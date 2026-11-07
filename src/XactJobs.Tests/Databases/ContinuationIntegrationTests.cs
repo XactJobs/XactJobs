@@ -330,9 +330,9 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
             return (batch, continuation);
         });
 
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RunJobNowAsync(batch.Jobs[0].Id))).Status);
-        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RunJobNowAsync(continuation.Id))).Status);
-        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.CancelJobAsync(continuation.Id, null))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RunJobNowAsync(KeyOf(batch.Jobs[0].Id)))).Status);
+        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RunJobNowAsync(KeyOf(continuation.Id)))).Status);
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.CancelJobAsync(KeyOf(continuation.Id), null))).Status);
 
         await using var db = CreateDb();
 
@@ -438,6 +438,16 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
         fixture.Configure(options, retryOnFailure: false);
 
         return new TestDbContext(options.Options);
+    }
+
+    /// <summary>
+    /// The primary key of a pending job, as the dashboard has it from the job's row (the stored time, with the database's precision).
+    /// </summary>
+    private JobKey KeyOf(long id)
+    {
+        using var db = CreateDb();
+
+        return JobKey.Of(db.Jobs.AsNoTracking().Single(j => j.Id == id));
     }
 
     private async Task<T> WithServiceAsync<T>(Func<IXactJobsUIService, Task<T>> action)

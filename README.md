@@ -301,6 +301,11 @@ once all the workers run v0.2.0: a worker of an older version that retries a job
 For v0.3.0, run the script first: it adds the column for the time a job was originally scheduled for, which v0.3.0 needs. Then upgrade the workers.
 A worker of an older version that retries a job leaves the column empty, so that retry sees its own retry time as `XactJobContext.OriginallyScheduledAt`.
 On SQLite, the script also adds an index on the queue and the scheduled time, for the claims: without it, every claim reads and sorts the whole job table.
+Except on MySQL, it also adds an index of the periodic job column, with only the runs of periodic jobs, so that pausing a periodic job, resuming it, the
+reconciliation and the dashboard's Periodic page don't read the whole table. On SQL Server it changes the column from `nvarchar(max)`, which can't be indexed,
+to `nvarchar(450)`, the type of the periodic job's id, and it's a filtered index: creating it, and writing to the table, needs `QUOTED_IDENTIFIER` and
+`ANSI_NULLS` on, which are SqlClient's defaults (`sqlcmd` needs `-I`).
+The dashboard's API identifies a pending job by its primary key now: see [API](#api).
 
 ## Using EF Migrations
 Alternatively, instead of manually creating the required tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
@@ -543,9 +548,9 @@ All under the API base path (`/api/XactJobs` by default):
 | GET | `/stats` | Dashboard counts |
 | GET | `/chart-data?from=&to=&intervalMinutes=` | Counts per interval (default: the last 24 hours) |
 | GET | `/jobs?page=&pageSize=&queue=` | Pending and running jobs |
-| GET | `/jobs/{id}` | A pending or running job |
-| POST | `/jobs/{id}/run-now` | Make a pending job due now |
-| POST | `/jobs/{id}/cancel` | Cancel a pending job |
+| GET | `/jobs/{id}?queue=&scheduledAt=` | A pending or running job |
+| POST | `/jobs/{id}/run-now?queue=&scheduledAt=` | Make a pending job due now |
+| POST | `/jobs/{id}/cancel?queue=&scheduledAt=` | Cancel a pending job |
 | GET | `/history?category=&page=&pageSize=&queue=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped` |
 | GET | `/history/{id}` | A history row |
 | POST | `/history/{id}/retry` | Enqueue a failed or cancelled job, or a skipped continuation, again |
@@ -559,6 +564,10 @@ All under the API base path (`/api/XactJobs` by default):
 | DELETE | `/periodic/{id}` | Delete a periodic job |
 
 The actions answer `200` with a message, `404` if the job doesn't exist, or `409` if its state doesn't allow the action (e.g. it's running).
+
+A pending job is identified by its primary key: its `id`, `queue` and `scheduledAt`, as `/jobs` returns them, with `scheduledAt` in UTC
+(e.g. `2026-11-07T10:00:00.1234567Z`). On most databases there's no index on the id alone, so a lookup by the id would read the whole job table.
+Without the queue and the scheduled time, these routes answer `400`.
 
 # How Jobs Run
 
