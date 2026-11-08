@@ -155,6 +155,9 @@ public class SqlDialectLeaseSqlTests
     {
         var (sql, parameters) = new OracleDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration);
 
+        // the SQL is a multi-line literal: with \r\n where the source files are checked out with them (git on Windows)
+        sql = sql.ReplaceLineEndings("\n");
+
         AssertFullyParameterized(sql, parameters);
         Assert.Contains("SELECT /*+ INDEX_ASC(XACT_JOBS_JOB (QUEUE, SCHEDULED_AT, ID)) */ ROWIDTOCHAR(ROWID)", sql);
         Assert.Contains("ORDER BY SCHEDULED_AT\n    FOR UPDATE SKIP LOCKED", sql);
@@ -173,6 +176,9 @@ public class SqlDialectLeaseSqlTests
     public void Oracle_ContinuationClaimLocksAtMostMaxJobsRowsInIdOrder_ThenLeasesThem()
     {
         var (sql, parameters) = new OracleDialect().GetFetchContinuationsSql("queue-a", 10, Leaser, LeaseDuration, ClaimedAt);
+
+        // the SQL is a multi-line literal: with \r\n where the source files are checked out with them (git on Windows)
+        sql = sql.ReplaceLineEndings("\n");
 
         AssertFullyParameterized(sql, parameters);
         Assert.Contains("SELECT /*+ INDEX_ASC(c (QUEUE, SCHEDULED_AT, ID)) */ ROWIDTOCHAR(c.ROWID)", sql);
