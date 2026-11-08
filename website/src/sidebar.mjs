@@ -17,6 +17,7 @@ export const sidebar = [
       { label: 'Failures, retries and stopping', slug: 'docs/failures-and-retries' },
       { label: 'Idempotent external calls', slug: 'docs/idempotent-external-calls' },
       { label: 'Dashboard and API', slug: 'docs/dashboard' },
+      { label: 'Metrics and logs', slug: 'docs/observability' },
       { label: 'Using XactJobs with AI agents', slug: 'docs/ai-agents' },
     ],
   },

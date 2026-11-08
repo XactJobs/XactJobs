@@ -92,6 +92,12 @@ namespace XactJobs
         public XactJobSaveCheck SaveOutsideTransaction { get; set; } = XactJobSaveCheck.Warn;
 
         /// <summary>
+        /// Also tags the jobs' metrics (attempts, duration, start delay) with the job's type and method. Off by default: one series
+        /// per job method instead of per queue. Applies to all the queues.
+        /// </summary>
+        public bool JobTagsInMetrics { get; set; }
+
+        /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>
         public Dictionary<string, XactJobsOptionsBase<TDbContext>> IsolatedQueues { get; set; } = [];

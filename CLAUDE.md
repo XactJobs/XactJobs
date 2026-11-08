@@ -174,6 +174,13 @@ XactJobs is a .NET library for background job processing with full database tran
 
 - Once the stopping token (or a job's token) is cancelled, an exception counts as that cancellation, not only an `OperationCanceledException`: SqlClient throws a `SqlException` ("Operation cancelled by user") for a cancelled command. So a stop doesn't log errors (the poll loop, the lease timer, the cron scheduler), and a job cancelled by it runs again without a failed attempt, unless it threw `XactJobCancelException`. `SqliteShutdownCancellationTests` simulates such a provider
 
+### Metrics and Logs
+
+- `Internal/XactJobsMetrics.cs`: the meter `XactJobs` (System.Diagnostics.Metrics, no OpenTelemetry dependency): attempts by outcome (completed, skipped, retried, failed, interrupted), their duration, the start delay (from the scheduled time, or a waiting continuation's claim), the claims' duration and jobs, and observable running and held jobs per queue, from the registered runners (`IXactJobsWorkerState`). Tags: `xactjobs.queue`, `xactjobs.outcome`, and with `WithJobTagsInMetrics` the job's type and method. Instrument names, units and tags are a contract, like log messages: dashboards depend on them
+- No counter of saves outside a transaction: in `Warn` mode the checker stops watching a job method after its first warning, so it would undercount
+- `Internal/XactJobLogScope.cs`: each attempt runs in a log scope with JobId, JobType, JobMethod, JobQueue and JobAttempt
+- `SqliteObservabilityTests`: the meter is shared with the tests running at the same time, so each test has a queue of its own and filters the measurements by it
+
 ### Database Entities
 
 - **XactJob** - Main job queue (status, payload, scheduled time, retry info)

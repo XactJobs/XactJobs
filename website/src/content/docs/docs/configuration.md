@@ -16,6 +16,7 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
         .WithPeriodicJobReconciliationInterval(300) // seconds between the checks for periodic jobs without a pending run
         .WithSaveOutsideTransaction(XactJobSaveCheck.Warn); // when a job saves without a transaction: Warn, Throw or Ignore (all the queues)
      // .WithHistoryRetentionPeriodInDays(30)       // deletes the older history every hour (default: the history is kept)
+     // .WithJobTagsInMetrics()                     // tags the jobs' metrics with the job's type and method (all the queues)
 
     // isolated queues have their own settings
     options.WithLongRunningQueue(queue => queue.WithMaxDegreeOfParallelism(2));
@@ -48,6 +49,7 @@ these defaults, not from the default queue's settings.
 | `WithHistoryRetentionPeriodInDays(days)` | none: the history is kept | Adds the periodic job `xj_history_cleanup`, which deletes the older history every hour, except the history of the batches that continuations still wait for |
 | `WithPeriodicJobReconciliationInterval(seconds)` | 300 | Seconds between each node's checks for active periodic jobs without a pending run |
 | `WithSaveOutsideTransaction(check)` | `XactJobSaveCheck.Warn` | When a job saves without a transaction: `Warn`, `Throw` or `Ignore`. See [the save check](../unit-of-work/#the-save-check) |
+| `WithJobTagsInMetrics(enabled?)` | off | Also tags the jobs' metrics with the job's type and method. See [Metrics and logs](../observability/) |
 | `WithPriorityQueue(configure?)` | not started | Workers for `QueueNames.Priority`: 2, polling every 4 seconds |
 | `WithLongRunningQueue(configure?)` | not started | Workers for `QueueNames.LongRunning`: 2, polling every 10 seconds |
 | `WithIsolatedQueue(name, configure?)` | none | Workers for a queue of your own |
