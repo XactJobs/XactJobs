@@ -67,6 +67,8 @@ export default defineConfig({
       expressiveCode: {
         themes: ['github-dark-default', 'github-light'],
         styleOverrides: { borderRadius: '0.6rem' },
+        // a first-line comment like "// Microsoft.EntityFrameworkCore.SqlServer" is a comment, not a file name for the frame's title
+        frames: { extractFileNameFromCode: false },
       },
       sidebar,
     }),
