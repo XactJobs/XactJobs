@@ -17,7 +17,7 @@ It needs Node.js 22.23 or later (Astro 7).
 ```bash
 cd website
 npm ci
-npm run dev        # http://localhost:4321/XactJobs/, reloads on changes
+npm run dev        # http://localhost:4321/, reloads on changes
 npm run build      # the static site, in dist/
 npm run preview    # serves dist/ (Astro 7 runs it in the background: npx astro preview stop)
 ```
@@ -30,10 +30,10 @@ npm run preview    # serves dist/ (Astro 7 runs it in the background: npx astro 
 
 ## The domain
 
-The site's address is one value, `SITE_URL` in `site.config.mjs`. Until the domain is bought, it's the GitHub Pages project URL,
-`https://xactjobs.github.io/XactJobs/`, and every page and asset is under `/XactJobs/`. When the domain is ready:
+The site is at `https://xactjobs.com/`. The address is set in three places, which must agree:
 
-1. Set `SITE_URL` to it, e.g. `https://xactjobs.dev/`. The base path then becomes `/`.
-2. Put the same host name in `public/CNAME` (it holds a placeholder).
-3. Set it in the repository's Settings > Pages > Custom domain, and add the DNS records GitHub shows there. With a workflow deployment,
-   GitHub takes the domain from this setting, not from the CNAME file.
+1. `SITE_URL` in `site.config.mjs`. The links, the canonical URLs, the sitemap and `/llms.txt` are built from it. A path in it, like
+   the GitHub Pages project URL `https://xactjobs.github.io/XactJobs/`, would be the base path of every page and asset.
+2. `public/CNAME`, the host name.
+3. The repository's Settings > Pages > Custom domain, with its DNS records. With a workflow deployment, GitHub takes the domain from
+   this setting, not from the CNAME file. The old address, `https://xactjobs.github.io/XactJobs/`, redirects to the domain.
