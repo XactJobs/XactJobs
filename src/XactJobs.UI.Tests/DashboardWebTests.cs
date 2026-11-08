@@ -160,14 +160,14 @@ public partial class DashboardWebTests : IAsyncDisposable
 
         var urls = Regex.Matches(html, @"(?:href|src)=""(/XactJobs/assets/[^""]+)""").Select(m => WebUtility.HtmlDecode(m.Groups[1].Value)).ToList();
 
-        Assert.Equal(8, urls.Count);
+        Assert.Equal(9, urls.Count);
 
         foreach (var url in urls)
         {
             var response = await client.GetAsync(url);
 
             Assert.True(response.StatusCode == HttpStatusCode.OK, $"{url}: {response.StatusCode}");
-            Assert.Equal(url.Contains(".css") ? "text/css" : "text/javascript", response.Content.Headers.ContentType?.MediaType);
+            Assert.Equal(url.Contains(".css") ? "text/css" : url.Contains(".svg") ? "image/svg+xml" : "text/javascript", response.Content.Headers.ContentType?.MediaType);
             Assert.Equal("public, max-age=31536000, immutable", response.Headers.CacheControl?.ToString());
             Assert.NotNull(response.Headers.ETag);
             Assert.NotEmpty(await response.Content.ReadAsByteArrayAsync());
