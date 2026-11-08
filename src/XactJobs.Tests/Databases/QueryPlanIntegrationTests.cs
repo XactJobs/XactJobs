@@ -18,8 +18,14 @@ public sealed class SqlServerQueryPlanTests(SqlServerFixture fixture) : QueryPla
 [Collection(OracleCollection.Name)]
 public sealed class OracleQueryPlanTests(OracleFixture fixture) : QueryPlanIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresQueryPlanTests(PostgresFixture fixture) : QueryPlanIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16QueryPlanTests(Postgres16Fixture fixture) : QueryPlanIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17QueryPlanTests(Postgres17Fixture fixture) : QueryPlanIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18QueryPlanTests(Postgres18Fixture fixture) : QueryPlanIntegrationTests(fixture);
 
 /// <summary>
 /// <see cref="QueryPlanScenarios"/> on every database, with the schema from the SQL scripts.

@@ -18,8 +18,14 @@ public sealed class SqlServerSaveCheckTests(SqlServerFixture fixture) : SaveChec
 [Collection(OracleCollection.Name)]
 public sealed class OracleSaveCheckTests(OracleFixture fixture) : SaveCheckIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresSaveCheckTests(PostgresFixture fixture) : SaveCheckIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16SaveCheckTests(Postgres16Fixture fixture) : SaveCheckIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17SaveCheckTests(Postgres17Fixture fixture) : SaveCheckIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18SaveCheckTests(Postgres18Fixture fixture) : SaveCheckIntegrationTests(fixture);
 
 /// <summary>
 /// <see cref="SaveCheckScenarios"/> on every database, with the schema from the SQL scripts: whether a save outside a transaction is seen

@@ -8,8 +8,16 @@ namespace XactJobs.Tests.Postgres;
 /// <summary>
 /// What the README promises about the database writes of a job using the scoped DbContext.
 /// </summary>
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresJobTransactionTests(PostgresFixture fixture) : IAsyncLifetime
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16JobTransactionTests(Postgres16Fixture fixture) : PostgresJobTransactionTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17JobTransactionTests(Postgres17Fixture fixture) : PostgresJobTransactionTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18JobTransactionTests(Postgres18Fixture fixture) : PostgresJobTransactionTests(fixture);
+
+public abstract class PostgresJobTransactionTests(PostgresFixture fixture) : IAsyncLifetime
 {
     private const string MarkerQueue = "marker";
 

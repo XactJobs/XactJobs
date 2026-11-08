@@ -18,8 +18,14 @@ public sealed class SqlServerOriginalScheduleTests(SqlServerFixture fixture) : O
 [Collection(OracleCollection.Name)]
 public sealed class OracleOriginalScheduleTests(OracleFixture fixture) : OriginalScheduleIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresOriginalScheduleTests(PostgresFixture fixture) : OriginalScheduleIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16OriginalScheduleTests(Postgres16Fixture fixture) : OriginalScheduleIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17OriginalScheduleTests(Postgres17Fixture fixture) : OriginalScheduleIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18OriginalScheduleTests(Postgres18Fixture fixture) : OriginalScheduleIntegrationTests(fixture);
 
 /// <summary>
 /// <see cref="OriginalScheduleScenarios"/> on every database, with the schema from the SQL scripts.

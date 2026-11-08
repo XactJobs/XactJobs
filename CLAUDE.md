@@ -41,15 +41,16 @@ dotnet test --collect:"XPlat Code Coverage" src/XactJobs.Tests/XactJobs.Tests.cs
 
 The dashboard is tested in `src/XactJobs.UI.Tests/` (SQLite and an in-memory test server), and its queries and actions on every database in `src/XactJobs.Tests/Databases/DashboardIntegrationTests.cs`.
 
-The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. The first run downloads the images (about 5 GB).
+The tests in `src/XactJobs.Tests/Postgres/` and `src/XactJobs.Tests/Databases/` run against real databases in containers (Testcontainers), and are skipped if Docker isn't running. `Databases/` is one suite that runs on PostgreSQL, MySQL, SQL Server and Oracle. PostgreSQL runs as 16, 17 and 18, each with its own container, fixture (`Postgres16Fixture`...) and test classes (`Postgres16IntegrationTests`...), in `Postgres/` too. The first run downloads the images (about 5 GB). The images have exact versions (in `Postgres/PostgresFixture.cs` and `Databases/DatabaseFixture.cs`), so every machine tests the same ones: a moving tag (`mysql:8`) stays at the version a machine pulled first, and query plans differ between versions. Update them on purpose, and run the suites of that database.
 
 On a small machine (e.g. 8 GB of RAM), run them one framework and one database at a time: `dotnet test` runs both frameworks at once, and xUnit runs the database classes in parallel, which starts several SQL Server and Oracle containers together, and they fail to start or time out.
 
 ```bash
 dotnet build src/XactJobs.Tests/XactJobs.Tests.csproj
 dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName!~XactJobs.Tests.Databases&FullyQualifiedName!~XactJobs.Tests.Postgres"
-dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Postgres."
-# then each database of Databases/: Postgres, OfficialMySql, PomeloMySql (net9.0 only), SqlServer, Oracle
+# then each PostgreSQL version of Postgres/: Postgres16, Postgres17, Postgres18
+dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Postgres.Postgres16"
+# then each database of Databases/: Postgres16, Postgres17, Postgres18, OfficialMySql, PomeloMySql (net9.0 only), SqlServer, Oracle
 # (the prefix runs both suites of the database: its *IntegrationTests and *DashboardTests)
 dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filter "FullyQualifiedName~XactJobs.Tests.Databases.Oracle"
 ```

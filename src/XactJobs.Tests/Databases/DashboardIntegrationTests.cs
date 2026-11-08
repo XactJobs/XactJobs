@@ -24,8 +24,14 @@ public sealed class SqlServerDashboardTests(SqlServerFixture fixture) : Dashboar
 [Collection(OracleCollection.Name)]
 public sealed class OracleDashboardTests(OracleFixture fixture) : DashboardIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresDashboardTests(PostgresFixture fixture) : DashboardIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16DashboardTests(Postgres16Fixture fixture) : DashboardIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17DashboardTests(Postgres17Fixture fixture) : DashboardIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18DashboardTests(Postgres18Fixture fixture) : DashboardIntegrationTests(fixture);
 
 /// <summary>
 /// The dashboard's queries and actions on every database. The actions replace job rows by their whole primary key

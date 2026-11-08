@@ -152,7 +152,7 @@ public sealed class DockerFactAttribute : FactAttribute
 
 public abstract class MySqlFixtureBase : DatabaseFixture
 {
-    private readonly MySqlContainer _container = new MySqlBuilder("mysql:8").Build();
+    private readonly MySqlContainer _container = new MySqlBuilder("mysql:8.4.13").Build();
 
     protected string ConnectionString => _container.GetConnectionString();
 
@@ -216,7 +216,7 @@ public sealed class SqlServerFixture : DatabaseFixture
 {
     private const string DatabaseName = "xact_jobs_tests";
 
-    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-latest").Build();
+    private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04").Build();
 
     private string ConnectionString => new SqlConnectionStringBuilder(_container.GetConnectionString())
     {
@@ -270,7 +270,7 @@ WHERE ic.object_id = OBJECT_ID('XactJobs.Job') AND c.name = 'Leaser'";
 
 public sealed class OracleFixture : DatabaseFixture
 {
-    private readonly OracleContainer _container = new OracleBuilder("gvenzl/oracle-free:slim")
+    private readonly OracleContainer _container = new OracleBuilder("gvenzl/oracle-free:23.26.3-slim")
         .WithDatabase("xact_jobs_tests") // not the default one, which the image would then try to create again
         .Build();
 

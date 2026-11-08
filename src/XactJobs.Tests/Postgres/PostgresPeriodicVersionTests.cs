@@ -6,8 +6,16 @@ using Microsoft.Extensions.Logging;
 
 namespace XactJobs.Tests.Postgres;
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresPeriodicVersionTests(PostgresFixture fixture) : IAsyncLifetime
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16PeriodicVersionTests(Postgres16Fixture fixture) : PostgresPeriodicVersionTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17PeriodicVersionTests(Postgres17Fixture fixture) : PostgresPeriodicVersionTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18PeriodicVersionTests(Postgres18Fixture fixture) : PostgresPeriodicVersionTests(fixture);
+
+public abstract class PostgresPeriodicVersionTests(PostgresFixture fixture) : IAsyncLifetime
 {
     private const string Daily = "0 0 0 * * *";
     private const string EverySecond = "* * * * * *";
