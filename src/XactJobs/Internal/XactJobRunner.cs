@@ -15,6 +15,10 @@ namespace XactJobs.Internal
         // How long jobs get to react to the cancellation, after the shutdown timeout has passed
         private static readonly TimeSpan JobCancellationTimeout = TimeSpan.FromSeconds(5);
 
+        // During a backlog, how long a worker with a batch waits for the batch to finish before it claims again, while fewer jobs
+        // wait than it can run
+        private static readonly TimeSpan EarlyClaimDelay = TimeSpan.FromSeconds(1);
+
         // Jobs claimed by this runner and not finished yet, by primary key.
         // Jobs that were cancelled because of a shutdown stay here, so their leases get cleared.
         private readonly ConcurrentDictionary<(string Queue, DateTime ScheduledAt, long Id), XactJob> _inFlightJobs = new();
@@ -32,7 +36,7 @@ namespace XactJobs.Internal
         // The most jobs running at the same time
         private readonly int _maxDegreeOfParallelism;
 
-        // With a batch larger than the parallelism, the claimed jobs wait here for a slot to run, oldest first. Null otherwise.
+        // With a batch larger than the parallelism, the claimed jobs wait here for a slot to run, in no set order. Null otherwise.
         private readonly SemaphoreSlim? _runSlots;
 
         private int _runningJobCount;
@@ -188,7 +192,8 @@ namespace XactJobs.Internal
 
         /// <summary>
         /// During a backlog: when a slot is free. With a batch larger than the parallelism, only once fewer jobs wait than can run,
-        /// so that the worker claims a batch, not one job each time one finishes.
+        /// so that the worker claims a batch, not one job each time one finishes. Then it still waits for the batch to finish, at
+        /// most <see cref="EarlyClaimDelay"/> (see <see cref="WaitForFreeSlotAsync"/>).
         /// </summary>
         private bool ShouldClaimMore()
         {
@@ -207,6 +212,28 @@ namespace XactJobs.Internal
             {
                 await _jobFinished.Reader.ReadAsync(stoppingToken)
                     .ConfigureAwait(false);
+            }
+
+            if (_runSlots == null || _inFlightJobs.IsEmpty) return;
+
+            // A batch: the claim waits for the batch to finish, so that it doesn't run while the batch's jobs save their results
+            // (on SQLite, one writer at a time: a claim that collides with a save waits 150 ms in Microsoft.Data.Sqlite's retry).
+            // At most EarlyClaimDelay, so that a slow job doesn't leave the other slots idle.
+            using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+
+            delayCts.CancelAfter(EarlyClaimDelay);
+
+            try
+            {
+                while (!_inFlightJobs.IsEmpty)
+                {
+                    await _jobFinished.Reader.ReadAsync(delayCts.Token)
+                        .ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
+            {
+                // the delay has passed: claim for the free slots
             }
         }
 
