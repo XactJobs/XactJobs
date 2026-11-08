@@ -5,6 +5,7 @@ The landing page and the docs, built with [Astro](https://astro.build) and [Star
 - `src/pages/index.astro` - the landing page, with its layout in `src/layouts/Landing.astro` and its parts in `src/components/`
 - `src/content/docs/docs/` - the docs pages, served under `/docs/`. The sidebar is in `src/sidebar.mjs`
 - `src/pages/llms.txt.ts`, `src/pages/llms-full.txt.ts` - `/llms.txt` (an index of the docs) and `/llms-full.txt` (all the docs as markdown), generated from the docs pages
+- `src/pages/robots.txt.ts` - `/robots.txt`: everything may be crawled, and the sitemap's address (Starlight generates `/sitemap-index.xml`)
 - `src/styles/theme.css` - the colors (one accent and neutrals) and fonts, shared by the docs and the landing page
 - The dashboard screenshots come from `../docs/images/`, and are resized and converted (AVIF, WebP) at build time
 
@@ -32,7 +33,7 @@ npm run preview    # serves dist/ (Astro 7 runs it in the background: npx astro 
 
 The site is at `https://xactjobs.com/`. The address is set in three places, which must agree:
 
-1. `SITE_URL` in `site.config.mjs`. The links, the canonical URLs, the sitemap and `/llms.txt` are built from it. A path in it, like
+1. `SITE_URL` in `site.config.mjs`. The links, the canonical URLs, the sitemap, `/robots.txt` and `/llms.txt` are built from it. A path in it, like
    the GitHub Pages project URL `https://xactjobs.github.io/XactJobs/`, would be the base path of every page and asset.
 2. `public/CNAME`, the host name.
 3. The repository's Settings > Pages > Custom domain, with its DNS records. With a workflow deployment, GitHub takes the domain from
