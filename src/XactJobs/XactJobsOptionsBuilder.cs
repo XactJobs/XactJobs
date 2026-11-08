@@ -135,6 +135,17 @@ namespace XactJobs
             return this;
         }
 
+        /// <summary>
+        /// Also tags the jobs' metrics (attempts, duration, start delay) with the job's type and method, as <c>xactjobs.job.type</c>
+        /// and <c>xactjobs.job.method</c>. Off by default: it makes one series per job method instead of per queue. Applies to all
+        /// the queues.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithJobTagsInMetrics(bool enabled = true)
+        {
+            Options.JobTagsInMetrics = enabled;
+            return this;
+        }
+
         public XactJobsOptionsBuilder<TDbContext> WithPriorityQueue(Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
         {
             WithIsolatedQueue(QueueNames.Priority, options =>

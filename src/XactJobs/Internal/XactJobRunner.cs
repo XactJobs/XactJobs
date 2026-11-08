@@ -5,12 +5,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 
 namespace XactJobs.Internal
 {
-    internal sealed class XactJobRunner<TDbContext> where TDbContext: DbContext
+    internal sealed class XactJobRunner<TDbContext> : IXactJobsWorkerState where TDbContext: DbContext
     {
         // How long jobs get to react to the cancellation, after the shutdown timeout has passed
         private static readonly TimeSpan JobCancellationTimeout = TimeSpan.FromSeconds(5);
@@ -50,6 +51,7 @@ namespace XactJobs.Internal
         private readonly Guid _leaser = Guid.NewGuid();
         private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly XactJobSaveChecker _saveChecker;
+        private readonly XactJobsMetrics _metrics;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
 
@@ -61,6 +63,7 @@ namespace XactJobs.Internal
                              QuickPollChannels quickPollChannels,
                              XactJobsOptionsBase<TDbContext> options,
                              XactJobSaveChecker saveChecker,
+                             XactJobsMetrics metrics,
                              IServiceScopeFactory scopeFactory,
                              ILogger logger)
         {
@@ -69,6 +72,7 @@ namespace XactJobs.Internal
             _quickPollChannels = quickPollChannels;
             _options = options;
             _saveChecker = saveChecker;
+            _metrics = metrics;
             _scopeFactory = scopeFactory;
             _logger = logger;
 
@@ -96,6 +100,9 @@ namespace XactJobs.Internal
 
             // not disposed: a job ignoring the cancellation can still be using the token after this method returns
             var jobsCts = new CancellationTokenSource();
+
+            // its running and held jobs, in the metrics
+            using var metricsRegistration = XactJobsMetrics.Register(this);
 
             using var extendLeaseTimer = new AsyncTimer(_logger, TimeSpan.FromSeconds(_options.LeaseDurationInSeconds * 0.75), ExtendLeaseAsync);
 
@@ -399,6 +406,8 @@ namespace XactJobs.Internal
             // in whole microseconds, which every database stores exactly: the continuation claim saves it as their original time
             var claimedAt = TruncateToMicroseconds(DateTime.UtcNow);
 
+            var claimStartedAt = Stopwatch.GetTimestamp();
+
             if (ShouldClaimContinuations())
             {
                 // first, so that a backlog of the queue doesn't hold them back
@@ -441,6 +450,8 @@ namespace XactJobs.Internal
 
             // set by one of the claims: no continuations means that the jobs' claim ran, and if it threw, so does this method
             jobs ??= [];
+
+            XactJobsMetrics.RecordClaim(GetQueueDisplayName(), jobs.Count, Stopwatch.GetElapsedTime(claimStartedAt));
 
             foreach (var job in jobs)
             {
@@ -536,9 +547,22 @@ namespace XactJobs.Internal
             // the worker is stopping: it stays in flight, so its lease is cleared, and another worker can claim it right away
             if (_runSlots != null && !await TakeRunSlotAsync(stoppingToken).ConfigureAwait(false)) return;
 
+            var queue = GetQueueDisplayName();
+
+            // the job's properties on every entry logged while it runs, the job's own and EF's too
+            using var logScope = _logger.BeginScope(new XactJobLogScope(job, queue));
+
+            var startedAt = Stopwatch.GetTimestamp();
+
+            // due at its scheduled time (a retry's too), or, for a continuation that waited for its batch, when it was claimed
+            _metrics.RecordStartDelay(queue, job, DateTime.UtcNow - (job.IsAwaitingBatch ? claimedAt : job.ScheduledAt));
+
+            // null: the outcome couldn't be saved, the job runs again once its lease expires
+            string? outcome = null;
+
             try
             {
-                await RunJobAsync(job, periodicJob, claimedAt, jobsToken)
+                outcome = await RunJobAsync(job, periodicJob, claimedAt, jobsToken)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -552,12 +576,20 @@ namespace XactJobs.Internal
                     _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
                 }
 
-                var isFinished = await RecordFailureAsync(job, periodicJob, claimedAt, ex)
+                var recordedStatus = await RecordFailureAsync(job, periodicJob, claimedAt, ex)
                     .ConfigureAwait(false);
+
+                outcome = recordedStatus switch
+                {
+                    XactJobStatus.Failed => XactJobsMetrics.Retried,
+                    XactJobStatus.Cancelled => XactJobsMetrics.Failed,
+                    _ => null,
+                };
 
                 _inFlightJobs.TryRemove(GetKey(job), out _);
 
-                if (isFinished)
+                // finished: it won't be retried
+                if (recordedStatus is XactJobStatus.Cancelled)
                 {
                     await StartContinuationsIfBatchFinishedAsync(job)
                         .ConfigureAwait(false);
@@ -565,6 +597,11 @@ namespace XactJobs.Internal
             }
             finally
             {
+                if (outcome != null)
+                {
+                    _metrics.RecordAttempt(queue, job, outcome, Stopwatch.GetElapsedTime(startedAt));
+                }
+
                 Interlocked.Decrement(ref _runningJobCount);
 
                 _runSlots?.Release();
@@ -616,8 +653,9 @@ namespace XactJobs.Internal
         /// to a reader that doesn't use snapshots (SQL Server without snapshot isolation).
         /// </para>
         /// </summary>
-        /// <returns>True if the job is finished: it won't be retried.</returns>
-        private async Task<bool> RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception jobException)
+        /// <returns>The status recorded in the history: Failed if the job is retried, Cancelled if it's finished. Null if it
+        /// couldn't be recorded.</returns>
+        private async Task<XactJobStatus?> RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception jobException)
         {
             try
             {
@@ -656,7 +694,7 @@ namespace XactJobs.Internal
                     return recordedStatus;
                 }, cts.Token).ConfigureAwait(false);
 
-                return status != XactJobStatus.Failed;
+                return status;
             }
             catch (DbUpdateConcurrencyException ex)
             {
@@ -669,7 +707,7 @@ namespace XactJobs.Internal
                     GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
             }
 
-            return false;
+            return null;
         }
 
         /// <summary>
@@ -721,9 +759,11 @@ namespace XactJobs.Internal
             return ExecuteLeaseSqlForInFlightJobsAsync((dialect, jobs) => dialect.GetExtendLeaseSql(_leaser, jobs, _options.LeaseDurationInSeconds), token);
         }
 
-        public async Task RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, CancellationToken stoppingToken)
+        /// <returns>The outcome (see <see cref="XactJobsMetrics"/>): completed, skipped, or interrupted by the shutdown. A failure throws.</returns>
+        public async Task<string> RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, CancellationToken stoppingToken)
         {
             var isFinished = false;
+            var outcome = XactJobsMetrics.Interrupted;
 
             using var scope = _scopeFactory.CreateScope();
 
@@ -799,6 +839,7 @@ namespace XactJobs.Internal
                 _inFlightJobs.TryRemove(GetKey(job), out _);
 
                 isFinished = true;
+                outcome = isSkipped ? XactJobsMetrics.Skipped : XactJobsMetrics.Completed;
 
                 if (_logger.IsEnabled(LogLevel.Debug))
                 {
@@ -839,6 +880,8 @@ namespace XactJobs.Internal
                 await StartContinuationsIfBatchFinishedAsync(job)
                     .ConfigureAwait(false);
             }
+
+            return outcome;
         }
 
         /// <summary>
@@ -1008,6 +1051,12 @@ namespace XactJobs.Internal
         {
             return new DateTime(value.Ticks - value.Ticks % 10, value.Kind);
         }
+
+        string IXactJobsWorkerState.QueueDisplayName => GetQueueDisplayName();
+
+        int IXactJobsWorkerState.RunningJobs => Volatile.Read(ref _runningJobCount);
+
+        int IXactJobsWorkerState.HeldJobs => _inFlightJobs.Count;
 
         private string GetQueueDisplayName()
         {
