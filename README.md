@@ -6,6 +6,8 @@ Supports **SQL Server, PostgreSQL, MySQL, Oracle and SQLite**, on .NET 8, 9 and 
 
 XactJobs uses EF Core 9 on .NET 8 and 9, and EF Core 10 on .NET 10, so your database provider has to support that version. For MySQL, see [which provider to use](#mysql).
 
+The docs are also on the website, page by page: [xactjobs.com](https://xactjobs.com/).
+
 ## A Job Is a Unit of Work
 **The worker saves a job's database changes, not the job.** Changes a job makes through the injected `TDbContext` are saved when the job finishes, in the same transaction that marks it as completed:
 
