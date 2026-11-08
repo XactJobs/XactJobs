@@ -42,6 +42,9 @@ public sealed class SqliteQueryPlanTests : IAsyncLifetime
     [Fact]
     public Task PeriodicJobQueries_UseThePeriodicJobIndex() => _scenarios.PeriodicJobQueries_UseThePeriodicJobIndex();
 
+    [Fact]
+    public Task BatchQueries_UseTheBatchIndexes() => _scenarios.BatchQueries_UseTheBatchIndexes();
+
     private static IEnumerable<string> GetSqliteMigrationScripts()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

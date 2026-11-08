@@ -1,4 +1,4 @@
--- XactJobs v0.3.0, SQLite: the whole schema, for a new installation.
+-- XactJobs v0.4.0, SQLite: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -27,9 +27,9 @@ CREATE TABLE "xact_jobs_job" (
   "originally_scheduled_at" DATETIME NULL
 );
 
--- batches and continuations
-CREATE INDEX "ix_job_batch_id" ON "xact_jobs_job" ("batch_id");
-CREATE INDEX "ix_job_awaits_batch_id" ON "xact_jobs_job" ("awaits_batch_id");
+-- batches and continuations: only the rows of a batch, or of a continuation (most jobs are in none)
+CREATE INDEX "ix_job_batch_id" ON "xact_jobs_job" ("batch_id") WHERE "batch_id" IS NOT NULL;
+CREATE INDEX "ix_job_awaits_batch_id" ON "xact_jobs_job" ("awaits_batch_id") WHERE "awaits_batch_id" IS NOT NULL;
 
 -- the claims look for a queue's due jobs, oldest first: without this index, every claim reads and sorts the whole table
 CREATE INDEX "ix_job_queue_scheduled_at" ON "xact_jobs_job" ("queue", "scheduled_at");
@@ -63,8 +63,8 @@ CREATE TABLE "xact_jobs_job_history" (
 );
 
 CREATE INDEX "ix_job_history_processed_at" ON "xact_jobs_job_history" ("processed_at");
-CREATE INDEX "ix_job_history_batch_id" ON "xact_jobs_job_history" ("batch_id");
-CREATE INDEX "ix_job_history_awaits_batch_id" ON "xact_jobs_job_history" ("awaits_batch_id");
+CREATE INDEX "ix_job_history_batch_id" ON "xact_jobs_job_history" ("batch_id") WHERE "batch_id" IS NOT NULL;
+CREATE INDEX "ix_job_history_awaits_batch_id" ON "xact_jobs_job_history" ("awaits_batch_id") WHERE "awaits_batch_id" IS NOT NULL;
 
 -- ============================
 -- Table storing recurring jobs

@@ -86,13 +86,15 @@ namespace XactJobs.EntityConfigurations
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
 
-            // to count the failed jobs of a batch
+            // to count the failed jobs of a batch. Only the jobs of batches
             builder.HasIndex(x => x.BatchId)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColBatchId}");
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColBatchId}")
+                .WhereNotNull(_sqlDialect, _sqlDialect.ColBatchId);
 
-            // to find the continuations of a batch in the history
+            // to find the continuations of a batch in the history. Only the continuations
             builder.HasIndex(x => x.AwaitsBatchId)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColAwaitsBatchId}");
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColAwaitsBatchId}")
+                .WhereNotNull(_sqlDialect, _sqlDialect.ColAwaitsBatchId);
         }
     }
 }

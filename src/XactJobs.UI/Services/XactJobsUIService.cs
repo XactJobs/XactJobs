@@ -809,8 +809,12 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         var jobs = db.Set<XactJob>();
         var awaiting = XactJobBase.AwaitingBatchScheduledAt;
 
+        // a parameter for each column: with one parameter for both, Oracle compared RAWTOHEX(BATCH_ID) with it in the subquery,
+        // which can't use the index, and read the whole job table (see XactJobRunner.StartContinuationsIfBatchFinishedAsync)
+        var awaitedBatchId = batchId;
+
         var queues = await jobs
-            .Where(c => c.AwaitsBatchId == batchId && c.ScheduledAt == awaiting && !jobs.Any(j => j.BatchId == batchId))
+            .Where(c => c.AwaitsBatchId == awaitedBatchId && c.ScheduledAt == awaiting && !jobs.Any(j => j.BatchId == batchId))
             .Select(c => c.Queue)
             .Distinct()
             .ToListAsync(ct);

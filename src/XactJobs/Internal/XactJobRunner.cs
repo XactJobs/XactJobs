@@ -692,8 +692,12 @@ namespace XactJobs.Internal
 
                 var jobs = dbContext.Set<XactJob>();
 
+                // a parameter for each column: with one parameter for both, Oracle compared RAWTOHEX(BATCH_ID) with it in the
+                // subquery, which can't use the index, and read the whole job table (QueryPlanScenarios.BatchQueries_UseTheBatchIndexes)
+                var awaitedBatchId = batchId;
+
                 var queues = await jobs
-                    .Where(c => c.AwaitsBatchId == batchId
+                    .Where(c => c.AwaitsBatchId == awaitedBatchId
                         && c.ScheduledAt == XactJobBase.AwaitingBatchScheduledAt
                         && !jobs.Any(j => j.BatchId == batchId))
                     .Select(c => c.Queue)

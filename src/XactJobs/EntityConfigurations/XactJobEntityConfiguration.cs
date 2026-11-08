@@ -82,13 +82,15 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.OriginallyScheduledAt).HasColumnName(_sqlDialect.ColOriginallyScheduledAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
-            // to check if a batch has jobs left
+            // to check if a batch has jobs left. Only the jobs of batches
             builder.HasIndex(x => x.BatchId)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColBatchId}");
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColBatchId}")
+                .WhereNotNull(_sqlDialect, _sqlDialect.ColBatchId);
 
-            // to find the continuations of a batch
+            // to find the continuations of a batch. Only the continuations
             builder.HasIndex(x => x.AwaitsBatchId)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColAwaitsBatchId}");
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColAwaitsBatchId}")
+                .WhereNotNull(_sqlDialect, _sqlDialect.ColAwaitsBatchId);
 
             ConfigurePeriodicJobIdIndex(builder);
 
@@ -116,22 +118,9 @@ namespace XactJobs.EntityConfigurations
             // MySQL has no filtered indexes, and a full one would be written by every job
             if (_sqlDialect is MySqlDialect) return;
 
-            var index = builder.HasIndex(x => x.PeriodicJobId)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}");
-
-            // Oracle doesn't store the rows where all the index's columns are null, so its index is filtered on its own
-            var filter = _sqlDialect switch
-            {
-                PostgreSqlDialect => $"{_sqlDialect.ColPeriodicJobId} IS NOT NULL",
-                SqlServerDialect => $"[{_sqlDialect.ColPeriodicJobId}] IS NOT NULL",
-                SqliteDialect => $"\"{_sqlDialect.ColPeriodicJobId}\" IS NOT NULL",
-                _ => null
-            };
-
-            if (filter != null)
-            {
-                index.HasFilter(filter);
-            }
+            builder.HasIndex(x => x.PeriodicJobId)
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}")
+                .WhereNotNull(_sqlDialect, _sqlDialect.ColPeriodicJobId);
         }
     }
 }

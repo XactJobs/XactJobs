@@ -166,7 +166,7 @@ XactJobs is a .NET library for background job processing with full database tran
 ### Indexes of the Job Table
 
 - The claims, the leases and the worker's delete use the primary key: `(queue, scheduled_at, id)`, or on SQLite the id with `ix_job_queue_scheduled_at` (SQLite only generates ids for `INTEGER PRIMARY KEY`)
-- `batch_id` and `awaits_batch_id`, for batches and continuations
+- `batch_id` and `awaits_batch_id`, for batches and continuations, in the job table and the history: like `periodic_job_id` below, only the rows where they're set (most jobs are in no batch), so the queries must imply that the column isn't null (an equality does). Oracle's provider gave one parameter compared with both columns (`AwaitsBatchId == id && !Any(BatchId == id)`) a type that made Oracle compare `RAWTOHEX(BATCH_ID)` and read the whole table: each column gets its own parameter. `QueryPlanScenarios.BatchQueries_UseTheBatchIndexes` checks the plans
 - `periodic_job_id`, only the rows of periodic jobs: a partial or filtered index (`IS NOT NULL`) on PostgreSQL, SQL Server and SQLite, a plain one on Oracle (which leaves out the rows where all its columns are null), none on MySQL (no filtered indexes, and a full one would be written by every job)
 - A new index adds a write to every job's insert and delete, unless it's filtered. On PostgreSQL, a claim must not change an indexed column, so it stays a HOT update
 

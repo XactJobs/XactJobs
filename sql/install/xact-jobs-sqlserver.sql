@@ -1,4 +1,4 @@
--- XactJobs v0.3.0, SQL Server: the whole schema, for a new installation.
+-- XactJobs v0.4.0, SQL Server: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 -- The filtered index needs QUOTED_IDENTIFIER and ANSI_NULLS on, to create it and to write to the table: SqlClient's defaults
@@ -31,9 +31,9 @@ CREATE TABLE [XactJobs].[Job] (
   CONSTRAINT [PK_Job] PRIMARY KEY ([Queue], [ScheduledAt], [Id])
 );
 
--- batches and continuations
-CREATE INDEX [IX_Job_BatchId] ON [XactJobs].[Job] ([BatchId]);
-CREATE INDEX [IX_Job_AwaitsBatchId] ON [XactJobs].[Job] ([AwaitsBatchId]);
+-- batches and continuations: only the rows of a batch, or of a continuation (most jobs are in none)
+CREATE INDEX [IX_Job_BatchId] ON [XactJobs].[Job] ([BatchId]) WHERE [BatchId] IS NOT NULL;
+CREATE INDEX [IX_Job_AwaitsBatchId] ON [XactJobs].[Job] ([AwaitsBatchId]) WHERE [AwaitsBatchId] IS NOT NULL;
 
 -- the runs of a periodic job: only the rows of periodic jobs, so the other jobs' inserts and deletes don't write to it
 CREATE INDEX [IX_Job_PeriodicJobId] ON [XactJobs].[Job] ([PeriodicJobId]) WHERE [PeriodicJobId] IS NOT NULL;
@@ -65,8 +65,8 @@ CREATE TABLE [XactJobs].[JobHistory] (
 );
 
 CREATE INDEX [IX_JobHistory_ProcessedAt] ON [XactJobs].[JobHistory] ([ProcessedAt]);
-CREATE INDEX [IX_JobHistory_BatchId] ON [XactJobs].[JobHistory] ([BatchId]);
-CREATE INDEX [IX_JobHistory_AwaitsBatchId] ON [XactJobs].[JobHistory] ([AwaitsBatchId]);
+CREATE INDEX [IX_JobHistory_BatchId] ON [XactJobs].[JobHistory] ([BatchId]) WHERE [BatchId] IS NOT NULL;
+CREATE INDEX [IX_JobHistory_AwaitsBatchId] ON [XactJobs].[JobHistory] ([AwaitsBatchId]) WHERE [AwaitsBatchId] IS NOT NULL;
 
 -- ============================
 -- Table storing recurring jobs
