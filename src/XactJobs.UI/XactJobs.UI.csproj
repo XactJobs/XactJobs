@@ -7,7 +7,7 @@
 		<Nullable>enable</Nullable>
 		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
-		<Version>0.3.0</Version>
+		<Version>0.3.1</Version>
 		<RepositoryUrl>https://github.com/XactJobs/XactJobs</RepositoryUrl>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<Authors>XactJobs</Authors>
