@@ -379,7 +379,9 @@ ORDER BY qs.last_execution_time DESC";
         {
             while (reader.Read())
             {
-                plan.AppendLine(read(reader));
+                // \n, not AppendLine's Environment.NewLine: with \r\n (Windows), a pattern's $ doesn't match at the end of a line, since
+                // in multiline mode .NET's $ matches only before \n
+                plan.Append(read(reader)).Append('\n');
             }
         }
         while (reader.NextResult());
