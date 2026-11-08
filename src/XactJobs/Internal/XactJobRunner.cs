@@ -393,7 +393,8 @@ namespace XactJobs.Internal
 
             var dialect = dbContext.GetSqlDialect();
 
-            var jobs = new List<XactJob>();
+            // the dialects' lists are new for each claim: the first one is kept, not copied
+            List<XactJob>? jobs = null;
 
             // in whole microseconds, which every database stores exactly: the continuation claim saves it as their original time
             var claimedAt = TruncateToMicroseconds(DateTime.UtcNow);
@@ -401,8 +402,8 @@ namespace XactJobs.Internal
             if (ShouldClaimContinuations())
             {
                 // first, so that a backlog of the queue doesn't hold them back
-                jobs.AddRange(await dialect.ClaimContinuationsAsync(dbContext, _queueName, maxJobs, _leaser, _options.LeaseDurationInSeconds, claimedAt, stoppingToken)
-                    .ConfigureAwait(false));
+                jobs = await dialect.ClaimContinuationsAsync(dbContext, _queueName, maxJobs, _leaser, _options.LeaseDurationInSeconds, claimedAt, stoppingToken)
+                    .ConfigureAwait(false);
 
                 if (jobs.Count == maxJobs)
                 {
@@ -413,19 +414,33 @@ namespace XactJobs.Internal
 
             ExceptionDispatchInfo? claimError = null;
 
-            if (jobs.Count < maxJobs)
+            var continuationCount = jobs?.Count ?? 0;
+
+            if (continuationCount < maxJobs)
             {
                 try
                 {
-                    jobs.AddRange(await dialect.ClaimJobsAsync(dbContext, _queueName, maxJobs - jobs.Count, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
-                        .ConfigureAwait(false));
+                    var claimed = await dialect.ClaimJobsAsync(dbContext, _queueName, maxJobs - continuationCount, _leaser, _options.LeaseDurationInSeconds, stoppingToken)
+                        .ConfigureAwait(false);
+
+                    if (jobs == null || jobs.Count == 0)
+                    {
+                        jobs = claimed;
+                    }
+                    else
+                    {
+                        jobs.AddRange(claimed);
+                    }
                 }
-                catch (Exception ex) when (jobs.Count > 0)
+                catch (Exception ex) when (continuationCount > 0)
                 {
                     // the continuations are leased already: start them, then report the failure
                     claimError = ExceptionDispatchInfo.Capture(ex);
                 }
             }
+
+            // set by one of the claims: no continuations means that the jobs' claim ran, and if it threw, so does this method
+            jobs ??= [];
 
             foreach (var job in jobs)
             {
@@ -487,15 +502,24 @@ namespace XactJobs.Internal
             return true;
         }
 
+        // read only: the jobs look up their periodic job in it
+        private static readonly Dictionary<string, XactJobPeriodic> NoPeriodicJobs = [];
+
         private static async Task<Dictionary<string, XactJobPeriodic>> LoadPeriodicJobsAsync(TDbContext dbContext, List<XactJob> jobs, CancellationToken cancellationToken)
         {
-            var periodicJobIds = jobs
-                .Where(job => job.PeriodicJobId != null)
-                .Select(job => job.PeriodicJobId!)
-                .Distinct()
-                .ToList();
+            // without LINQ, and nothing new when none of the jobs is periodic (most claims). A list, which EF translates: a claim has
+            // few periodic jobs, so the duplicates check is cheap
+            List<string>? periodicJobIds = null;
 
-            if (periodicJobIds.Count == 0) return [];
+            foreach (var job in jobs)
+            {
+                if (job.PeriodicJobId != null && periodicJobIds?.Contains(job.PeriodicJobId) != true)
+                {
+                    (periodicJobIds ??= []).Add(job.PeriodicJobId);
+                }
+            }
+
+            if (periodicJobIds == null) return NoPeriodicJobs;
 
             return await dbContext.Set<XactJobPeriodic>()
                 .Where(x => periodicJobIds.Contains(x.Id))
