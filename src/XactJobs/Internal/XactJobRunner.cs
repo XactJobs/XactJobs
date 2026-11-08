@@ -19,6 +19,9 @@ namespace XactJobs.Internal
         // wait than it can run
         private static readonly TimeSpan EarlyClaimDelay = TimeSpan.FromSeconds(1);
 
+        // Cancels the wait for EarlyClaimDelay, or when the worker stops. Used only by the polling loop
+        private CancellationTokenSource? _earlyClaimCts;
+
         // Jobs claimed by this runner and not finished yet, by primary key.
         // Jobs that were cancelled because of a shutdown stay here, so their leases get cleared.
         private readonly ConcurrentDictionary<(string Queue, DateTime ScheduledAt, long Id), XactJob> _inFlightJobs = new();
@@ -183,6 +186,9 @@ namespace XactJobs.Internal
                     }
                 }
             }
+
+            _earlyClaimCts?.Dispose();
+            _earlyClaimCts = null;
         }
 
         private int GetFreeSlots()
@@ -219,21 +225,31 @@ namespace XactJobs.Internal
             // A batch: the claim waits for the batch to finish, so that it doesn't run while the batch's jobs save their results
             // (on SQLite, one writer at a time: a claim that collides with a save waits 150 ms in Microsoft.Data.Sqlite's retry).
             // At most EarlyClaimDelay, so that a slow job doesn't leave the other slots idle.
-            using var delayCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            // One token source for every wait, reset after each: a new one only when the delay has passed (or the worker stops)
+            _earlyClaimCts ??= CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
 
-            delayCts.CancelAfter(EarlyClaimDelay);
+            _earlyClaimCts.CancelAfter(EarlyClaimDelay);
 
             try
             {
                 while (!_inFlightJobs.IsEmpty)
                 {
-                    await _jobFinished.Reader.ReadAsync(delayCts.Token)
+                    await _jobFinished.Reader.ReadAsync(_earlyClaimCts.Token)
                         .ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (!stoppingToken.IsCancellationRequested)
             {
                 // the delay has passed: claim for the free slots
+            }
+            finally
+            {
+                // also stops the delay's timer
+                if (!_earlyClaimCts.TryReset())
+                {
+                    _earlyClaimCts.Dispose();
+                    _earlyClaimCts = null;
+                }
             }
         }
 
