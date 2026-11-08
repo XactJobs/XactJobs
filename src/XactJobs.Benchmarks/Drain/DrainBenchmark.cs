@@ -61,9 +61,10 @@ public static class DrainBenchmark
         var runXactJobs = only is null or "xactjobs";
         var runEf = only is null or "ef";
 
-        // warm-up: JIT, EF's model and query caches
-        if (runXactJobs) await DrainWithXactJobsAsync(Math.Min(jobs, 500), settings, listSql: false);
-        if (runEf) await DrainWithEfAsync(Math.Min(jobs, 500), settings, listSql: false);
+        // warm-up: JIT, EF's model and query caches. Not measured: a small backlog can be drained before all the workers poll,
+        // on a fast machine, when the measurement would start
+        if (runXactJobs) await DrainWithXactJobsAsync(Math.Min(jobs, 500), settings, listSql: false, measure: false);
+        if (runEf) await DrainWithEfAsync(Math.Min(jobs, 500), settings, listSql: false, measure: false);
 
         List<Measurement> xactJobs = [];
         List<Measurement> ef = [];
@@ -99,7 +100,8 @@ public static class DrainBenchmark
 
     private const int PollingIntervalInSeconds = 1;
 
-    private static async Task<Measurement> DrainWithXactJobsAsync(int jobs, DrainSettings settings, bool listSql)
+    /// <summary>Drains the backlog with XactJobs. Without <paramref name="measure"/> (the warm-up), the result is empty.</summary>
+    private static async Task<Measurement> DrainWithXactJobsAsync(int jobs, DrainSettings settings, bool listSql, bool measure = true)
     {
         await using var database = await BenchDatabase.CreateAsync(settings, jobs);
 
@@ -117,6 +119,10 @@ public static class DrainBenchmark
         }
 
         builder.Services.AddDbContext<BenchDbContext>(options => database.Configure(options).AddInterceptors(completed, commands));
+
+        // the drain starts and stops the host itself. The console lifetime would take Ctrl+C: it would stop the workers and keep
+        // the process alive, while the drain waits for jobs that no longer run. Without it, Ctrl+C ends the process.
+        builder.Services.AddSingleton<IHostLifetime, NoConsoleLifetime>();
 
         builder.Services.AddXactJobs<BenchDbContext>(options =>
         {
@@ -140,7 +146,16 @@ public static class DrainBenchmark
         // measured once all of them poll
         var allPolling = Task.Delay(TimeSpan.FromSeconds(PollingIntervalInSeconds) * (1 + (settings.Workers - 1.0) / settings.Workers) + TimeSpan.FromMilliseconds(200));
 
-        var measurement = await Measurement.MeasureAsync(completed, commands, allPolling);
+        Measurement measurement = default;
+
+        if (measure)
+        {
+            measurement = await Measurement.MeasureAsync(completed, commands, allPolling);
+        }
+        else
+        {
+            await completed.AllCompleted;
+        }
 
         await host.StopAsync();
 
@@ -154,7 +169,16 @@ public static class DrainBenchmark
         return measurement;
     }
 
-    private static async Task<Measurement> DrainWithEfAsync(int jobs, DrainSettings settings, bool listSql)
+    /// <summary>A host lifetime that does nothing: the drain starts and stops the host, and Ctrl+C isn't handled.</summary>
+    private sealed class NoConsoleLifetime : IHostLifetime
+    {
+        public Task WaitForStartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    }
+
+    /// <summary>Drains the backlog with plain EF. Without <paramref name="measure"/> (the warm-up), the result is empty.</summary>
+    private static async Task<Measurement> DrainWithEfAsync(int jobs, DrainSettings settings, bool listSql, bool measure = true)
     {
         await using var database = await BenchDatabase.CreateAsync(settings, jobs);
 
@@ -170,7 +194,16 @@ public static class DrainBenchmark
         // as many slots as the workers have in all
         var slots = Task.WhenAll(Enumerable.Range(0, settings.Workers * settings.Parallelism).Select(_ => Task.Run(() => RunSlotAsync(services, leaser))));
 
-        var measurement = await Measurement.MeasureAsync(completed, commands);
+        Measurement measurement = default;
+
+        if (measure)
+        {
+            measurement = await Measurement.MeasureAsync(completed, commands);
+        }
+        else
+        {
+            await completed.AllCompleted;
+        }
 
         await slots;
 
@@ -407,7 +440,16 @@ public static class DrainBenchmark
 
             if (startAfter != null) await startAfter;
 
-            if (completed.Count >= completed.Expected) throw new InvalidOperationException("The backlog was drained before the measurement started: use more jobs");
+            // measured from the moment all the workers poll (each one's first poll waits for its polling interval): with too few jobs,
+            // most of the backlog is gone by then, and the rest says nothing
+            var done = completed.Count;
+
+            if (done * 2 > completed.Expected)
+            {
+                throw new InvalidOperationException(
+                    $"{done} of the {completed.Expected} jobs were done before the measurement started, once all the workers poll: " +
+                    "use more jobs (--jobs), so that most of the drain is measured");
+            }
 
             var process = Process.GetCurrentProcess();
 
