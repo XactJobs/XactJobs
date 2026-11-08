@@ -240,13 +240,47 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
 
         Assert.Equal(4, await CountLeasedAsync());
 
-        // another one finishes: only 1 waits, fewer than can run, so the worker claims up to the batch again
+        // another one finishes: only 1 waits, fewer than can run, so the worker claims up to the batch again. Not right away: it
+        // waits for the batch to finish, and since its jobs are still running, claims after the delay (1 s)
+        var released = System.Diagnostics.Stopwatch.StartNew();
+
         _state.ReleaseOne();
 
         await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 4), "the last waiting job to start");
         await WaitForAsync(async () => await CountLeasedAsync() == 5, "the batch to be refilled");
 
+        Assert.True(released.Elapsed >= TimeSpan.FromMilliseconds(900), $"The batch was refilled after {released.Elapsed.TotalMilliseconds:F0} ms, before the delay");
         Assert.Equal(4, _state.BlockedCount);
+    }
+
+    /// <summary>
+    /// Quick jobs in batches: the worker claims the next batch as soon as one finishes, without waiting for the delay that a slow
+    /// job's batch waits for. 40 jobs in batches of 4 would take at least 9 s with the delay.
+    /// </summary>
+    [Fact]
+    public async Task Batches_OfQuickJobs_AreClaimedWithoutTheDelay()
+    {
+        await CreateHostAsync(capacity: 2, batchSize: 4);
+
+        await WithDbAsync(db =>
+        {
+            for (var i = 0; i < 40; i++)
+            {
+                db.JobEnqueue<PollingJob>(x => x.Quick());
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        await _host!.StartAsync();
+
+        await WaitForAsync(() => Task.FromResult(_state.QuickCount >= 1), "the first job to run");
+
+        var started = System.Diagnostics.Stopwatch.StartNew();
+
+        await WaitForAsync(() => Task.FromResult(_state.QuickCount == 40), "all the jobs to run");
+
+        Assert.True(started.Elapsed < TimeSpan.FromSeconds(5), $"The jobs took {started.Elapsed.TotalMilliseconds:F0} ms");
     }
 
     /// <summary>
@@ -320,6 +354,9 @@ public class SqliteConcurrentPollingTests : IAsyncLifetime
         await _host!.StartAsync();
 
         await WaitForAsync(() => Task.FromResult(_state.QuickCount == 1), "the next job to run");
+
+        // both are claimed together (a batch of 2), and either can take the slot first
+        await WaitForAsync(() => WithDbAsync(db => db.JobHistory.AnyAsync(h => h.MethodName == "Fail()")), "the failed attempt's history");
 
         var failed = await WithDbAsync(db => db.JobHistory.AsNoTracking().SingleAsync(h => h.MethodName == "Fail()"));
 

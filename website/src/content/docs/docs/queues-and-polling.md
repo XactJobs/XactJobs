@@ -38,12 +38,13 @@ jobs), set in its configure action. It doesn't take them from the default queue.
 ## Polling
 
 A worker runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of claimed (leased) jobs: by default twice as many, so that
-each slot has a job waiting for it. A free slot takes the next job the worker holds, oldest first, without waiting for a claim. A slow job
-only occupies its own slot.
+each slot has a job waiting for it. A free slot takes one of the jobs the worker holds, without waiting for a claim. A slow job only
+occupies its own slot.
 
-If a poll fills the batch there is likely a backlog, so the worker claims again as soon as fewer jobs wait than it can run, instead of once
-for each job that finishes. Otherwise it waits for the polling interval or a QuickPoll notification. Polling can stop only if all the slots
-are occupied, so long-running jobs are best kept in their own queue.
+If a poll fills the batch there is likely a backlog, so the worker claims again once fewer jobs wait than it can run, instead of once for
+each job that finishes: when the jobs it holds are done, or after a second if some are still running. Otherwise it waits for the polling
+interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own
+queue.
 
 The workers of a queue start at staggered times: with 2 workers polling every 6 seconds, the second one starts 3 seconds after the first.
 

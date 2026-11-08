@@ -607,13 +607,14 @@ Without the queue and the scheduled time, these routes answer `400`.
 # How Jobs Run
 
 ## Polling
-A worker runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of claimed (leased) jobs: by default twice as many, so that each
-slot has a job waiting for it. A free slot takes the next job the worker holds, oldest first, without waiting for a claim. A slow job only
+A worker runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of claimed (leased) jobs: by default twice as many, so that
+each slot has a job waiting for it. A free slot takes one of the jobs the worker holds, without waiting for a claim. A slow job only
 occupies its own slot.
 
-If a poll fills the batch there is likely a backlog, so the worker claims again as soon as fewer jobs wait than it can run, instead of once
-for each job that finishes. Otherwise it waits for the polling interval or a QuickPoll notification. Polling can stop only if all the slots
-are occupied, so long-running jobs are best kept in their own queue.
+If a poll fills the batch there is likely a backlog, so the worker claims again once fewer jobs wait than it can run, instead of once for
+each job that finishes: when the jobs it holds are done, or after a second if some are still running. Otherwise it waits for the polling
+interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own
+queue.
 
 `WithBatchSize` changes the batch. A larger one saves claims, which helps short jobs: on PostgreSQL, 2 workers running 4 no-op jobs at a
 time each drained a backlog about twice as fast with a batch of 100 as with no batch. The cost is that the jobs a worker holds wait for its
