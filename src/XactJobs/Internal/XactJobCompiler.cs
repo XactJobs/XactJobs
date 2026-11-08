@@ -15,17 +15,34 @@ namespace XactJobs.Internal
         
         public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
-            var jsonArgs = JsonDocument.Parse(job.MethodArgs);
+            var (compiledFunc, args) = PrepareCall(job, context, stoppingToken);
+
+            var resultTask = compiledFunc(scope.ServiceProvider, args);
+
+            if (resultTask != null)
+            {
+                await resultTask.ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// The job's compiled method, and its arguments. Before the job runs, so that the parsed JSON's buffers go back to the pool
+        /// right away, not when the job finishes (the arguments are deserialized into objects of their own).
+        /// </summary>
+        private static (Func<IServiceProvider, object?[], Task?>, object?[]) PrepareCall(XactJob job, XactJobContext context, CancellationToken stoppingToken)
+        {
+            using var jsonArgs = JsonDocument.Parse(job.MethodArgs);
 
             var args = new object?[jsonArgs.RootElement.GetArrayLength()];
 
             var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
 
-            var (compiledFunc, parameters) = _compiledJobs.GetOrAdd(key, _ =>
+            // static, with the job as the factory's argument: a lambda capturing it would be allocated also when the job is cached
+            var (compiledFunc, parameters) = _compiledJobs.GetOrAdd(key, static (key, job) =>
             {
-                var (type, method) = job.ToMethodInfo(args.Length);
+                var (type, method) = job.ToMethodInfo(key.ArgCount);
                 return (BuildJobDelegate(type, method), method.GetParameters());
-            });
+            }, job);
 
             // set the args
             for (var i = 0; i < args.Length; i++)
@@ -48,12 +65,7 @@ namespace XactJobs.Internal
                 }
             }
 
-            var resultTask = compiledFunc(scope.ServiceProvider, args);
-
-            if (resultTask != null)
-            {
-                await resultTask.ConfigureAwait(false);
-            }
+            return (compiledFunc, args);
         }
 
         public static Func<IServiceProvider, object?[], Task?> BuildJobDelegate(Type type, MethodInfo method)
