@@ -18,8 +18,14 @@ public sealed class SqlServerInstallScriptTests(SqlServerFixture fixture) : Inst
 [Collection(OracleCollection.Name)]
 public sealed class OracleInstallScriptTests(OracleFixture fixture) : InstallScriptIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresInstallScriptTests(PostgresFixture fixture) : InstallScriptIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16InstallScriptTests(Postgres16Fixture fixture) : InstallScriptIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17InstallScriptTests(Postgres17Fixture fixture) : InstallScriptIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18InstallScriptTests(Postgres18Fixture fixture) : InstallScriptIntegrationTests(fixture);
 
 /// <summary>
 /// The install script (sql/install), for a new installation, creates the same schema as the versioned scripts (sql/v*), which the

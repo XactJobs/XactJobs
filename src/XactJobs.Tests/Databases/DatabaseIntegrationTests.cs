@@ -336,8 +336,14 @@ public sealed class SqlServerIntegrationTests(SqlServerFixture fixture) : Databa
 [Collection(OracleCollection.Name)]
 public sealed class OracleIntegrationTests(OracleFixture fixture) : DatabaseIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresIntegrationTests(PostgresFixture fixture) : DatabaseIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16IntegrationTests(Postgres16Fixture fixture) : DatabaseIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17IntegrationTests(Postgres17Fixture fixture) : DatabaseIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18IntegrationTests(Postgres18Fixture fixture) : DatabaseIntegrationTests(fixture);
 
 /// <summary>
 /// What every database has to do the same way, with the real runner and the real SQL scripts.

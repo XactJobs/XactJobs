@@ -8,8 +8,16 @@ using XactJobs.Internal.SqlDialects;
 
 namespace XactJobs.Tests.Postgres;
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetime
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16RunnerTests(Postgres16Fixture fixture) : PostgresRunnerTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17RunnerTests(Postgres17Fixture fixture) : PostgresRunnerTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18RunnerTests(Postgres18Fixture fixture) : PostgresRunnerTests(fixture);
+
+public abstract class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifetime
 {
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(60);
 

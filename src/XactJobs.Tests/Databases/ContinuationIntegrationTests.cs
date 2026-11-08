@@ -26,8 +26,14 @@ public sealed class SqlServerContinuationTests(SqlServerFixture fixture) : Conti
 [Collection(OracleCollection.Name)]
 public sealed class OracleContinuationTests(OracleFixture fixture) : ContinuationIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresContinuationTests(PostgresFixture fixture) : ContinuationIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16ContinuationTests(Postgres16Fixture fixture) : ContinuationIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17ContinuationTests(Postgres17Fixture fixture) : ContinuationIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18ContinuationTests(Postgres18Fixture fixture) : ContinuationIntegrationTests(fixture);
 
 /// <summary>
 /// Batches and continuations on every database: the claim of the continuations is SQL of each dialect,

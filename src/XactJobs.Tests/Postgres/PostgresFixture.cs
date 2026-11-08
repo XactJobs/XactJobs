@@ -7,12 +7,12 @@ using XactJobs.Tests.Databases;
 namespace XactJobs.Tests.Postgres;
 
 /// <summary>
-/// One Postgres container for all the Postgres tests. Each test gets its own database,
+/// One Postgres container, of one major version, for all the Postgres tests of that version. Each test gets its own database,
 /// created with the scripts in the sql folder, so the migration scripts are tested too.
 /// </summary>
-public sealed class PostgresFixture : DatabaseFixture
+public abstract class PostgresFixture(string image) : DatabaseFixture
 {
-    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16").Build();
+    private readonly PostgreSqlContainer _container = new PostgreSqlBuilder(image).Build();
 
     private string _connectionString = "";
 
@@ -83,10 +83,29 @@ public sealed class PostgresFixture : DatabaseFixture
     }
 }
 
+// The latest minor version of each major version that's supported, exact so that every machine tests the same ones
+public sealed class Postgres16Fixture() : PostgresFixture("postgres:16.15");
+
+public sealed class Postgres17Fixture() : PostgresFixture("postgres:17.11");
+
+public sealed class Postgres18Fixture() : PostgresFixture("postgres:18.6");
+
 [CollectionDefinition(Name)]
-public sealed class PostgresCollection : ICollectionFixture<PostgresFixture>
+public sealed class Postgres16Collection : ICollectionFixture<Postgres16Fixture>
 {
-    public const string Name = "Postgres";
+    public const string Name = "Postgres16";
+}
+
+[CollectionDefinition(Name)]
+public sealed class Postgres17Collection : ICollectionFixture<Postgres17Fixture>
+{
+    public const string Name = "Postgres17";
+}
+
+[CollectionDefinition(Name)]
+public sealed class Postgres18Collection : ICollectionFixture<Postgres18Fixture>
+{
+    public const string Name = "Postgres18";
 }
 
 /// <summary>

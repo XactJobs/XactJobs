@@ -14,8 +14,14 @@ namespace XactJobs.Tests.Databases;
 [Collection(SqlServerCollection.Name)]
 public sealed class SqlServerSchemaTests(SqlServerFixture fixture) : SchemaIntegrationTests(fixture);
 
-[Collection(PostgresCollection.Name)]
-public sealed class PostgresSchemaTests(PostgresFixture fixture) : SchemaIntegrationTests(fixture);
+[Collection(Postgres16Collection.Name)]
+public sealed class Postgres16SchemaTests(Postgres16Fixture fixture) : SchemaIntegrationTests(fixture);
+
+[Collection(Postgres17Collection.Name)]
+public sealed class Postgres17SchemaTests(Postgres17Fixture fixture) : SchemaIntegrationTests(fixture);
+
+[Collection(Postgres18Collection.Name)]
+public sealed class Postgres18SchemaTests(Postgres18Fixture fixture) : SchemaIntegrationTests(fixture);
 
 /// <summary>
 /// Two apps in one database, each with XactJobs' tables in its own schema: the fixture's default tables, and app B's, created from the

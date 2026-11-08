@@ -55,7 +55,7 @@ XactJobs overhead                    ...
 - `--postgres <connection string>` drains on PostgreSQL instead: a new database on that server for each drain, with the schema from the install script and fresh statistics, dropped afterwards. With several workers, XactJobs is measured once all of them poll (each one's first poll waits for its polling interval). For example, with a container:
 
   ```bash
-  docker run -d --name xactjobs-bench-pg -e POSTGRES_PASSWORD=bench -p 127.0.0.1:55432:5432 postgres:16
+  docker run -d --name xactjobs-bench-pg -e POSTGRES_PASSWORD=bench -p 127.0.0.1:55432:5432 postgres:16.15
   dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 10 \
       --postgres "Host=127.0.0.1;Port=55432;Username=postgres;Password=bench;Database=postgres"
   docker rm -f xactjobs-bench-pg
@@ -66,7 +66,7 @@ XactJobs overhead                    ...
 
   ```bash
   docker run -d --name xactjobs-bench-mssql -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=Bench_pass1!' -e MSSQL_MEMORY_LIMIT_MB=2048 \
-      -p 127.0.0.1:51433:1433 mcr.microsoft.com/mssql/server:2022-latest
+      -p 127.0.0.1:51433:1433 mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04
   dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 4 \
       --sqlserver "Server=127.0.0.1,51433;User ID=sa;Password=Bench_pass1!;TrustServerCertificate=True"
   docker rm -f xactjobs-bench-mssql
