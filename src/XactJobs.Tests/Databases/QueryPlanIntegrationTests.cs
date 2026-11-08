@@ -55,4 +55,7 @@ public abstract class QueryPlanIntegrationTests(DatabaseFixture fixture) : IAsyn
 
         await _scenarios.PeriodicJobQueries_UseThePeriodicJobIndex();
     }
+
+    [DockerFact]
+    public Task BatchQueries_UseTheBatchIndexes() => _scenarios.BatchQueries_UseTheBatchIndexes();
 }

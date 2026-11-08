@@ -4,6 +4,8 @@ using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using XactJobs.Internal;
+using XactJobs.Internal.SqlDialects;
 using XactJobs.UI.Services;
 using XactJobs.UI.Services.Models;
 
@@ -16,6 +18,9 @@ namespace XactJobs.Tests;
 /// <item>the dashboard's lookups of a pending job use the primary key, which is (queue, scheduled time, id) except on SQLite;</item>
 /// <item>the queries of the runs of a periodic job use the index of the periodic job column, which holds only the runs of periodic
 /// jobs. MySQL has no such index: it has no filtered indexes, and a full one would be written by every job.</item>
+/// <item>the queries of a batch's jobs and continuations use the indexes of the batch columns, which hold only the rows of batches
+/// and continuations (except on MySQL, which has no filtered indexes), also the continuation claim's check that a batch has no jobs
+/// left, which compares with the continuation's column, not with a parameter.</item>
 /// </list>
 /// The table gets enough rows, and statistics, for the planners to prefer an index. The scenarios run on every database: see
 /// <c>Databases/QueryPlanIntegrationTests</c> and <see cref="SqliteQueryPlanTests"/>.
@@ -106,6 +111,77 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
         }
     }
 
+    public async Task BatchQueries_UseTheBatchIndexes()
+    {
+        await AddRowsAsync();
+
+        // a batch with jobs left, and a finished one (no jobs left), each with a continuation waiting for it
+        var active = Guid.NewGuid();
+        var finished = Guid.NewGuid();
+
+        await using (var db = CreateDb(null))
+        {
+            var dueAt = DateTime.UtcNow.AddHours(1);
+
+            for (var i = 0; i < 3; i++)
+            {
+                db.Jobs.Add(new XactJob(0, dueAt.AddSeconds(i), "T", "M()", "[]", NotPolled) { BatchId = active });
+            }
+
+            db.Jobs.Add(new XactJob(0, XactJobBase.AwaitingBatchScheduledAt, "T", "M()", "[]", NotPolled) { AwaitsBatchId = active });
+            db.Jobs.Add(new XactJob(0, XactJobBase.AwaitingBatchScheduledAt, "T", "M()", "[]", NotPolled) { AwaitsBatchId = finished });
+
+            await db.SaveChangesAsync();
+
+            await db.Database.ExecuteSqlRawAsync(Statistics);
+        }
+
+        var recorder = new PlanRecorder(sql => IsJobTableQuery(sql)
+            && (sql.Contains(Column(nameof(XactJob.BatchId)), StringComparison.OrdinalIgnoreCase)
+                || sql.Contains(Column(nameof(XactJob.AwaitsBatchId)), StringComparison.OrdinalIgnoreCase)));
+
+        await using (var db = CreateDb(recorder))
+        {
+            // Oracle claims in a PL/SQL block, which can't be explained (and its index leaves out the null rows on its own)
+            if (Provider != Db.Oracle)
+            {
+                // the claim of the continuations whose batch is finished: checks for each one that its batch has no jobs left
+                List<XactJob> claimed = await Dialect.ClaimContinuationsAsync(db, NotPolled, 10, Guid.NewGuid(), 60, DateTime.UtcNow, CancellationToken.None);
+
+                Assert.Equal(finished, Assert.Single(claimed).AwaitsBatchId);
+            }
+
+            // the worker that finished a batch's last job (XactJobRunner.StartContinuationsIfBatchFinishedAsync): the queues of its
+            // continuations, if no job of the batch is left. With a parameter for each column, as there (Oracle)
+            var jobs = db.Set<XactJob>();
+            var awaitedBatchId = active;
+
+            Assert.Empty(await jobs
+                .Where(c => c.AwaitsBatchId == awaitedBatchId
+                    && c.ScheduledAt == XactJobBase.AwaitingBatchScheduledAt
+                    && !jobs.Any(j => j.BatchId == active))
+                .Select(c => c.Queue)
+                .Distinct()
+                .ToListAsync());
+        }
+
+        await using (var db = CreateDb(recorder))
+        {
+            // the Batch page: the batch's jobs and continuations, and its summary
+            Assert.NotNull(await new XactJobsUIService<TestDbContext>(db).GetBatchAsync(active));
+        }
+
+        var plans = await GetPlansAsync(recorder);
+
+        Assert.True(plans.Count >= 4, $"Expected the queries of the batches, but got:\n{string.Join("\n", plans.Select(p => p.Sql))}");
+
+        // or the primary key: the batch's summary reads its sample jobs by their id
+        foreach (var (sql, plan) in plans)
+        {
+            AssertUsesTheIndex($"(?:{BatchIndex})|(?:{PrimaryKey})", sql, plan);
+        }
+    }
+
     // ---- per database
 
     private string ProviderName { get; set; } = "";
@@ -119,12 +195,17 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
         _ => "\"xact_jobs_job\"",
     };
 
-    private string Column(string property) => Provider switch
+    private string Column(string property)
     {
-        Db.SqlServer => property,
-        Db.Oracle => "PERIODIC_JOB_ID",
-        _ => "periodic_job_id",
-    };
+        var snakeCase = Regex.Replace(property, "(?<!^)([A-Z])", "_$1");
+
+        return Provider switch
+        {
+            Db.SqlServer => property,
+            Db.Oracle => snakeCase.ToUpperInvariant(),
+            _ => snakeCase.ToLowerInvariant(),
+        };
+    }
 
     // patterns of the plans: MySQL may use its unique key on the id instead (InnoDB needs one for the auto increment), as direct
     private string PrimaryKey => Provider switch
@@ -143,6 +224,16 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
         Db.Oracle => @"\|\s*IX_JOB_PERIODIC_JOB_ID\s",
         Db.MySql => throw new InvalidOperationException("MySQL has no index of the periodic job column"),
         _ => @"USING (COVERING )?INDEX ix_job_periodic_job_id\b",
+    };
+
+    // either of the batch columns' indexes: of the batch's jobs, or of its continuations
+    private string BatchIndex => Provider switch
+    {
+        Db.PostgreSql => @"(using|Bitmap Index Scan on) ix_job_(awaits_)?batch_id\b",
+        Db.SqlServer => @"Index=""\[IX_Job_(Awaits)?BatchId\]""",
+        Db.Oracle => @"\|\s*IX_JOB_(AWAITS_)?BATCH_ID\s",
+        Db.MySql => @"^table=\w+ type=(const|eq_ref|ref|range) key=ix_job_(awaits_)?batch_id$",
+        _ => @"USING (COVERING )?INDEX ix_job_(awaits_)?batch_id\b",
     };
 
     public bool HasPeriodicJobIndex => Provider != Db.MySql;
@@ -239,16 +330,7 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
 
             await db.SaveChangesAsync();
 
-            var statistics = Provider switch
-            {
-                Db.PostgreSql => "ANALYZE xact_jobs.job",
-                Db.SqlServer => "UPDATE STATISTICS [XactJobs].[Job]",
-                Db.Oracle => "BEGIN DBMS_STATS.GATHER_TABLE_STATS(USER, 'XACT_JOBS_JOB'); END;",
-                Db.MySql => "ANALYZE TABLE xact_jobs_job",
-                _ => "ANALYZE",
-            };
-
-            await db.Database.ExecuteSqlRawAsync(statistics);
+            await db.Database.ExecuteSqlRawAsync(Statistics);
         }
 
         await using (var db = CreateDb(null))
@@ -258,6 +340,25 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
             return JobKey.Of(job);
         }
     }
+
+    // dynamic, like the fixtures' dialects: ISqlDialect is internal
+    private dynamic Dialect => Provider switch
+    {
+        Db.PostgreSql => (object)new PostgreSqlDialect(),
+        Db.SqlServer => new SqlServerDialect(),
+        Db.Oracle => new OracleDialect(),
+        Db.MySql => new MySqlDialect(),
+        _ => (object)new SqliteDialect(),
+    };
+
+    private string Statistics => Provider switch
+    {
+        Db.PostgreSql => "ANALYZE xact_jobs.job",
+        Db.SqlServer => "UPDATE STATISTICS [XactJobs].[Job]",
+        Db.Oracle => "BEGIN DBMS_STATS.GATHER_TABLE_STATS(USER, 'XACT_JOBS_JOB'); END;",
+        Db.MySql => "ANALYZE TABLE xact_jobs_job",
+        _ => "ANALYZE",
+    };
 
     private TestDbContext CreateDb(PlanRecorder? recorder)
     {

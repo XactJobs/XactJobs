@@ -1,4 +1,4 @@
--- XactJobs v0.3.0, PostgreSQL: the whole schema, for a new installation.
+-- XactJobs v0.4.0, PostgreSQL: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -31,9 +31,9 @@ CREATE TABLE xact_jobs.job (
   CONSTRAINT pk_job PRIMARY KEY (queue, scheduled_at, id)
 ) WITH (fillfactor = 70);
 
--- batches and continuations
-CREATE INDEX ix_job_batch_id ON xact_jobs.job (batch_id);
-CREATE INDEX ix_job_awaits_batch_id ON xact_jobs.job (awaits_batch_id);
+-- batches and continuations: only the rows of a batch, or of a continuation (most jobs are in none)
+CREATE INDEX ix_job_batch_id ON xact_jobs.job (batch_id) WHERE batch_id IS NOT NULL;
+CREATE INDEX ix_job_awaits_batch_id ON xact_jobs.job (awaits_batch_id) WHERE awaits_batch_id IS NOT NULL;
 
 -- the runs of a periodic job: only the rows of periodic jobs, so the other jobs' inserts and deletes don't write to it
 CREATE INDEX ix_job_periodic_job_id ON xact_jobs.job (periodic_job_id) WHERE periodic_job_id IS NOT NULL;
@@ -65,8 +65,8 @@ CREATE TABLE xact_jobs.job_history (
 );
 
 CREATE INDEX ix_job_history_processed_at ON xact_jobs.job_history (processed_at);
-CREATE INDEX ix_job_history_batch_id ON xact_jobs.job_history (batch_id);
-CREATE INDEX ix_job_history_awaits_batch_id ON xact_jobs.job_history (awaits_batch_id);
+CREATE INDEX ix_job_history_batch_id ON xact_jobs.job_history (batch_id) WHERE batch_id IS NOT NULL;
+CREATE INDEX ix_job_history_awaits_batch_id ON xact_jobs.job_history (awaits_batch_id) WHERE awaits_batch_id IS NOT NULL;
 
 -- ============================
 -- Table storing recurring jobs
