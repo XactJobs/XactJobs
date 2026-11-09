@@ -46,9 +46,8 @@ dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks --
     --batch-size 100 --postgres "Host=127.0.0.1;Username=postgres;Password=bench;Database=postgres"
 ```
 
-`--sqlserver <connection string>` runs it on SQL Server. With either, the connection string is only used to connect to the server: each
-drain creates a new database there, named `bench_` and a random id (e.g. `bench_3f2a9c…`), with the schema from the install script, and
-drops it at the end. The database named in the connection string (`postgres` above) isn't used, so the tables are only in the `bench_…`
-database while a drain runs. A drain stopped with Ctrl+C leaves its database behind: drop it by hand. The [benchmark
-README](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.Benchmarks) has all the options, and how to start the database in a
-container.
+`--sqlserver <connection string>` runs it on SQL Server. With either, each drain creates its own database on that server, named `bench_` and
+a random id (e.g. `bench_3f2a9c…`), with the schema from the install script, and drops it at the end. The database in the connection string
+(`postgres` above) is only used to connect: the tables never appear there. A drain stopped with Ctrl+C leaves its database behind: drop it
+by hand. The [benchmark README](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.Benchmarks) has all the options, and how to
+start the database in a container.
