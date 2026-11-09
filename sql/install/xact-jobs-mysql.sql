@@ -1,4 +1,4 @@
--- XactJobs v0.3.0, MySQL: the whole schema, for a new installation.
+-- XactJobs v0.5.0, MySQL: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -25,6 +25,8 @@ CREATE TABLE `xact_jobs_job` (
   `continuation_condition` int NULL,
   -- the time a job was originally scheduled for, kept by its retries (null: the same as scheduled_at)
   `originally_scheduled_at` datetime(6) NULL,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  `trace_parent` longtext CHARACTER SET utf8mb4 NULL,
   CONSTRAINT `pk_job` PRIMARY KEY (`queue`, `scheduled_at`, `id`),
   UNIQUE (`id`)
 ) CHARACTER SET=utf8mb4;
@@ -56,6 +58,8 @@ CREATE TABLE `xact_jobs_job_history` (
   `awaits_batch_id` char(36) COLLATE ascii_general_ci NULL,
   `continuation_condition` int NULL,
   `originally_scheduled_at` datetime(6) NULL,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  `trace_parent` longtext CHARACTER SET utf8mb4 NULL,
   CONSTRAINT `pk_job_history` PRIMARY KEY (`id`, `processed_at`)
 ) CHARACTER SET=utf8mb4;
 

@@ -83,6 +83,8 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.OriginallyScheduledAt).HasColumnName(_sqlDialect.ColOriginallyScheduledAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
+            builder.Property(x => x.TraceParent).HasColumnName(_sqlDialect.ColTraceParent);
+
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
 

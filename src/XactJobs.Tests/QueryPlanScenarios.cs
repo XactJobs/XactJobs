@@ -254,7 +254,8 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
 
     /// <summary>
     /// The plan uses the index, and doesn't read the whole job table, nor the whole of another of its indexes. Reading the whole
-    /// index of the periodic job column is fine: it holds only the runs of periodic jobs.
+    /// index of the periodic job column is fine: it holds only the runs of periodic jobs. So do the batch columns' indexes, which hold
+    /// only the rows of batches and continuations, except on MySQL (no filtered indexes): reading all of MySQL's reads every job.
     /// </summary>
     private void AssertUsesTheIndex(string index, string sql, string plan)
     {
@@ -277,11 +278,11 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
                 return XDocument.Parse(plan).Descendants(ns + "RelOp")
                     .Where(op => (string?)op.Attribute("PhysicalOp") is "Clustered Index Scan" or "Table Scan" or "Index Scan")
                     .SelectMany(op => op.Elements().Where(e => e.Name.LocalName is "IndexScan" or "TableScan").Elements(ns + "Object"))
-                    .Any(o => (string?)o.Attribute("Table") == "[Job]" && (string?)o.Attribute("Index") != "[IX_Job_PeriodicJobId]");
+                    .Any(o => (string?)o.Attribute("Table") == "[Job]" && (string?)o.Attribute("Index") is not ("[IX_Job_PeriodicJobId]" or "[IX_Job_BatchId]" or "[IX_Job_AwaitsBatchId]"));
 
             case Db.Oracle:
                 return Regex.IsMatch(plan, @"TABLE ACCESS (STORAGE )?FULL\s*\|\s*XACT_JOBS_JOB\s")
-                    || Regex.IsMatch(plan, @"INDEX (FAST )?FULL SCAN\s*\|\s*(?!IX_JOB_PERIODIC_JOB_ID\s)\w+\s");
+                    || Regex.IsMatch(plan, @"INDEX (FAST )?FULL SCAN\s*\|\s*(?!(IX_JOB_PERIODIC_JOB_ID|IX_JOB_BATCH_ID|IX_JOB_AWAITS_BATCH_ID)\s)\w+\s");
 
             case Db.MySql:
                 return JobTableAliases(sql, "`xact_jobs_job`", "`")
@@ -289,7 +290,7 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
 
             default:
                 return JobTableAliases(sql, "\"xact_jobs_job\"", "\"")
-                    .Any(alias => Regex.IsMatch(plan, $@"^SCAN {Regex.Escape(alias)}( USING (COVERING )?INDEX (?!ix_job_periodic_job_id\b)\w+.*)?$", RegexOptions.Multiline));
+                    .Any(alias => Regex.IsMatch(plan, $@"^SCAN {Regex.Escape(alias)}( USING (COVERING )?INDEX (?!(ix_job_periodic_job_id|ix_job_batch_id|ix_job_awaits_batch_id)\b)\w+.*)?$", RegexOptions.Multiline));
         }
     }
 

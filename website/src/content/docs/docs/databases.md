@@ -38,12 +38,13 @@ pile up meanwhile, which slows down fetching jobs.
 
 ## MySQL
 
-XactJobs needs **MySQL 8.0 or later**, because claiming jobs uses `SKIP LOCKED` and `FOR UPDATE OF`. MariaDB isn't supported: it doesn't
+XactJobs needs **MySQL 8.0 or later**, because picking up jobs uses `SKIP LOCKED` and `FOR UPDATE OF`. MariaDB isn't supported: it doesn't
 support `FOR UPDATE OF`, and only supports `SKIP LOCKED` from 10.6.
 
-The workers claim jobs at `READ COMMITTED`, not at InnoDB's default `REPEATABLE READ`. At `REPEATABLE READ`, a claim would keep the running
-jobs it scans locked, and the gaps between rows too, so finished jobs couldn't be deleted, and new jobs (`JobEnqueue` and `SaveChanges`)
-couldn't be saved until the claim commits. Only the claims use it: your own transactions, and the jobs, keep their isolation level.
+The workers pick up jobs at `READ COMMITTED`, not at InnoDB's default `REPEATABLE READ`. At `REPEATABLE READ`, the query that picks up jobs
+would keep the running jobs it scans locked, and the gaps between rows too, so finished jobs couldn't be deleted, and new jobs (`JobEnqueue`
+and `SaveChanges`) couldn't be saved until that query commits. Only that query uses it: your own transactions, and the jobs, keep their
+isolation level.
 
 The provider depends on the version of .NET:
 
@@ -75,20 +76,20 @@ The workers already do this for their own saves, so running jobs are not affecte
 
 ## Oracle
 
-XactJobs needs **Oracle 12c or later**. A claim is one PL/SQL block, which returns the claimed jobs with `DBMS_SQL.RETURN_RESULT`.
+XactJobs needs **Oracle 12c or later**. Jobs are picked up by one PL/SQL block, which returns them with `DBMS_SQL.RETURN_RESULT`.
 
-Jobs are claimed oldest first. The block locks the due jobs with `FOR UPDATE SKIP LOCKED`, fetches only as many as the worker has free
+Jobs are picked up oldest first. The block locks the due jobs with `FOR UPDATE SKIP LOCKED`, fetches only as many as the worker has free
 slots, and leases them. Oracle locks a row only when it's fetched, so workers that poll at once each get different jobs from a backlog.
 `ROWNUM` can't be used to limit the rows, because it's applied before locked rows are skipped: all the workers would try the same first
 rows, and all but one would get none.
 
-The claims read the table's primary key in order (with an index hint), so a claim doesn't sort the whole backlog, even if Oracle cached a
+Picking up jobs reads the table's primary key in order (with an index hint), so it doesn't sort the whole backlog, even if Oracle cached a
 plan from when the table was nearly empty.
 
 ## SQLite
 
-On SQLite the primary key of the job table is only the id, so the claims use an index on the queue and the scheduled time. Without it,
-every claim would read and sort the whole job table. The install script creates it; for an existing installation, the v0.3.0 script adds it.
+On SQLite the primary key of the job table is only the id, so picking up jobs uses an index on the queue and the scheduled time. Without it,
+every poll would read and sort the whole job table. The install script creates it; for an existing installation, the v0.3.0 script adds it.
 
 A job enqueued with [QuickPoll](../queues-and-polling/#quickpoll) within the same millisecond as the poll can wait for the next regular poll.
 

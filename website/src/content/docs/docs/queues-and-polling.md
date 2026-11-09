@@ -1,6 +1,6 @@
 ---
 title: Queues and polling
-description: Isolated queues with their own workers, how workers poll and claim batches of jobs, BatchSize, and QuickPoll.
+description: Isolated queues with their own workers, how workers poll and pick up batches of jobs, BatchSize, and QuickPoll.
 ---
 
 ## Isolated queues
@@ -37,11 +37,12 @@ jobs), set in its configure action. It doesn't take them from the default queue.
 
 ## Polling
 
-A worker runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of claimed (leased) jobs: by default twice as many, so that
-each slot has a job waiting for it. A free slot takes one of the jobs the worker holds, without waiting for a claim. A slow job only
-occupies its own slot.
+A worker polls the database for due jobs and picks up a batch of them: it reserves them for a while (a lease, `WithLeaseDuration`), so no
+other worker runs them, and extends the lease while a job runs. It runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of
+jobs it picked up: by default twice as many, so that each slot has a job waiting for it. A free slot takes one of the jobs the worker holds,
+without waiting for the next poll. A slow job only occupies its own slot.
 
-If a poll fills the batch there is likely a backlog, so the worker claims again once fewer jobs wait than it can run, instead of once for
+If a poll fills the batch there is likely a backlog, so the worker polls again once fewer jobs wait than it can run, instead of once for
 each job that finishes: when the jobs it holds are done, or after a second if some are still running. Otherwise it waits for the polling
 interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own
 queue.
@@ -52,13 +53,13 @@ While a job runs, its lease is extended automatically, every three quarters of `
 
 ## Batch size
 
-`WithBatchSize` changes the batch. A larger one saves claims, which helps short jobs: on PostgreSQL, 2 workers running 4 no-op jobs at a
-time each drained a backlog about twice as fast with a batch of 100 as with no batch (see [Throughput](../throughput/)).
+`WithBatchSize` changes the batch. A larger one means fewer polls, which helps short jobs: on PostgreSQL, 2 workers running 4 no-op jobs at
+a time each drained a backlog about twice as fast with a batch of 100 as with no batch (see [Throughput](../throughput/)).
 
 The cost is that the jobs a worker holds wait for its slots, also when another worker is idle, and wait for their leases to expire if the
-worker crashes. At or below `MaxDegreeOfParallelism`, there's no batch: a worker only claims jobs it can start immediately, so they never
-wait behind a slow job while another worker is free. When the worker stops, the jobs it holds that haven't started are released right
-away, for the other workers.
+worker crashes. At or below `MaxDegreeOfParallelism`, there's no batch: a worker only picks up jobs it can start immediately, so they never
+wait behind a slow job while another worker is free. When the worker stops, the jobs it holds that haven't started are released right away,
+for the other workers.
 
 ```csharp
 builder.Services.AddXactJobs<UserDbContext>(options =>

@@ -11,8 +11,8 @@ jobs at **2,300 to 2,600 jobs per second**. The best setting was 2 workers, `Max
 
 Each job is still its own transaction: its changes, the delete of its row and its history row commit together.
 
-With real jobs, their own work sets the pace. A larger batch saves claims, which helps short jobs, at a cost for slow ones: see
-[Batch size](../queues-and-polling/#batch-size).
+With real jobs, their own work sets the pace. A larger batch means fewer polls, which helps short jobs, at a cost for slow ones: see [Batch
+size](../queues-and-polling/#batch-size).
 
 ## Benchmarks
 
@@ -35,17 +35,19 @@ dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks --
 
 ### drain: a backlog of no-op jobs
 
-Drains a backlog of jobs that do nothing, with XactJobs and with plain EF doing the least database work for the same result (the same
-claim, then for each job its delete and its history row, saved together). The difference per job is XactJobs' own cost. It runs on SQLite
-in memory by default, or on a PostgreSQL or SQL Server server:
+Drains a backlog of jobs that do nothing, with XactJobs and with plain EF doing the least database work for the same result (the same query
+to pick up jobs, then for each job its delete and its history row, saved together). The difference per job is XactJobs' own cost. It runs on
+SQLite in memory by default, or on a PostgreSQL or SQL Server server:
 
 ```bash
 dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 3000 --runs 5
 
 dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 4 \
-    --batch-size 100 --postgres "Host=127.0.0.1;Port=55432;Username=postgres;Password=bench;Database=postgres"
+    --batch-size 100 --postgres "Host=127.0.0.1;Username=postgres;Password=bench;Database=postgres"
 ```
 
-`--sqlserver <connection string>` runs it on SQL Server. Each drain gets a new database on that server, with the schema from the install
-script, dropped afterwards. The [benchmark README](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.Benchmarks) has all the
-options, and how to start the database in a container.
+`--sqlserver <connection string>` runs it on SQL Server. With either, each drain creates its own database on that server, named `bench_` and
+a random id (e.g. `bench_3f2a9c…`), with the schema from the install script, and drops it at the end. The database in the connection string
+(`postgres` above) is only used to connect: the tables never appear there. A drain stopped with Ctrl+C leaves its database behind: drop it
+by hand. The [benchmark README](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.Benchmarks) has all the options, and how to
+start the database in a container.

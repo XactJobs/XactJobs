@@ -63,6 +63,9 @@ namespace XactJobs.Internal
                 BatchId = batchId,
                 AwaitsBatchId = awaitsBatchId,
                 ContinuationCondition = continuationCondition,
+
+                // the trace that enqueues the job, linked from each of its attempts' activities
+                TraceParent = XactJobsTracing.GetCurrentTraceParent(),
             };
         }
 

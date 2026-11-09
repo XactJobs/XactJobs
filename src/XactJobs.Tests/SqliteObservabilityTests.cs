@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
@@ -9,12 +10,16 @@ using Microsoft.Extensions.Logging;
 namespace XactJobs.Tests;
 
 /// <summary>
-/// The workers' metrics (the meter "XactJobs") and the log scope of a job's attempt. The meter is shared with the other tests running
-/// at the same time, so each test has a queue of its own, and looks only at its measurements.
+/// The workers' metrics (the meter "XactJobs"), traces (the activity source "XactJobs") and the log scope of a job's attempt. The meter
+/// and the source are shared with the other tests running at the same time, so each test has a queue of its own, and looks only at its
+/// measurements and activities.
 /// </summary>
 public sealed class SqliteObservabilityTests : IAsyncLifetime
 {
     private static readonly TimeSpan WaitTimeout = TimeSpan.FromSeconds(30);
+
+    // the tests' own activities: the trace that enqueues a job, and what a job does inside its attempt
+    internal static readonly ActivitySource TestSource = new("XactJobs.Tests");
 
     private readonly string _queue = $"obs-{Guid.NewGuid():N}";
     private readonly string _connectionString = $"Data Source={Guid.NewGuid():N};Mode=Memory;Cache=Shared;";
@@ -147,6 +152,95 @@ public sealed class SqliteObservabilityTests : IAsyncLifetime
         Assert.Equal(1, scope["JobAttempt"]);
     }
 
+    [Fact]
+    public async Task Attempts_AreTraced_AndLinkedToTheTraceThatEnqueuedThem()
+    {
+        using var activities = new ActivityCollector(_queue);
+
+        await StartAsync();
+
+        // enqueued in a trace (a request's, in an app): a job that completes, and one that fails twice
+        string enqueueTraceParent;
+        ActivityContext enqueueContext;
+
+        using (var enqueue = TestSource.StartActivity("enqueue")!)
+        {
+            enqueueTraceParent = enqueue.Id!;
+            enqueueContext = enqueue.Context;
+
+            await WithDbAsync(db =>
+            {
+                db.JobEnqueue(() => ObservabilityJobs.Succeed(), _queue);
+                db.JobEnqueue(() => ObservabilityJobs.Fail(), _queue);
+                return db.SaveChangesAsync();
+            });
+        }
+
+        await WaitForAsync(() => activities.Jobs.Count == 3, "the three attempts' activities");
+
+        Assert.All(activities.Jobs, a =>
+        {
+            Assert.Equal(ActivityKind.Consumer, a.Kind);
+            Assert.Null(a.Parent);
+            Assert.Equal(default, a.ParentSpanId);
+
+            var link = Assert.Single(a.Links);
+            Assert.Equal(enqueueContext.TraceId, link.Context.TraceId);
+            Assert.Equal(enqueueContext.SpanId, link.Context.SpanId);
+
+            Assert.Equal("xactjobs", a.GetTagItem("messaging.system"));
+            Assert.Equal("process", a.GetTagItem("messaging.operation.type"));
+            Assert.Equal(_queue, a.GetTagItem("messaging.destination.name"));
+        });
+
+        var completed = Assert.Single(activities.Jobs, a => Equals(a.GetTagItem("xactjobs.outcome"), "completed"));
+        Assert.Equal("ObservabilityJobs.Succeed", completed.DisplayName);
+        Assert.Equal(ActivityStatusCode.Unset, completed.Status);
+
+        var failures = activities.Jobs.Where(a => a.DisplayName == "ObservabilityJobs.Fail").OrderBy(a => a.GetTagItem("xactjobs.attempt")).ToList();
+        Assert.Equal([1, 2], failures.Select(a => (int)a.GetTagItem("xactjobs.attempt")!));
+        Assert.Equal(["retried", "failed"], failures.Select(a => (string)a.GetTagItem("xactjobs.outcome")!));
+        Assert.All(failures, a =>
+        {
+            Assert.Equal(ActivityStatusCode.Error, a.Status);
+            Assert.Equal("Failed on purpose", a.StatusDescription);
+            Assert.Contains(a.Events, e => e.Name == "exception" && Equals(e.Tags.First(t => t.Key == "exception.message").Value, "Failed on purpose"));
+        });
+
+        // the retry kept the trace that enqueued the job, and the history keeps it
+        var history = await WithDbAsync(db => db.JobHistory.AsNoTracking().Where(h => h.Queue == _queue).ToListAsync());
+        Assert.Equal(3, history.Count);
+        Assert.All(history, h => Assert.Equal(enqueueTraceParent, h.TraceParent));
+    }
+
+    [Fact]
+    public async Task WhatAJobDoes_IsInsideItsActivity_AndAJobEnqueuedWithoutATraceHasNoLink()
+    {
+        using var activities = new ActivityCollector(_queue);
+
+        await StartAsync();
+
+        var key = Guid.NewGuid().ToString("N");
+
+        var job = await WithDbAsync(async db =>
+        {
+            var enqueued = db.JobEnqueue(() => ObservabilityJobs.StartChildActivity(key), _queue);
+            await db.SaveChangesAsync();
+            return enqueued;
+        });
+
+        Assert.Null(job.TraceParent);
+
+        await WaitForAsync(() => activities.Jobs.Count == 1 && activities.Children.Any(c => Equals(c.GetTagItem("key"), key)), "the job's activity and its child");
+
+        var attempt = Assert.Single(activities.Jobs);
+        var child = activities.Children.Single(c => Equals(c.GetTagItem("key"), key));
+
+        Assert.Empty(attempt.Links);
+        Assert.Equal(attempt.TraceId, child.TraceId);
+        Assert.Equal(attempt.SpanId, child.ParentSpanId);
+    }
+
     private async Task StartAsync(bool jobTags = false)
     {
         _metrics = new MetricsCollector(_queue);
@@ -201,6 +295,38 @@ public sealed class SqliteObservabilityTests : IAsyncLifetime
     private sealed class RetryOnceNow : IRetryStrategy
     {
         public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => newErrorCount == 1 ? DateTime.UtcNow : null;
+    }
+
+    /// <summary>
+    /// The stopped activities of the source "XactJobs" with the test's queue, and those of the tests' own source.
+    /// </summary>
+    private sealed class ActivityCollector : IDisposable
+    {
+        private readonly ActivityListener _listener;
+        private readonly ConcurrentQueue<Activity> _jobs = new();
+        private readonly ConcurrentQueue<Activity> _children = new();
+
+        public ActivityCollector(string queue)
+        {
+            _listener = new ActivityListener
+            {
+                ShouldListenTo = source => source.Name is "XactJobs" or "XactJobs.Tests",
+                Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+                ActivityStopped = activity =>
+                {
+                    if (activity.Source.Name == "XactJobs" && Equals(activity.GetTagItem("xactjobs.queue"), queue)) _jobs.Enqueue(activity);
+                    else if (activity.Source.Name == "XactJobs.Tests") _children.Enqueue(activity);
+                },
+            };
+
+            ActivitySource.AddActivityListener(_listener);
+        }
+
+        public List<Activity> Jobs => [.. _jobs];
+
+        public List<Activity> Children => [.. _children];
+
+        public void Dispose() => _listener.Dispose();
     }
 
     /// <summary>
@@ -324,4 +450,11 @@ public class ObservabilityJobs(ILogger<ObservabilityJobs> logger)
     }
 
     public void Log(string message) => logger.LogInformation("{Message}", message);
+
+    public static void StartChildActivity(string key)
+    {
+        using var child = SqliteObservabilityTests.TestSource.StartActivity("child");
+
+        child?.SetTag("key", key);
+    }
 }

@@ -1,4 +1,4 @@
--- XactJobs v0.3.0, Oracle: the whole schema, for a new installation.
+-- XactJobs v0.5.0, Oracle: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -24,6 +24,8 @@ CREATE TABLE "XACT_JOBS_JOB" (
   "CONTINUATION_CONDITION" NUMBER(10),
   -- the time a job was originally scheduled for, kept by its retries (null: the same as SCHEDULED_AT)
   "ORIGINALLY_SCHEDULED_AT" TIMESTAMP,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  "TRACE_PARENT" NVARCHAR2(2000),
   CONSTRAINT "PK_JOB" PRIMARY KEY ("QUEUE", "SCHEDULED_AT", "ID")
 );
 
@@ -59,6 +61,8 @@ CREATE TABLE "XACT_JOBS_JOB_HISTORY" (
   "AWAITS_BATCH_ID" RAW(16),
   "CONTINUATION_CONDITION" NUMBER(10),
   "ORIGINALLY_SCHEDULED_AT" TIMESTAMP,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  "TRACE_PARENT" NVARCHAR2(2000),
   CONSTRAINT "PK_JOB_HISTORY" PRIMARY KEY ("ID", "PROCESSED_AT")
 );
 

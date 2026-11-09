@@ -1,4 +1,4 @@
--- XactJobs v0.4.0, SQL Server: the whole schema, for a new installation.
+-- XactJobs v0.5.0, SQL Server: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 -- The filtered index needs QUOTED_IDENTIFIER and ANSI_NULLS on, to create it and to write to the table: SqlClient's defaults
@@ -28,6 +28,8 @@ CREATE TABLE [XactJobs].[Job] (
   [ContinuationCondition] int NULL,
   -- the time a job was originally scheduled for, kept by its retries (null: the same as ScheduledAt)
   [OriginallyScheduledAt] datetime2 NULL,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  [TraceParent] nvarchar(max) NULL,
   CONSTRAINT [PK_Job] PRIMARY KEY ([Queue], [ScheduledAt], [Id])
 );
 
@@ -61,6 +63,8 @@ CREATE TABLE [XactJobs].[JobHistory] (
   [AwaitsBatchId] uniqueidentifier NULL,
   [ContinuationCondition] int NULL,
   [OriginallyScheduledAt] datetime2 NULL,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  [TraceParent] nvarchar(max) NULL,
   CONSTRAINT [PK_JobHistory] PRIMARY KEY ([Id], [ProcessedAt])
 );
 
