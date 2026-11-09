@@ -43,14 +43,16 @@ public static class DrainBenchmark
             BatchSize: args.Contains("--batch-size") ? GetOption(args, "--batch-size", 1) : null,
             Postgres: GetString(args, "--postgres"),
             SqlServer: GetString(args, "--sqlserver"),
-            Log: args.Contains("--log"));
+            Log: args.Contains("--log"),
+            ContextPool: args.Contains("--context-pool"));
         var listSql = args.Contains("--sql");
         var only = GetOnly(args);
 
         if (jobs < 2) throw new ArgumentException("--jobs needs at least 2: the first one only starts the measurement");
 
         Console.WriteLine($"Drain: {jobs} jobs, {settings.Workers} worker(s) running {settings.Parallelism} at a time each" +
-                          $"{(settings.BatchSize != null ? $", claiming batches of {settings.BatchSize}" : "")}, median of {runs} runs after a warm-up");
+                          $"{(settings.BatchSize != null ? $", claiming batches of {settings.BatchSize}" : "")}" +
+                          $"{(settings.ContextPool ? ", pooled contexts" : "")}, median of {runs} runs after a warm-up");
         Console.WriteLine($".NET {Environment.Version}, EF Core {GetVersion(typeof(DbContext))}, XactJobs {GetVersion(typeof(XactJob))}, " +
                           $"{(settings.Postgres != null ? "PostgreSQL" : settings.SqlServer != null ? "SQL Server" : "SQLite in memory")}, {Environment.ProcessorCount} processors");
 #if DEBUG
@@ -118,7 +120,7 @@ public static class DrainBenchmark
             builder.Logging.AddSimpleConsole(o => o.SingleLine = true).SetMinimumLevel(LogLevel.Warning);
         }
 
-        builder.Services.AddDbContext<BenchDbContext>(options => database.Configure(options).AddInterceptors(completed, commands));
+        AddContext(builder.Services, settings, options => database.Configure(options).AddInterceptors(completed, commands));
 
         // the drain starts and stops the host itself. The console lifetime would take Ctrl+C: it would stop the workers and keep
         // the process alive, while the drain waits for jobs that no longer run. Without it, Ctrl+C ends the process.
@@ -185,8 +187,7 @@ public static class DrainBenchmark
         var completed = new CompletedJobCounter(jobs);
         var commands = new CommandCounter();
 
-        await using var services = new ServiceCollection()
-            .AddDbContext<BenchDbContext>(options => database.Configure(options).AddInterceptors(completed, commands))
+        await using var services = AddContext(new ServiceCollection(), settings, options => database.Configure(options).AddInterceptors(completed, commands))
             .BuildServiceProvider();
 
         var leaser = Guid.NewGuid();
@@ -288,7 +289,17 @@ public static class DrainBenchmark
     }
 
     // the plain EF baseline doesn't batch: each of its slots claims one job
-    private sealed record DrainSettings(int Workers, int Parallelism, int? BatchSize, string? Postgres, string? SqlServer, bool Log);
+    private sealed record DrainSettings(int Workers, int Parallelism, int? BatchSize, string? Postgres, string? SqlServer, bool Log, bool ContextPool);
+
+    /// <summary>
+    /// The context, created for each scope, or with <c>--context-pool</c> reused from a pool (AddDbContextPool), for both drains.
+    /// </summary>
+    private static IServiceCollection AddContext(IServiceCollection services, DrainSettings settings, Action<DbContextOptionsBuilder> configure)
+    {
+        return settings.ContextPool
+            ? services.AddDbContextPool<BenchDbContext>(configure)
+            : services.AddDbContext<BenchDbContext>(configure);
+    }
 
     private static int GetOption(string[] args, string name, int defaultValue)
     {

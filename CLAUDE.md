@@ -145,6 +145,7 @@ XactJobs is a .NET library for background job processing with full database tran
 - While a job runs, `XactJobRunner` subscribes `XactJobSaveChecker` to the `SavingChanges` event of the scoped `TDbContext` it created, and unsubscribes in a `finally` before its own save, which must never be checked
 - `Database.CurrentTransaction` is null in the handler when the job didn't open a transaction: EF starts its own after the event (tested on every database in `SaveCheckScenarios`)
 - `XactJobSaveCheck` (`WithSaveOutsideTransaction`, all the queues): `Warn` logs once per job type and method, per dispatcher (the runners share one checker); `Throw` throws `InvalidOperationException` from the event, so nothing is saved and the job is retried; `Ignore` doesn't subscribe. In `Warn` mode a job method that was already warned about isn't subscribed again
+- Apps may register their context with `AddDbContextPool`: the runner must give a pooled context back as it got it (EF resets `AutoTransactionBehavior`; the save check's handler is removed in the `finally`). `SqlitePooledContextTests` checks both
 - Only `SaveChanges` on that context is seen: not other DbContext instances, `ExecuteUpdate`/`ExecuteDelete`, raw SQL, or a transaction the job commits itself
 
 ### Schema of XactJobs' Tables

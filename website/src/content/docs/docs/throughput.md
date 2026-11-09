@@ -11,6 +11,10 @@ jobs at **2,300 to 2,600 jobs per second**. The best setting was 2 workers, `Max
 
 Each job is still its own transaction: its changes, the delete of its row and its history row commit together.
 
+Registering your context with `AddDbContextPool` instead of `AddDbContext` made the same drain about 20% faster, with 60% less memory
+allocated per job: the workers create a context for each job, and the pool reuses them. XactJobs gives each pooled context back as it got
+it.
+
 With real jobs, their own work sets the pace. A larger batch means fewer polls, which helps short jobs, at a cost for slow ones: see [Batch
 size](../queues-and-polling/#batch-size).
 
