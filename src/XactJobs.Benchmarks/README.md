@@ -62,6 +62,17 @@ XactJobs overhead                    ...
   ```
 
   The database's CPU time isn't in `CPU µs`, which is the benchmark process's only.
+
+  On Linux, a port published with `-p` goes through `docker-proxy`, a process that copies every byte between the benchmark and the container. On a 4-vCPU machine it took almost half a core, and the drain was 15–30% slower than when connecting to the container's own address, which skips it:
+
+  ```bash
+  docker run -d --name xactjobs-bench-pg -e POSTGRES_PASSWORD=bench postgres:16.15
+  IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' xactjobs-bench-pg)
+  dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 10 \
+      --postgres "Host=$IP;Username=postgres;Password=bench;Database=postgres"
+  ```
+
+  The same applies to SQL Server. Compare commits with the same setup.
 - `--sqlserver <connection string>` does the same on SQL Server: a new `bench_…` database for each drain, dropped at the end, whatever database the connection string names. For example:
 
   ```bash

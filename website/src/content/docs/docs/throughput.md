@@ -51,3 +51,7 @@ a random id (e.g. `bench_3f2a9c…`), with the schema from the install script, a
 (`postgres` above) is only used to connect: the tables never appear there. A drain stopped with Ctrl+C leaves its database behind: drop it
 by hand. The [benchmark README](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.Benchmarks) has all the options, and how to
 start the database in a container.
+
+On Linux, a port published with `-p` goes through `docker-proxy`, which copies every byte between the benchmark and the container: on a
+4-vCPU machine, the drain was 15–30% slower than when connecting to the container's own address (`docker inspect` gives it). Compare commits
+with the same setup.
