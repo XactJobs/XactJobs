@@ -305,7 +305,7 @@ const shots = [
           <h3>Status: pre-1.0</h3>
           <p>
             The core is tested on all five databases, with an integration test suite running against each one (SQLite in-process, the
-            others in containers): transactional enqueue, claiming and leasing, retries, batches and continuations, and periodic jobs.
+            others in containers): transactional enqueue, picking up jobs with leases, retries, batches and continuations, and periodic jobs.
           </p>
           <ul>
             <li><strong>The API can still change</strong> between minor versions (0.x). Breaking changes are listed in the release notes, with how to migrate.</li>

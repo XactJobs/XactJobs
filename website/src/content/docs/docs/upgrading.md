@@ -40,8 +40,8 @@ Run the script first: it adds the column for the time a job was originally sched
 A worker of an older version that retries a job leaves the column empty, so that retry sees its own retry time as
 `XactJobContext.OriginallyScheduledAt`.
 
-- On SQLite, the script also adds an index on the queue and the scheduled time, for the claims: without it, every claim reads and sorts
-  the whole job table.
+- On SQLite, the script also adds an index on the queue and the scheduled time, for picking up due jobs: without it, every poll reads and
+  sorts the whole job table.
 - Except on MySQL, it also adds an index of the periodic job column, with only the runs of periodic jobs, so that pausing a periodic job,
   resuming it, the reconciliation and the dashboard's Periodic page don't read the whole table.
 - On SQL Server it changes the column from `nvarchar(max)`, which can't be indexed, to `nvarchar(450)`, the type of the periodic job's

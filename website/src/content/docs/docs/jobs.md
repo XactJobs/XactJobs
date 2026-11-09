@@ -130,8 +130,8 @@ dbContext.JobEnsurePeriodic<ReportSender>(
 ```
 
 - For a periodic job it's the cron slot of the run.
-- For a continuation, it's the time its first attempt was claimed, once its batch was finished. The time is saved when the first
-  attempt is claimed, so a second run of that attempt, after its lease expired, gets the same value.
+- For a continuation, it's the time its first attempt was picked up, once its batch was finished. That time is saved, so a second run of
+  that attempt, after its lease expired, gets the same value.
 - The dashboard's *Run now*, *Trigger* and *Retry* keep it too.
 
 The cron slot and `OriginallyScheduledAt` are in UTC, because cron expressions are evaluated in UTC. So a daily run at midnight in a time

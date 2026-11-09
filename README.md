@@ -33,7 +33,7 @@ public class InvoiceJob(UserDbContext db)
 The details are in [Exactly-Once Database Effects](#exactly-once-database-effects), and for `XactJobCancelException` in [Failures and Retries](#failures-and-retries).
 
 ## Status
-XactJobs is pre-1.0. The core is tested on all five databases, with an integration test suite running against each one (SQLite in-process, the others in containers): transactional enqueue, claiming and leasing, retries, batches and continuations, and periodic jobs.
+XactJobs is pre-1.0. The core is tested on all five databases, with an integration test suite running against each one (SQLite in-process, the others in containers): transactional enqueue, picking up jobs with leases, retries, batches and continuations, and periodic jobs.
 
 Until 1.0:
 - **The API can still change** between minor versions (0.x). Breaking changes are listed in the release notes, with how to migrate.
@@ -318,14 +318,14 @@ batch columns, in the job table and the history, so that they hold only the rows
 and deletes don't write to them. There's no script for MySQL, which has no filtered indexes, nor for Oracle, whose indexes already leave
 out those rows. On SQL Server, run it with `QUOTED_IDENTIFIER` and `ANSI_NULLS` on.
 
-For v0.3.0, run the script first: it adds the column for the time a job was originally scheduled for, which v0.3.0 needs. Then upgrade the workers.
-A worker of an older version that retries a job leaves the column empty, so that retry sees its own retry time as `XactJobContext.OriginallyScheduledAt`.
-On SQLite, the script also adds an index on the queue and the scheduled time, for the claims: without it, every claim reads and sorts the whole job table.
-Except on MySQL, it also adds an index of the periodic job column, with only the runs of periodic jobs, so that pausing a periodic job, resuming it, the
-reconciliation and the dashboard's Periodic page don't read the whole table. On SQL Server it changes the column from `nvarchar(max)`, which can't be indexed,
-to `nvarchar(450)`, the type of the periodic job's id, and it's a filtered index: creating it, and writing to the table, needs `QUOTED_IDENTIFIER` and
-`ANSI_NULLS` on, which are SqlClient's defaults (`sqlcmd` needs `-I`).
-The dashboard's API identifies a pending job by its primary key now: see [API](#api).
+For v0.3.0, run the script first: it adds the column for the time a job was originally scheduled for, which v0.3.0 needs. Then upgrade the
+workers. A worker of an older version that retries a job leaves the column empty, so that retry sees its own retry time as
+`XactJobContext.OriginallyScheduledAt`. On SQLite, the script also adds an index on the queue and the scheduled time, for picking up due
+jobs: without it, every poll reads and sorts the whole job table. Except on MySQL, it also adds an index of the periodic job column, with
+only the runs of periodic jobs, so that pausing a periodic job, resuming it, the reconciliation and the dashboard's Periodic page don't read
+the whole table. On SQL Server it changes the column from `nvarchar(max)`, which can't be indexed, to `nvarchar(450)`, the type of the
+periodic job's id, and it's a filtered index: creating it, and writing to the table, needs `QUOTED_IDENTIFIER` and `ANSI_NULLS` on, which
+are SqlClient's defaults (`sqlcmd` needs `-I`). The dashboard's API identifies a pending job by its primary key now: see [API](#api).
 
 ## Using EF Migrations
 Alternatively, instead of creating the tables with the scripts above, you can include the XactJobs entities in EF migrations like this:
@@ -427,8 +427,8 @@ dbContext.JobEnsurePeriodic<ReportSender>(
     Cron.Daily());
 ```
 
-For a periodic job it's the cron slot of the run. For a continuation, it's the time its first attempt was claimed, once its batch was finished: the time is saved
-when the first attempt is claimed, so a second run of that attempt, after its lease expired, gets the same value.
+For a periodic job it's the cron slot of the run. For a continuation, it's the time its first attempt was picked up, once its batch was
+finished. That time is saved, so a second run of that attempt, after its lease expired, gets the same value.
 
 The cron slot and `OriginallyScheduledAt` are in UTC, because cron expressions are evaluated in UTC. So a daily run at midnight in a time zone east of UTC,
 written as its UTC time (e.g. `0 0 22 * * *` for UTC+2), has the previous day's UTC date. If that's confusing, format the key with the full time, e.g. `:yyyyMMddHHmmss`.
@@ -489,7 +489,7 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
     options
         .WithWorkerCount(2)                         // workers polling the queue
         .WithMaxDegreeOfParallelism(8)              // jobs running at the same time, per worker (default: processor count)
-     // .WithBatchSize(16)                          // jobs a worker claims and holds at a time (default: twice MaxDegreeOfParallelism, see Polling)
+     // .WithBatchSize(16)                          // jobs a worker picks up and holds at a time (default: twice MaxDegreeOfParallelism, see Polling)
         .WithPollingInterval(6)                     // seconds between polls, per worker
         .WithLeaseDuration(120)                     // seconds, extended automatically while a job is running
         .WithShutdownTimeout(10)                    // seconds running jobs get to finish on stop, before they are cancelled
@@ -618,20 +618,21 @@ Without the queue and the scheduled time, these routes answer `400`.
 # How Jobs Run
 
 ## Polling
-A worker runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of claimed (leased) jobs: by default twice as many, so that
-each slot has a job waiting for it. A free slot takes one of the jobs the worker holds, without waiting for a claim. A slow job only
-occupies its own slot.
+A worker polls the database for due jobs and picks up a batch of them: it reserves them for a while (a lease, `WithLeaseDuration`), so no
+other worker runs them, and extends the lease while a job runs. It runs up to `MaxDegreeOfParallelism` jobs at a time, and holds a batch of
+jobs it picked up: by default twice as many, so that each slot has a job waiting for it. A free slot takes one of the jobs the worker holds,
+without waiting for the next poll. A slow job only occupies its own slot.
 
-If a poll fills the batch there is likely a backlog, so the worker claims again once fewer jobs wait than it can run, instead of once for
+If a poll fills the batch there is likely a backlog, so the worker polls again once fewer jobs wait than it can run, instead of once for
 each job that finishes: when the jobs it holds are done, or after a second if some are still running. Otherwise it waits for the polling
 interval or a QuickPoll notification. Polling can stop only if all the slots are occupied, so long-running jobs are best kept in their own
 queue.
 
-`WithBatchSize` changes the batch. A larger one saves claims, which helps short jobs: on PostgreSQL, 2 workers running 4 no-op jobs at a
-time each drained a backlog about twice as fast with a batch of 100 as with no batch. The cost is that the jobs a worker holds wait for its
-slots, also when another worker is idle, and wait for their leases to expire if the worker crashes. At or below `MaxDegreeOfParallelism`,
-there's no batch: a worker only claims jobs it can start immediately, so they never wait behind a slow job while another worker is free.
-When the worker stops, the jobs it holds that haven't started are released right away, for the other workers.
+`WithBatchSize` changes the batch. A larger one means fewer polls, which helps short jobs: on PostgreSQL, 2 workers running 4 no-op jobs at
+a time each drained a backlog about twice as fast with a batch of 100 as with no batch. The cost is that the jobs a worker holds wait for
+its slots, also when another worker is idle, and wait for their leases to expire if the worker crashes. At or below
+`MaxDegreeOfParallelism`, there's no batch: a worker only picks up jobs it can start immediately, so they never wait behind a slow job while
+another worker is free. When the worker stops, the jobs it holds that haven't started are released right away, for the other workers.
 
 ## Throughput
 On a Hetzner Cloud CX33 (cost-optimized, 4 shared vCPUs, AMD EPYC Rome, 8 GB of RAM), with PostgreSQL 16 in a container on the
@@ -733,9 +734,9 @@ builder.Services.AddOpenTelemetry()
 |---|---|---|---|
 | `xactjobs.job.attempts` | counter | `{attempt}` | Attempts that ended, by `xactjobs.outcome`: `completed`; `skipped` (an inactive periodic job, or a continuation whose condition isn't met); `retried` (failed, and scheduled again); `failed` (out of retries, or cancelled itself); `interrupted` (stopped by the shutdown, it runs again) |
 | `xactjobs.job.duration` | histogram | s | How long an attempt took, until its outcome was saved, by `xactjobs.outcome` |
-| `xactjobs.job.start_delay` | histogram | s | How long a job waited from the time it was due until it started: a queue falling behind shows here first. A continuation is due when it's claimed |
-| `xactjobs.claim.duration` | histogram | s | How long a claim took |
-| `xactjobs.job.claimed` | counter | `{job}` | Jobs claimed |
+| `xactjobs.job.start_delay` | histogram | s | How long a job waited from the time it was due until it started: a queue falling behind shows here first. A continuation is due when it's picked up |
+| `xactjobs.claim.duration` | histogram | s | How long a worker's query for due jobs took |
+| `xactjobs.job.claimed` | counter | `{job}` | Jobs the workers picked up |
 | `xactjobs.job.running` | up-down counter | `{job}` | Jobs running now |
 | `xactjobs.job.held` | up-down counter | `{job}` | Jobs the workers hold: running, and waiting for a slot |
 
@@ -781,9 +782,9 @@ ALTER TABLE xact_jobs.job SET (
 Long-running transactions **anywhere in the cluster** hold back the cleanup of dead rows, not just the ones using this table. Dead rows pile up meanwhile, which slows down fetching jobs.
 
 ## MySQL
-XactJobs needs **MySQL 8.0 or later**, because claiming jobs uses `SKIP LOCKED` and `FOR UPDATE OF`. MariaDB isn't supported: it doesn't support `FOR UPDATE OF`, and only supports `SKIP LOCKED` from 10.6.
+XactJobs needs **MySQL 8.0 or later**, because picking up jobs uses `SKIP LOCKED` and `FOR UPDATE OF`. MariaDB isn't supported: it doesn't support `FOR UPDATE OF`, and only supports `SKIP LOCKED` from 10.6.
 
-The workers claim jobs at `READ COMMITTED`, not at InnoDB's default `REPEATABLE READ`. At `REPEATABLE READ`, a claim would keep the running jobs it scans locked, and the gaps between rows too, so finished jobs couldn't be deleted, and new jobs (`JobEnqueue` and `SaveChanges`) couldn't be saved until the claim commits. Only the claims use it: your own transactions, and the jobs, keep their isolation level.
+The workers pick up jobs at `READ COMMITTED`, not at InnoDB's default `REPEATABLE READ`. At `REPEATABLE READ`, the query that picks up jobs would keep the running jobs it scans locked, and the gaps between rows too, so finished jobs couldn't be deleted, and new jobs (`JobEnqueue` and `SaveChanges`) couldn't be saved until that query commits. Only that query uses it: your own transactions, and the jobs, keep their isolation level.
 
 The provider depends on the version of .NET:
 
@@ -813,11 +814,11 @@ public class UserDbContext : DbContext
 The workers already do this for their own saves, so running jobs are not affected. Pomelo starts a transaction when a save has more than one statement.
 
 ## Oracle
-XactJobs needs **Oracle 12c or later**. A claim is one PL/SQL block, which returns the claimed jobs with `DBMS_SQL.RETURN_RESULT`.
+XactJobs needs **Oracle 12c or later**. Jobs are picked up by one PL/SQL block, which returns them with `DBMS_SQL.RETURN_RESULT`.
 
-Jobs are claimed oldest first. The block locks the due jobs with `FOR UPDATE SKIP LOCKED`, fetches only as many as the worker has free slots, and leases them. Oracle locks a row only when it's fetched, so workers that poll at once each get different jobs from a backlog. `ROWNUM` can't be used to limit the rows, because it's applied before locked rows are skipped: all the workers would try the same first rows, and all but one would get none.
+Jobs are picked up oldest first. The block locks the due jobs with `FOR UPDATE SKIP LOCKED`, fetches only as many as the worker has free slots, and leases them. Oracle locks a row only when it's fetched, so workers that poll at once each get different jobs from a backlog. `ROWNUM` can't be used to limit the rows, because it's applied before locked rows are skipped: all the workers would try the same first rows, and all but one would get none.
 
-The claims read the table's primary key in order (with an index hint), so a claim doesn't sort the whole backlog, even if Oracle cached a plan from when the table was nearly empty.
+Picking up jobs reads the table's primary key in order (with an index hint), so it doesn't sort the whole backlog, even if Oracle cached a plan from when the table was nearly empty.
 
 # License
 

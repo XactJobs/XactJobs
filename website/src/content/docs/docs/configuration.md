@@ -9,7 +9,7 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
     options
         .WithWorkerCount(2)                         // workers polling the queue
         .WithMaxDegreeOfParallelism(8)              // jobs running at the same time, per worker (default: processor count)
-     // .WithBatchSize(16)                          // jobs a worker claims and holds at a time (default: twice MaxDegreeOfParallelism)
+     // .WithBatchSize(16)                          // jobs a worker picks up and holds at a time (default: twice MaxDegreeOfParallelism)
         .WithPollingInterval(6)                     // seconds between polls, per worker
         .WithLeaseDuration(120)                     // seconds, extended automatically while a job is running
         .WithShutdownTimeout(10)                    // seconds running jobs get to finish on stop, before they are cancelled
@@ -34,9 +34,9 @@ these defaults, not from the default queue's settings.
 |---|---|---|
 | `WithWorkerCount(n)` | 2 | Workers polling the queue, started at staggered times |
 | `WithMaxDegreeOfParallelism(n)` | processor count | Jobs running at the same time, per worker |
-| `WithBatchSize(n)` | twice `MaxDegreeOfParallelism` | Jobs a worker claims and holds at a time. At or below `MaxDegreeOfParallelism`, no batch: see [Batch size](../queues-and-polling/#batch-size) |
+| `WithBatchSize(n)` | twice `MaxDegreeOfParallelism` | Jobs a worker picks up and holds at a time. At or below `MaxDegreeOfParallelism`, no batch: see [Batch size](../queues-and-polling/#batch-size) |
 | `WithPollingInterval(seconds)` | 6 | Seconds between polls, per worker |
-| `WithLeaseDuration(seconds)` | 120 | How long a claimed job is leased, extended every three quarters of it while the job runs |
+| `WithLeaseDuration(seconds)` | 120 | How long a job a worker picked up stays reserved for it (leased), extended every three quarters of it while the job runs |
 | `WithShutdownTimeout(seconds)` | 10 | Seconds running jobs get to finish on stop, before they are cancelled. 0 cancels them immediately |
 | `ClearLeaseTimeoutInSeconds` | 10 | How long the workers wait to clear the leases on stop. No builder method: set `options.Options.ClearLeaseTimeoutInSeconds` |
 | `WithRetryStrategy(strategy)` | `DefaultRetryStrategy` | When a failed job runs again: see [Failures and retries](../failures-and-retries/) |

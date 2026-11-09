@@ -18,9 +18,9 @@ builder.Services.AddOpenTelemetry()
 |---|---|---|---|
 | `xactjobs.job.attempts` | counter | `{attempt}` | Attempts that ended, by `xactjobs.outcome`: `completed`; `skipped` (an inactive periodic job, or a continuation whose condition isn't met); `retried` (failed, and scheduled again); `failed` (out of retries, or cancelled itself); `interrupted` (stopped by the shutdown, it runs again) |
 | `xactjobs.job.duration` | histogram | s | How long an attempt took, until its outcome was saved, by `xactjobs.outcome` |
-| `xactjobs.job.start_delay` | histogram | s | How long a job waited from the time it was due until it started: a queue falling behind shows here first. A continuation is due when it's claimed |
-| `xactjobs.claim.duration` | histogram | s | How long a claim took |
-| `xactjobs.job.claimed` | counter | `{job}` | Jobs claimed |
+| `xactjobs.job.start_delay` | histogram | s | How long a job waited from the time it was due until it started: a queue falling behind shows here first. A continuation is due when it's picked up |
+| `xactjobs.claim.duration` | histogram | s | How long a worker's query for due jobs took |
+| `xactjobs.job.claimed` | counter | `{job}` | Jobs the workers picked up |
 | `xactjobs.job.running` | up-down counter | `{job}` | Jobs running now |
 | `xactjobs.job.held` | up-down counter | `{job}` | Jobs the workers hold: running, and waiting for a slot |
 
