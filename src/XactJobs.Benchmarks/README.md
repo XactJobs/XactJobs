@@ -52,22 +52,22 @@ XactJobs overhead                    ...
 - `--workers N` runs N workers, and `--parallelism N` N jobs at a time per worker. Plain EF gets as many slots in all, each claiming one job when it's free. On SQLite the claims and the saves then wait for each other, so this measures SQLite's single writer more than XactJobs: use PostgreSQL.
 - `--batch-size N` makes the XactJobs workers claim batches of N jobs (`WithBatchSize`). Plain EF doesn't batch.
 - `--log` shows XactJobs' warnings and errors, e.g. why a job failed. A failed attempt doesn't end the drain: only completions count, and the failed attempts are printed.
-- `--postgres <connection string>` drains on PostgreSQL instead: a new database on that server for each drain, with the schema from the install script and fresh statistics, dropped afterwards. With several workers, XactJobs is measured once all of them poll (each one's first poll waits for its polling interval). For example, with a container:
+- `--postgres <connection string>` drains on PostgreSQL instead. The connection string is only used to connect to the server: each drain creates a new database there, named `bench_` and a random id (e.g. `bench_3f2a9c…`), with the schema from the install script and fresh statistics, and drops it at the end. The database named in the connection string (`postgres` below) isn't used, so the tables are only in the `bench_…` database while a drain runs. A drain stopped with Ctrl+C leaves its database behind: drop it by hand. With several workers, XactJobs is measured once all of them poll (each one's first poll waits for its polling interval). For example, with a container:
 
   ```bash
-  docker run -d --name xactjobs-bench-pg -e POSTGRES_PASSWORD=bench -p 127.0.0.1:55432:5432 postgres:16.15
+  docker run -d --name xactjobs-bench-pg -e POSTGRES_PASSWORD=bench -p 127.0.0.1:5432:5432 postgres:16.15
   dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 10 \
-      --postgres "Host=127.0.0.1;Port=55432;Username=postgres;Password=bench;Database=postgres"
+      --postgres "Host=127.0.0.1;Username=postgres;Password=bench;Database=postgres"
   docker rm -f xactjobs-bench-pg
   ```
 
   The database's CPU time isn't in `CPU µs`, which is the benchmark process's only.
-- `--sqlserver <connection string>` does the same on SQL Server. For example:
+- `--sqlserver <connection string>` does the same on SQL Server: a new `bench_…` database for each drain, dropped at the end, whatever database the connection string names. For example:
 
   ```bash
   docker run -d --name xactjobs-bench-mssql -e ACCEPT_EULA=Y -e 'MSSQL_SA_PASSWORD=Bench_pass1!' -e MSSQL_MEMORY_LIMIT_MB=2048 \
-      -p 127.0.0.1:51433:1433 mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04
+      -p 127.0.0.1:1433:1433 mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04
   dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 4 \
-      --sqlserver "Server=127.0.0.1,51433;User ID=sa;Password=Bench_pass1!;TrustServerCertificate=True"
+      --sqlserver "Server=127.0.0.1;User ID=sa;Password=Bench_pass1!;TrustServerCertificate=True"
   docker rm -f xactjobs-bench-mssql
   ```
