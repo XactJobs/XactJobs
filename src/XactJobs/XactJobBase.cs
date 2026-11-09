@@ -42,6 +42,12 @@ namespace XactJobs
         /// </summary>
         public DateTime? OriginallyScheduledAt { get; init; }
 
+        /// <summary>
+        /// The W3C traceparent of the activity that enqueued the job, if there was one: each attempt's activity links to that trace.
+        /// It stays the same across retries, and the history keeps it. Null for the runs of periodic jobs.
+        /// </summary>
+        public string? TraceParent { get; init; }
+
         private Guid? _batchId;
 
         /// <summary>

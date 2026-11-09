@@ -1,4 +1,4 @@
--- XactJobs v0.4.0, SQLite: the whole schema, for a new installation.
+-- XactJobs v0.5.0, SQLite: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -24,7 +24,9 @@ CREATE TABLE "xact_jobs_job" (
   "awaits_batch_id" TEXT NULL,
   "continuation_condition" INTEGER NULL,
   -- the time a job was originally scheduled for, kept by its retries (null: the same as scheduled_at)
-  "originally_scheduled_at" DATETIME NULL
+  "originally_scheduled_at" DATETIME NULL,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  "trace_parent" TEXT NULL
 );
 
 -- batches and continuations: only the rows of a batch, or of a continuation (most jobs are in none)
@@ -59,7 +61,9 @@ CREATE TABLE "xact_jobs_job_history" (
   "batch_id" TEXT NULL,
   "awaits_batch_id" TEXT NULL,
   "continuation_condition" INTEGER NULL,
-  "originally_scheduled_at" DATETIME NULL
+  "originally_scheduled_at" DATETIME NULL,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  "trace_parent" TEXT NULL
 );
 
 CREATE INDEX "ix_job_history_processed_at" ON "xact_jobs_job_history" ("processed_at");

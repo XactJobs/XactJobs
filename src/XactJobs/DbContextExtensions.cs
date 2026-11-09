@@ -333,7 +333,8 @@ namespace XactJobs
                 BatchId = job.BatchId,
                 AwaitsBatchId = job.AwaitsBatchId,
                 ContinuationCondition = job.ContinuationCondition,
-                OriginallyScheduledAt = originallyScheduledAt
+                OriginallyScheduledAt = originallyScheduledAt,
+                TraceParent = job.TraceParent
             };
 
             dbContext.Set<XactJob>().Add(newJob);

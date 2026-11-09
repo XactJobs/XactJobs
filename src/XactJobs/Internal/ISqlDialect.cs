@@ -43,6 +43,7 @@ namespace XactJobs.Internal
         string ColIsActive { get; }
         string ColVersion { get; }
         string ColBatchId { get; }
+        string ColTraceParent { get; }
         string ColAwaitsBatchId { get; }
         string ColContinuationCondition { get; }
         string ColOriginallyScheduledAt { get; }

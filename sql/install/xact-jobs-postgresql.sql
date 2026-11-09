@@ -1,4 +1,4 @@
--- XactJobs v0.4.0, PostgreSQL: the whole schema, for a new installation.
+-- XactJobs v0.5.0, PostgreSQL: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -28,6 +28,8 @@ CREATE TABLE xact_jobs.job (
   continuation_condition integer,
   -- the time a job was originally scheduled for, kept by its retries (null: the same as scheduled_at)
   originally_scheduled_at timestamptz,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  trace_parent text,
   CONSTRAINT pk_job PRIMARY KEY (queue, scheduled_at, id)
 ) WITH (fillfactor = 70);
 
@@ -61,6 +63,8 @@ CREATE TABLE xact_jobs.job_history (
   awaits_batch_id uuid,
   continuation_condition integer,
   originally_scheduled_at timestamptz,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  trace_parent text,
   CONSTRAINT pk_job_history PRIMARY KEY (id, processed_at)
 );
 

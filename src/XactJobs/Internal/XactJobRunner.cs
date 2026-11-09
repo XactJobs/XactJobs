@@ -549,6 +549,9 @@ namespace XactJobs.Internal
 
             var queue = GetQueueDisplayName();
 
+            // the attempt's activity, with what the job does inside it; first, so that the log entries get its trace id
+            using var activity = XactJobsTracing.StartAttempt(job, queue);
+
             // the job's properties on every entry logged while it runs, the job's own and EF's too
             using var logScope = _logger.BeginScope(new XactJobLogScope(job, queue));
 
@@ -559,6 +562,7 @@ namespace XactJobs.Internal
 
             // null: the outcome couldn't be saved, the job runs again once its lease expires
             string? outcome = null;
+            Exception? failure = null;
 
             try
             {
@@ -567,6 +571,8 @@ namespace XactJobs.Internal
             }
             catch (Exception ex)
             {
+                failure = ex;
+
                 if (XactJobCancelException.Find(ex) != null)
                 {
                     _logger.LogWarning(ex, "{Queue}: Job cancelled itself, it won't be retried: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
@@ -600,6 +606,11 @@ namespace XactJobs.Internal
                 if (outcome != null)
                 {
                     _metrics.RecordAttempt(queue, job, outcome, Stopwatch.GetElapsedTime(startedAt));
+                }
+
+                if (activity != null)
+                {
+                    XactJobsTracing.SetOutcome(activity, outcome, failure);
                 }
 
                 Interlocked.Decrement(ref _runningJobCount);

@@ -229,7 +229,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
                 BatchId = job.BatchId,
                 AwaitsBatchId = job.AwaitsBatchId,
                 ContinuationCondition = job.ContinuationCondition,
-                OriginallyScheduledAt = job.OriginallyScheduledAt
+                OriginallyScheduledAt = job.OriginallyScheduledAt,
+                TraceParent = job.TraceParent
             });
         }, ct);
 
@@ -318,7 +319,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
                                  history.MethodArgs,
                                  history.Queue)
         {
-            OriginallyScheduledAt = history.OriginallyScheduledAt ?? history.ScheduledAt
+            OriginallyScheduledAt = history.OriginallyScheduledAt ?? history.ScheduledAt,
+            TraceParent = history.TraceParent
         };
 
         db.Set<XactJob>().Add(newJob);
@@ -506,7 +508,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
                 ContinuationCondition = job.ContinuationCondition,
 
                 // the run keeps the time it was scheduled for, e.g. the cron slot of a periodic job
-                OriginallyScheduledAt = job.OriginallyScheduledAt ?? job.ScheduledAt
+                OriginallyScheduledAt = job.OriginallyScheduledAt ?? job.ScheduledAt,
+                TraceParent = job.TraceParent
             };
 
             db.Set<XactJob>().Add(newJob);
@@ -710,8 +713,10 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         var awaiting = XactJobBase.AwaitingBatchScheduledAt;
         var batchIds = ids.Select(id => (Guid?)id).ToList();
 
+        // "IS NOT NULL" with each Contains: the batch columns' indexes leave out the null rows (filtered), and SQL Server uses them
+        // only if the query says so. EF Core 9 sends the list as a JSON parameter, which doesn't (EF Core 10 sends parameters)
         var pending = await db.Set<XactJob>()
-            .Where(j => batchIds.Contains(j.BatchId))
+            .Where(j => j.BatchId != null && batchIds.Contains(j.BatchId))
             .GroupBy(j => j.BatchId)
             .Select(g => new
             {
@@ -724,7 +729,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             .ToListAsync(ct);
 
         var finished = await db.Set<XactJobHistory>()
-            .Where(h => batchIds.Contains(h.BatchId))
+            .Where(h => h.BatchId != null && batchIds.Contains(h.BatchId))
             .GroupBy(h => h.BatchId)
             .Select(g => new
             {
@@ -737,7 +742,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             .ToListAsync(ct);
 
         var continuations = await db.Set<XactJob>()
-            .Where(j => j.ScheduledAt == awaiting && batchIds.Contains(j.AwaitsBatchId))
+            .Where(j => j.ScheduledAt == awaiting && j.AwaitsBatchId != null && batchIds.Contains(j.AwaitsBatchId))
             .GroupBy(j => j.AwaitsBatchId)
             .Select(g => new { Id = g.Key, Count = g.Count() })
             .ToListAsync(ct);
@@ -748,12 +753,12 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         // with the batch, so it uses the index of the batch column: on most databases there's no index on the id alone
         var samples = await db.Set<XactJob>()
-            .Where(j => pendingSampleIds.Contains(j.Id) && batchIds.Contains(j.BatchId))
+            .Where(j => pendingSampleIds.Contains(j.Id) && j.BatchId != null && batchIds.Contains(j.BatchId))
             .Select(j => new { j.BatchId, j.TypeName, j.MethodName })
             .ToListAsync(ct);
 
         samples.AddRange(await db.Set<XactJobHistory>()
-            .Where(h => historySampleIds.Contains(h.Id) && batchIds.Contains(h.BatchId))
+            .Where(h => historySampleIds.Contains(h.Id) && h.BatchId != null && batchIds.Contains(h.BatchId))
             .Select(h => new { h.BatchId, h.TypeName, h.MethodName })
             .ToListAsync(ct));
 

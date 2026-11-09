@@ -88,7 +88,8 @@ namespace XactJobs
                 ContinuationCondition = job.ContinuationCondition,
 
                 // null when it's the same: e.g. the first attempt of a continuation, whose claim saved its claim time
-                OriginallyScheduledAt = job.OriginallyScheduledAt != scheduledAt ? job.OriginallyScheduledAt : null
+                OriginallyScheduledAt = job.OriginallyScheduledAt != scheduledAt ? job.OriginallyScheduledAt : null,
+                TraceParent = job.TraceParent
             };
         }
     }
