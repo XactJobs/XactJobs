@@ -44,7 +44,7 @@ CREATE INDEX "ix_job_periodic_job_id" ON "xact_jobs_job" ("periodic_job_id") WHE
 -- ===============================
 
 CREATE TABLE "xact_jobs_job_history" (
-  "id" INTEGER NOT NULL CONSTRAINT "pk_job_history" PRIMARY KEY,
+  "id" INTEGER NOT NULL,
   "processed_at" DATETIME NOT NULL,
   "status" INTEGER NOT NULL,
   "error_message" TEXT NULL,
@@ -66,7 +66,9 @@ CREATE TABLE "xact_jobs_job_history" (
   "trace_parent" TEXT NULL,
   -- a periodic run's state: the one it started with, and the one after it (the same, unless it completed and set one)
   "previous_state" TEXT NULL,
-  "state" TEXT NULL
+  "state" TEXT NULL,
+  -- a job keeps its id across its retries: a row per attempt
+  CONSTRAINT "pk_job_history" PRIMARY KEY ("id", "processed_at")
 );
 
 CREATE INDEX "ix_job_history_processed_at" ON "xact_jobs_job_history" ("processed_at");

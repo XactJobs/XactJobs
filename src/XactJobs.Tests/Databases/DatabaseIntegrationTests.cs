@@ -515,11 +515,14 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
 
         var pending = await WithDbAsync(host, db => db.Jobs.AsNoTracking().Where(j => j.PeriodicJobId == null).ToListAsync());
 
-        Assert.Equal(jobCount, pending.Count);
+        // a retry is the same row, moved to its retry time (an UPDATE of the primary key): it keeps its id, and has no lease
+        Assert.Equal(jobIds, pending.Select(j => j.Id).Order());
         Assert.All(pending, j =>
         {
             Assert.Equal(1, j.ErrorCount);
             Assert.Equal(retryAt, j.ScheduledAt, TimeSpan.FromSeconds(1));
+            Assert.Null(j.LeasedUntil);
+            Assert.Null(j.Leaser);
         });
     }
 

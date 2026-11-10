@@ -28,6 +28,10 @@ Run the script first: it adds the columns for the state of periodic jobs (see [S
 which v0.6.0 writes, in the history on every attempt. A worker of an older version runs the jobs without their state, and leaves the
 history's state columns empty.
 
+v0.6.0 also keeps a job's id across its retries and the dashboard's *Run now* (the row moves to its new time, instead of being replaced by
+a new one), so the history has a row per attempt with the same id. On SQLite, the script copies the history into a table whose primary key
+is the id and the time it was processed, as on the other databases: without it, the second attempt of a job can't be recorded.
+
 ## v0.5.0
 
 Run the script first: it adds a column for the trace that enqueued a job (see [Metrics, traces and logs](../observability/#traces)),

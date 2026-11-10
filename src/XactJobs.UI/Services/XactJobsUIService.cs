@@ -290,15 +290,19 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         return await db.Set<XactJobHistory>()
             .AsNoTracking()
             .Where(h => h.Id == id)
+            .OrderByDescending(h => h.ProcessedAt) // the last attempt: the retries of a job have the same id
             .Select(ToJobHistoryDto)
             .FirstOrDefaultAsync(ct);
     }
 
     public async Task<ActionResultDto> RetryJobAsync(long historyId, CancellationToken ct = default)
     {
+        // the last attempt of the job: its retries have the same id
         var history = await db.Set<XactJobHistory>()
             .AsNoTracking()
-            .FirstOrDefaultAsync(h => h.Id == historyId, ct);
+            .Where(h => h.Id == historyId)
+            .OrderByDescending(h => h.ProcessedAt)
+            .FirstOrDefaultAsync(ct);
 
         if (history == null) return ActionResultDto.NotFound($"Job #{historyId} not found in the history.");
 
@@ -493,45 +497,38 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             return ActionResultDto.Done($"{subject} is already due, it starts as soon as a worker is free.");
         }
 
-        XactJob? newJob = null;
-
-        // the scheduled time is part of the primary key, so the row is replaced instead of updated
-        var conflict = await ReplacePendingJobAsync(job, now =>
+        if (!await MoveToNowAsync(job, ct))
         {
-            newJob = new XactJob(0,
-                                 now,
-                                 job.TypeName,
-                                 job.MethodName,
-                                 job.MethodArgs,
-                                 job.Queue,
-                                 job.PeriodicJobId,
-                                 job.CronExpression,
-                                 job.PeriodicJobVersion,
-                                 job.ErrorCount)
-            {
-                BatchId = job.BatchId,
-                AwaitsBatchId = job.AwaitsBatchId,
-                ContinuationCondition = job.ContinuationCondition,
-
-                // the run keeps the time it was scheduled for, e.g. the cron slot of a periodic job
-                OriginallyScheduledAt = job.OriginallyScheduledAt ?? job.ScheduledAt,
-                TraceParent = job.TraceParent
-            };
-
-            db.Set<XactJob>().Add(newJob);
-        }, ct);
-
-        if (conflict != null) return conflict;
+            return ActionResultDto.Conflict($"{subject} started running or finished meanwhile.");
+        }
 
         NotifyQueue(job.Queue);
 
-        return ActionResultDto.Done($"{subject} runs now, as job #{newJob!.Id}.");
+        return ActionResultDto.Done($"{subject} runs now.");
     }
 
     /// <summary>
-    /// Deletes the job row if no worker has leased it, and adds what replaces it, in one transaction.
-    /// The replacement is inserted first, so that the job's batch can't look finished meanwhile
-    /// to a reader that doesn't use snapshots (SQL Server without snapshot isolation).
+    /// Makes a pending job due now, if no worker has leased it: the same row, with the scheduled time now. It keeps the time it was
+    /// scheduled for, e.g. the cron slot of a periodic job. The scheduled time is part of the primary key, so it's an UPDATE by the
+    /// old key, in one statement.
+    /// </summary>
+    /// <returns>False if a worker leased the row, or it's gone.</returns>
+    private async Task<bool> MoveToNowAsync(XactJob job, CancellationToken ct)
+    {
+        var now = DateTime.UtcNow;
+        var originallyScheduledAt = job.OriginallyScheduledAt ?? job.ScheduledAt;
+
+        var updated = await WhereKey(db.Set<XactJob>(), JobKey.Of(job))
+            .Where(j => j.LeasedUntil == null || j.LeasedUntil < now)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(j => j.ScheduledAt, now)
+                .SetProperty(j => j.OriginallyScheduledAt, originallyScheduledAt), ct);
+
+        return updated > 0;
+    }
+
+    /// <summary>
+    /// Deletes the job row if no worker has leased it, and adds what replaces it in the history, in one transaction.
     /// </summary>
     /// <returns>A conflict if a worker leased the row, or it's gone.</returns>
     private async Task<ActionResultDto?> ReplacePendingJobAsync(XactJob job, Action<DateTime> addReplacement, CancellationToken ct)

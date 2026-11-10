@@ -95,7 +95,7 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
     }
 
     [DockerFact]
-    public async Task RunNow_ReplacesAFutureJobWithADueOne_ButNotARunningOne()
+    public async Task RunNow_MovesAFutureJobToNow_ButNotARunningOne()
     {
         var futureId = await AddJobAsync(DateTime.UtcNow.AddHours(1), errorCount: 1);
         var running = DateTime.UtcNow.AddHours(1);
@@ -109,12 +109,12 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         var jobs = await db.Jobs.AsNoTracking().ToListAsync();
 
         Assert.Equal(2, jobs.Count);
-        Assert.DoesNotContain(jobs, j => j.Id == futureId);
 
-        var replacement = Assert.Single(jobs, j => j.Id != runningId);
+        // the same row, moved to now (an UPDATE of the primary key): it keeps its id
+        var moved = Assert.Single(jobs, j => j.Id == futureId);
 
-        Assert.True(replacement.ScheduledAt <= DateTime.UtcNow);
-        Assert.Equal(1, replacement.ErrorCount);
+        Assert.True(moved.ScheduledAt <= DateTime.UtcNow);
+        Assert.Equal(1, moved.ErrorCount);
         Assert.True(jobs.Single(j => j.Id == runningId).ScheduledAt > DateTime.UtcNow);
     }
 

@@ -342,10 +342,12 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
 
         await using var db = CreateDb();
 
-        var replaced = await db.Jobs.AsNoTracking().SingleAsync();
+        // the same row, moved to now: it keeps its id and its batch
+        var moved = await db.Jobs.AsNoTracking().SingleAsync();
 
-        Assert.NotEqual(batch.Jobs[0].Id, replaced.Id);
-        Assert.Equal(batch.Id, replaced.BatchId);
+        Assert.Equal(batch.Jobs[0].Id, moved.Id);
+        Assert.Equal(batch.Id, moved.BatchId);
+        Assert.True(moved.ScheduledAt <= DateTime.UtcNow);
 
         var cancelled = await db.JobHistory.AsNoTracking().SingleAsync();
 

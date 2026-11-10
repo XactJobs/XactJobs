@@ -59,6 +59,11 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
 
         Assert.Equal([XactJobStatus.Failed, XactJobStatus.Failed, XactJobStatus.Completed], history.Select(h => h.Status));
 
+        // a retry is the same row, moved to its retry time: every attempt has the job's id, and the dashboard shows the last one
+        var id = Assert.Single(history.Select(h => h.Id).Distinct());
+
+        Assert.Equal(XactJobStatus.Completed, (await WithServiceAsync(host, s => s.GetJobHistoryByIdAsync(id)))!.Status);
+
         // the first attempt had its own time, the retries other times, and they keep the original one
         Assert.Equal(at, history[0].ScheduledAt);
         Assert.Null(history[0].OriginallyScheduledAt);
@@ -263,7 +268,12 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
             return job.Id;
         });
 
-        var slot = await WithDbAsync(host, db => db.Jobs.Where(j => j.PeriodicJobId == "daily_trigger").Select(j => j.ScheduledAt).SingleAsync());
+        var (slot, runId) = await WithDbAsync(host, async db =>
+        {
+            var run = await db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == "daily_trigger");
+
+            return (run.ScheduledAt, run.Id);
+        });
 
         Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.RunJobNowAsync(KeyOf(host, jobId)))).Status);
         Assert.Equal(ActionStatus.Done, (await WithServiceAsync(host, s => s.TriggerPeriodicJobAsync("daily_trigger"))).Status);
@@ -275,6 +285,10 @@ public sealed class OriginalScheduleScenarios(Action<DbContextOptionsBuilder> co
 
         Assert.Equal([at], _state.RunsOf("run-now"));
         Assert.Equal([slot], _state.RunsOf("trigger"));
+
+        // the same rows, moved to now: they keep their ids
+        Assert.Equal(jobId, runNow.Id);
+        Assert.Equal(runId, triggered.Id);
 
         Assert.True(runNow.ScheduledAt < at);
         Assert.Equal(at, runNow.OriginallyScheduledAt);

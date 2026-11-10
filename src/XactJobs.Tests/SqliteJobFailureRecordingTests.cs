@@ -74,7 +74,9 @@ public class SqliteJobFailureRecordingTests : IAsyncLifetime
         var pending = await db.Jobs.Where(j => j.PeriodicJobId == null).ToListAsync();
 
         Assert.Equal(ParallelJobCount, pending.Count);
-        Assert.Empty(pending.Select(j => j.Id).Intersect(jobIds));
+        // a retry is the same row, moved to its retry time: it keeps its id, and has no lease
+        Assert.Equal(jobIds.Order(), pending.Select(j => j.Id).Order());
+        Assert.All(pending, j => Assert.Null(j.LeasedUntil));
         Assert.All(pending, j =>
         {
             Assert.Equal(1, j.ErrorCount);

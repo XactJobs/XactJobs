@@ -358,6 +358,10 @@ For v0.6.0, run the script first: it adds the columns for the state of periodic 
 which v0.6.0 writes, in the history on every attempt. A worker of an older version runs the jobs without their state, and leaves the
 history's state columns empty.
 
+v0.6.0 also keeps a job's id across its retries and the dashboard's *Run now* (the row moves to its new time, instead of being replaced by
+a new one), so the history has a row per attempt with the same id. On SQLite, the script copies the history into a table whose primary key
+is the id and the time it was processed, as on the other databases: without it, the second attempt of a job can't be recorded.
+
 For v0.5.0, run the script first: it adds a column for the trace that enqueued a job (see [Metrics, Traces and Logs](#metrics-traces-and-logs)),
 which v0.5.0 writes. A worker of an older version leaves it empty in the retries and the history.
 
@@ -696,7 +700,7 @@ With real jobs, their own work sets the pace. The benchmark is in [src/XactJobs.
 
 ## Failures and Retries
 
-When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to 30 minutes), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
+When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. A retry is the same job: it keeps its id, so its attempts have the same id in the history, the logs and the traces. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to 30 minutes), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
 
 A job that finds it can never succeed, e.g. because the data it works on is gone, throws `XactJobCancelException` to stop without retries:
 

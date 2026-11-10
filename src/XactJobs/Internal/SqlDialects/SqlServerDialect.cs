@@ -87,8 +87,10 @@ INNER JOIN cte ON -- we need to join on the entire PK
             return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchContinuationsSql(queueName, maxJobs, leaser, leaseDurationInSeconds, claimedAt), cancellationToken);
         }
 
-        // The batch's jobs are read without READPAST, so a job that's being retried is waited for instead of skipped.
-        // Without snapshot isolation, a reader can miss a row inserted behind it: so a retry is inserted before the failed attempt is deleted.
+        // The batch's jobs are read without READPAST, so a job that's being retried is waited for instead of skipped. HOLDLOCK locks the
+        // range of the batch in its index until the claim commits: without it, locking READ COMMITTED (no snapshot isolation) reads row by
+        // row, and can miss a row that a retry or Run now moves (the scheduled time is part of the key) to a place it already passed.
+        // Only that batch's range: other batches and other jobs aren't blocked.
         public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt) => ($@"
 WITH cte AS (
     SELECT TOP ({{0}}) c.[{ColId}], c.[{ColQueue}], c.[{ColScheduledAt}]
@@ -97,7 +99,7 @@ WITH cte AS (
       AND c.[{ColScheduledAt}] = {{2}}
       AND c.[{ColAwaitsBatchId}] IS NOT NULL
       AND (c.[{ColLeasedUntil}] IS NULL OR c.[{ColLeasedUntil}] < SYSUTCDATETIME())
-      AND NOT EXISTS (SELECT 1 FROM [{XactJobSchema}].[{XactJobTable}] AS b WHERE b.[{ColBatchId}] = c.[{ColAwaitsBatchId}])
+      AND NOT EXISTS (SELECT 1 FROM [{XactJobSchema}].[{XactJobTable}] AS b WITH (HOLDLOCK) WHERE b.[{ColBatchId}] = c.[{ColAwaitsBatchId}])
     ORDER BY c.[{ColId}]
 )
 UPDATE target

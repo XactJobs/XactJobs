@@ -314,32 +314,25 @@ namespace XactJobs
         }
 
         /// <summary>
-        /// Adds the retry of a job. It keeps the time the job was originally scheduled for: see <see cref="XactJobBase.GetOriginallyScheduledAt"/>.
+        /// Moves a claimed job to its retry: the same row, with the new scheduled time, and without the lease. It keeps its id, and the
+        /// time it was originally scheduled for: see <see cref="XactJobBase.GetOriginallyScheduledAt"/>. A retry stays in its batch, and
+        /// a retry of a continuation is still one, but doesn't wait anymore (its scheduled time isn't the reserved one).
+        /// The scheduled time is part of the primary key, so it's an UPDATE by the old key (EF doesn't change the key of a tracked entity).
         /// </summary>
-        internal static XactJob Reschedule(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount, DateTime originallyScheduledAt)
+        /// <returns>False if the row is gone: another worker processed the job after its lease expired.</returns>
+        internal static async Task<bool> RescheduleAsync(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount, DateTime originallyScheduledAt, CancellationToken cancellationToken)
         {
-            var newJob = new XactJob(0,
-                                     scheduledAt,
-                                     job.TypeName,
-                                     job.MethodName,
-                                     job.MethodArgs,
-                                     job.Queue,
-                                     job.PeriodicJobId,
-                                     job.CronExpression,
-                                     job.PeriodicJobVersion,
-                                     errorCount)
-            {
-                // a retry stays in its batch, and a retry of a continuation is still one, but doesn't wait anymore
-                BatchId = job.BatchId,
-                AwaitsBatchId = job.AwaitsBatchId,
-                ContinuationCondition = job.ContinuationCondition,
-                OriginallyScheduledAt = originallyScheduledAt,
-                TraceParent = job.TraceParent
-            };
+            var updated = await dbContext.Set<XactJob>()
+                .Where(j => j.Queue == job.Queue && j.ScheduledAt == job.ScheduledAt && j.Id == job.Id)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(j => j.ScheduledAt, scheduledAt)
+                    .SetProperty(j => j.ErrorCount, errorCount)
+                    .SetProperty(j => j.OriginallyScheduledAt, originallyScheduledAt)
+                    .SetProperty(j => j.Leaser, (Guid?)null)
+                    .SetProperty(j => j.LeasedUntil, (DateTime?)null), cancellationToken)
+                .ConfigureAwait(false);
 
-            dbContext.Set<XactJob>().Add(newJob);
-
-            return newJob;
+            return updated > 0;
         }
 
         internal static XactJob ScheduleNextRun(this DbContext dbContext, XactJobPeriodic periodicJob)

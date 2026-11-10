@@ -33,17 +33,9 @@ namespace XactJobs.EntityConfigurations
                 builder.ToTable($"{_sqlDialect.XactJobSchema}_{_sqlDialect.XactJobHistoryTable}");
             }
 
-            if (_sqlDialect is SqliteDialect)
-            {
-                // Sqlite only supports autoincrement for INTEGER PRIMARY KEY
-                builder.HasKey(x => x.Id)
-                    .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobHistoryTable}");
-            }
-            else
-            {
-                builder.HasKey(x => new { x.Id, x.ProcessedAt })
-                    .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobHistoryTable}");
-            }
+            // a job keeps its id across its retries, so it has a history row per attempt
+            builder.HasKey(x => new { x.Id, x.ProcessedAt })
+                .HasName($"{_sqlDialect.PrimaryKeyPrefix}_{_sqlDialect.XactJobHistoryTable}");
 
             builder.Property(x => x.Id).HasColumnName(_sqlDialect.ColId)
                 .ValueGeneratedNever();

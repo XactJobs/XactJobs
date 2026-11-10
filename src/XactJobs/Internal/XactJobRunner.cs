@@ -660,8 +660,7 @@ namespace XactJobs.Internal
         /// Never throws: if the record can't be saved, the lease expires and the job runs again.
         /// The stopping token isn't used, so that a job failing during shutdown still gets its failure recorded.
         /// <para>
-        /// The retry is inserted before the failed attempt is deleted, in one transaction: so the job's batch can't look finished
-        /// to a reader that doesn't use snapshots (SQL Server without snapshot isolation).
+        /// A retry is the same row, moved to its new scheduled time with an UPDATE, in the transaction that adds the history row.
         /// </para>
         /// </summary>
         /// <returns>The status recorded in the history: Failed if the job is retried, Cancelled if it's finished. Null if it
@@ -690,12 +689,23 @@ namespace XactJobs.Internal
                         .ConfigureAwait(false);
 
                     // the state it started with, which a failed attempt leaves as it is
-                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException, periodicJob?.State);
+                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException, periodicJob?.State, out var retryAt);
 
-                    await dbContext.SaveChangesAsync(token)
-                        .ConfigureAwait(false);
+                    if (retryAt != null)
+                    {
+                        // the same row moves to its retry (the history row is saved below, in the same transaction)
+                        var isRescheduled = await dbContext.RescheduleAsync(job, retryAt.Value, job.ErrorCount + 1, job.GetOriginallyScheduledAt(claimedAt), token)
+                            .ConfigureAwait(false);
 
-                    dbContext.Set<XactJob>().Remove(job);
+                        if (!isRescheduled)
+                        {
+                            throw new DbUpdateConcurrencyException("The job's row is gone.");
+                        }
+                    }
+                    else
+                    {
+                        dbContext.Set<XactJob>().Remove(job);
+                    }
 
                     await dbContext.SaveChangesAsync(token)
                         .ConfigureAwait(false);
@@ -989,21 +999,21 @@ namespace XactJobs.Internal
 
         private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? previousState, string? state)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Completed, null, null, previousState, state);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Completed, null, null, previousState, state, out _);
         }
 
         private void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? reason, string? state)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Skipped, null, reason, state, state);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Skipped, null, reason, state, state, out _);
         }
 
-        private XactJobStatus RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception ex, string? state)
+        private XactJobStatus RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception ex, string? state, out DateTime? retryAt)
         {
-            return RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Failed, ex, null, state, state);
+            return RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Failed, ex, null, state, state, out retryAt);
         }
 
         /// <summary>
-        /// Adds the history row, and the retry or the next periodic run. The caller removes the job's row.
+        /// Adds the history row, and the next periodic run. The caller removes the job's row, or moves it to <paramref name="retryAt"/>.
         /// The states are a periodic run's, before and after it (the same, unless it completed and set one).
         /// </summary>
         private XactJobStatus RecordProcessingAttempt(TDbContext dbContext,
@@ -1014,8 +1024,11 @@ namespace XactJobs.Internal
                                                       Exception? ex,
                                                       string? message,
                                                       string? previousState,
-                                                      string? state)
+                                                      string? state,
+                                                      out DateTime? retryAt)
         {
+            retryAt = null;
+
             var status = processingResult switch
             {
                 ProcessingResult.Completed => XactJobStatus.Completed,
@@ -1036,7 +1049,7 @@ namespace XactJobs.Internal
 
                 if (nextRunTimeUtc.HasValue)
                 {
-                    dbContext.Reschedule(job, nextRunTimeUtc.Value, errorCount, job.GetOriginallyScheduledAt(claimedAt));
+                    retryAt = nextRunTimeUtc.Value;
                 }
                 else
                 {

@@ -6,7 +6,7 @@ description: What happens when a job throws, the default retry strategy, XactJob
 ## Failures and retries
 
 When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled
-to run again by the retry strategy. A job that runs out of retries is recorded as cancelled.
+to run again by the retry strategy. A job that runs out of retries is recorded as cancelled. A retry is the same job: it keeps its id, so its attempts have the same id in the history, the logs and the traces.
 
 By default (`DefaultRetryStrategy`) a job runs up to 10 times, waiting longer after each failed attempt:
 
