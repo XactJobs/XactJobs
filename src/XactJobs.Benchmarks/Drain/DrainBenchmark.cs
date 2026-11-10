@@ -95,6 +95,17 @@ public static class DrainBenchmark
         {
             Console.WriteLine($"{"XactJobs overhead",-20}{"",10}{x.Value.WallPerJob - e.Value.WallPerJob,10:F1}{x.Value.CpuPerJob - e.Value.CpuPerJob,10:F1}" +
                               $"{x.Value.KBPerJob - e.Value.KBPerJob,9:F2}{x.Value.CommandsPerJob - e.Value.CommandsPerJob,8:F2}{x.Value.SqlPerJob - e.Value.SqlPerJob,10:F1}");
+
+            // as the runner: a batch at or below the parallelism is no batch
+            var batch = settings.BatchSize is > 0 and var size ? Math.Max(size, settings.Parallelism) : 2 * settings.Parallelism;
+
+            if (batch > settings.Parallelism)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"The XactJobs workers pick up batches of {batch} jobs{(settings.BatchSize == null ? " (by default twice the parallelism)" : "")}, " +
+                                  "plain EF one job at a time, so the overhead row compares different database work.");
+                Console.WriteLine($"For XactJobs' own cost, run with --batch-size {settings.Parallelism}, where both pick up only the jobs they can start.");
+            }
         }
 
         return 0;

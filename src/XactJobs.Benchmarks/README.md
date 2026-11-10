@@ -32,10 +32,13 @@ Drains a backlog of jobs that do nothing, twice, on SQLite in memory:
 - with XactJobs: a host with one worker;
 - with plain EF: the same claim, then for each job its delete and its history row, saved together. That's the least database work for the same result.
 
-The difference per job is XactJobs' own cost: scopes, the runner's bookkeeping, running the job. Both are measured from the first completed job, because a worker's first poll waits for its polling interval.
+With `--batch-size` at or below `--parallelism`, where both pick up only the jobs they can start, the difference per job is XactJobs' own cost: scopes, the runner's bookkeeping, running the job. By default XactJobs picks up batches of twice the parallelism and plain EF one job at a time, so the `XactJobs overhead` row also shows what batching saves; the drain says so under the results. Both are measured from the first completed job, because a worker's first poll waits for its polling interval.
 
 ```bash
 dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 3000 --runs 5
+
+# XactJobs' own cost: no batch, as plain EF
+dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 3000 --runs 5 --batch-size 1
 ```
 
 ```
@@ -50,7 +53,7 @@ XactJobs overhead                    ...
 - `--sql` lists each command, with its count and time per job.
 - `--only xactjobs` or `--only ef` runs one of them, e.g. to profile it with `dotnet-trace`.
 - `--workers N` runs N workers, and `--parallelism N` N jobs at a time per worker. Plain EF gets as many slots in all, each claiming one job when it's free. On SQLite the claims and the saves then wait for each other, so this measures SQLite's single writer more than XactJobs: use PostgreSQL.
-- `--batch-size N` makes the XactJobs workers claim batches of N jobs (`WithBatchSize`). Plain EF doesn't batch.
+- `--batch-size N` makes the XactJobs workers pick up batches of N jobs (`WithBatchSize`; by default twice the parallelism, and at or below the parallelism, no batch). Plain EF never batches.
 - `--context-pool` registers the context with `AddDbContextPool` instead of `AddDbContext`, for both XactJobs and plain EF. On PostgreSQL (2 workers × 4, batch 100) it made XactJobs about 20% faster, with 60% less allocated per job: most of a job's own cost is creating its context.
 - `--log` shows XactJobs' warnings and errors, e.g. why a job failed. A failed attempt doesn't end the drain: only completions count, and the failed attempts are printed.
 - `--postgres <connection string>` drains on PostgreSQL instead. Each drain creates its own database on that server, named `bench_` and a random id (e.g. `bench_3f2a9c…`), with the schema from the install script and fresh statistics, and drops it at the end. The database in the connection string (`postgres` below) is only used to connect: the tables never appear there. A drain stopped with Ctrl+C leaves its database behind: drop it by hand. With several workers, XactJobs is measured once all of them poll (each one's first poll waits for its polling interval). For example, with a container:
