@@ -115,6 +115,50 @@ missed runs are not caught up.
 After a periodic job is deleted, or its definition changes, the pending run of the old definition stays in the table until its
 scheduled time. A worker then skips it, adding a `Skipped` row to the history.
 
+#### State Between Runs
+
+A run can leave a short state for the next run of the same periodic job, e.g. a watermark or a cursor. It gets it in
+`XactJobContext.PeriodicState`, and sets the next one with `SetPeriodicState`. The invoices and the state are saved together:
+
+```csharp
+public class InvoiceRun(AppDbContext db)
+{
+    public async Task CreateInvoicesAsync(XactJobContext context, CancellationToken cancellationToken)
+    {
+        // the last order the previous runs invoiced
+        var lastOrderId = long.Parse(context.PeriodicState ?? "0");
+
+        var orders = await db.Orders
+            .Where(o => o.Id > lastOrderId)
+            .OrderBy(o => o.Id)
+            .Take(500)
+            .ToListAsync(cancellationToken);
+
+        if (orders.Count == 0) return;
+
+        db.Invoices.AddRange(orders.Select(Invoice.For));
+
+        context.SetPeriodicState(orders[^1].Id.ToString());
+    }
+}
+
+dbContext.JobEnsurePeriodic<InvoiceRun>(
+    x => x.CreateInvoicesAsync(null!, CancellationToken.None),
+    "invoices",
+    Cron.MinuteInterval(5));
+```
+
+- The state is saved with the run's own changes, in the same transaction, and only if the run completes. A failed attempt leaves it as
+  it was, and its retry gets the same state.
+- A run that doesn't call `SetPeriodicState` keeps the state, and `null` clears it.
+- At most 2,000 characters (`XactJobPeriodic.MaxStateLength`). A longer one throws `ArgumentException`, which fails the attempt.
+- It belongs to the periodic job's id: a new definition, pausing and resuming keep it, and deleting the periodic job deletes it.
+  `JobEnsurePeriodic` and `WithPeriodicJob` never change it. To change it outside a run, update the `state` column of the periodic job
+  table.
+- The history has each run's state, before and after the run.
+- Only runs of periodic jobs have a state: in other jobs `PeriodicState` is null, and `SetPeriodicState` throws
+  `InvalidOperationException`. The dashboard can't retry a run that had a state, because it would run as a one-off job, without it.
+
 ### Several Jobs at Once
 Adding multiple jobs before saving changes will enqueue all jobs in a single transaction.
 
@@ -296,11 +340,11 @@ The install script creates the same schema as all the versioned scripts.
 
 | Database | New installation | Upgrade |
 |---|---|---|
-| SQL Server | [xact-jobs-sqlserver.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-sqlserver.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlserver-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlserver-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlserver-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-sqlserver-v0.3.0.sql), [v0.4.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.4.0/xact-jobs-sqlserver-v0.4.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-sqlserver-v0.5.0.sql) |
-| PostgreSQL | [xact-jobs-postgresql.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-postgresql.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-postgresql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-postgresql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-postgresql-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-postgresql-v0.3.0.sql), [v0.4.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.4.0/xact-jobs-postgresql-v0.4.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-postgresql-v0.5.0.sql) |
-| MySQL | [xact-jobs-mysql.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-mysql.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-mysql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-mysql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-mysql-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-mysql-v0.3.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-mysql-v0.5.0.sql) |
-| Oracle | [xact-jobs-oracle.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-oracle.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-oracle-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-oracle-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-oracle-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-oracle-v0.3.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-oracle-v0.5.0.sql) |
-| SQLite | [xact-jobs-sqlite.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-sqlite.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlite-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlite-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlite-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-sqlite-v0.3.0.sql), [v0.4.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.4.0/xact-jobs-sqlite-v0.4.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-sqlite-v0.5.0.sql) |
+| SQL Server | [xact-jobs-sqlserver.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-sqlserver.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlserver-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlserver-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlserver-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlserver-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-sqlserver-v0.3.0.sql), [v0.4.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.4.0/xact-jobs-sqlserver-v0.4.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-sqlserver-v0.5.0.sql), [v0.6.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.6.0/xact-jobs-sqlserver-v0.6.0.sql) |
+| PostgreSQL | [xact-jobs-postgresql.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-postgresql.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-postgresql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-postgresql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-postgresql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-postgresql-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-postgresql-v0.3.0.sql), [v0.4.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.4.0/xact-jobs-postgresql-v0.4.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-postgresql-v0.5.0.sql), [v0.6.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.6.0/xact-jobs-postgresql-v0.6.0.sql) |
+| MySQL | [xact-jobs-mysql.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-mysql.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-mysql-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-mysql-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-mysql-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-mysql-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-mysql-v0.3.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-mysql-v0.5.0.sql), [v0.6.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.6.0/xact-jobs-mysql-v0.6.0.sql) |
+| Oracle | [xact-jobs-oracle.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-oracle.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-oracle-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-oracle-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-oracle-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-oracle-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-oracle-v0.3.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-oracle-v0.5.0.sql), [v0.6.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.6.0/xact-jobs-oracle-v0.6.0.sql) |
+| SQLite | [xact-jobs-sqlite.sql](https://github.com/XactJobs/XactJobs/blob/main/sql/install/xact-jobs-sqlite.sql) | [v0.1.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.0/xact-jobs-sqlite-v0.1.0.sql), [v0.1.4](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.4/xact-jobs-sqlite-v0.1.4.sql), [v0.1.5](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.1.5/xact-jobs-sqlite-v0.1.5.sql), [v0.2.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.2.0/xact-jobs-sqlite-v0.2.0.sql), [v0.3.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.3.0/xact-jobs-sqlite-v0.3.0.sql), [v0.4.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.4.0/xact-jobs-sqlite-v0.4.0.sql), [v0.5.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.5.0/xact-jobs-sqlite-v0.5.0.sql), [v0.6.0](https://github.com/XactJobs/XactJobs/blob/main/sql/v0.6.0/xact-jobs-sqlite-v0.6.0.sql) |
 
 On SQL Server, run the scripts with `QUOTED_IDENTIFIER` and `ANSI_NULLS` on, which are SqlClient's and SSMS's defaults (`sqlcmd` needs `-I`): the job table has a filtered index.
 
@@ -309,6 +353,10 @@ the script, because it drops an index that older versions need.
 
 For v0.2.0, run the script first: it adds the columns for batches and continuations, which v0.2.0 needs. Start using batches and continuations only
 once all the workers run v0.2.0: a worker of an older version that retries a job of a batch removes the job from its batch, so the batch's continuations could start too early.
+
+For v0.6.0, run the script first: it adds the columns for the state of periodic jobs (see [State Between Runs](#state-between-runs)),
+which v0.6.0 writes, in the history on every attempt. A worker of an older version runs the jobs without their state, and leaves the
+history's state columns empty.
 
 For v0.5.0, run the script first: it adds a column for the trace that enqueued a job (see [Metrics, Traces and Logs](#metrics-traces-and-logs)),
 which v0.5.0 writes. A worker of an older version leaves it empty in the retries and the history.
@@ -412,7 +460,8 @@ If a method accepts a cancellation token, then `null` or `CancellationToken.None
 When the worker executes the job, it will pass the correct stopping token.
 
 In the same way, a method can take an `XactJobContext` parameter, with `null` passed when the job is enqueued. The worker passes the context of the run.
-For now it has `OriginallyScheduledAt`, the time (UTC) the job was originally scheduled for, which stays the same across its retries:
+It has `OriginallyScheduledAt`, the time (UTC) the job was originally scheduled for, which stays the same across its retries, and for a run
+of a periodic job its id and its state (see [State Between Runs](#state-between-runs)):
 
 ```csharp
 public async Task SendDailyReportAsync(XactJobContext context, CancellationToken cancellationToken)
@@ -561,11 +610,11 @@ The API endpoints that change data require an antiforgery token, which the dashb
   - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead.
     A cancelled job of a batch counts as a failed job of the batch, and if it was the last one, the batch's continuations start
 - **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts, and skipped runs and continuations, with the reason
-  - *Retry* enqueues a failed or cancelled job, or a skipped continuation, again as a new job. A run of a periodic job is enqueued as a one-off job,
-    and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations. Like a retry by a worker, it keeps the time the job was originally scheduled for
+  - *Retry* enqueues a failed or cancelled job, or a skipped continuation, again as a new job. A run of a periodic job is enqueued as a one-off job
+    (not one that had a state, which it would run without), and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations. Like a retry by a worker, it keeps the time the job was originally scheduled for
 - **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
-- **Periodic** - the periodic jobs, with their next run
+- **Periodic** - the periodic jobs, with their next run and their state
   - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts again, even if `JobEnsurePeriodic` or `WithPeriodicJob` defines it
   - *Resume* schedules the next run
   - *Trigger* makes the pending run due now, so the job keeps a single schedule

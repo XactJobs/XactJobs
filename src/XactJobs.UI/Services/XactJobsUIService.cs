@@ -309,6 +309,12 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             return ActionResultDto.Conflict($"Job #{historyId} can't be retried: only failed and cancelled jobs can, and continuations that were skipped.");
         }
 
+        // as a one-off job, a run of a periodic job would run without its state, which only the periodic job's runs get
+        if (history.PreviousState != null || history.State != null)
+        {
+            return ActionResultDto.Conflict($"Job #{historyId} can't be retried: it's a run of the periodic job '{history.PeriodicJobId}' with a state, and a retry would run without it.");
+        }
+
         // a one-off job: as a run of the periodic job, it would schedule a second chain of runs.
         // Outside of any batch: the continuations of its batch, if any, already started or were skipped.
         // it keeps the time the job was originally scheduled for, as a retry by a worker does
@@ -863,7 +869,9 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         BatchId = h.BatchId,
         AwaitsBatchId = h.AwaitsBatchId,
         ContinuationCondition = h.ContinuationCondition,
-        OriginallyScheduledAt = h.OriginallyScheduledAt != h.ScheduledAt ? h.OriginallyScheduledAt : null
+        OriginallyScheduledAt = h.OriginallyScheduledAt != h.ScheduledAt ? h.OriginallyScheduledAt : null,
+        PreviousState = h.PreviousState,
+        State = h.State
     };
 
     private Task<XactJob?> FindJobAsync(JobKey key, CancellationToken ct)
@@ -917,7 +925,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             MethodName = p.MethodName,
             Queue = p.Queue,
             IsActive = p.IsActive,
-            Version = p.Version
+            Version = p.Version,
+            State = p.State
         };
     }
 

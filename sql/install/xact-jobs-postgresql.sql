@@ -1,4 +1,4 @@
--- XactJobs v0.5.0, PostgreSQL: the whole schema, for a new installation.
+-- XactJobs v0.6.0, PostgreSQL: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -65,6 +65,9 @@ CREATE TABLE xact_jobs.job_history (
   originally_scheduled_at timestamptz,
   -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
   trace_parent text,
+  -- a periodic run's state: the one it started with, and the one after it (the same, unless it completed and set one)
+  previous_state character varying(2000),
+  state character varying(2000),
   CONSTRAINT pk_job_history PRIMARY KEY (id, processed_at)
 );
 
@@ -87,5 +90,7 @@ CREATE TABLE xact_jobs.job_periodic (
   queue text NOT NULL,
   is_active boolean NOT NULL,
   version integer NOT NULL DEFAULT 1,
+  -- the state the last completed run left for the next one (XactJobContext.PeriodicState), at most 2000 characters
+  state character varying(2000),
   CONSTRAINT pk_job_periodic PRIMARY KEY (id)
 );

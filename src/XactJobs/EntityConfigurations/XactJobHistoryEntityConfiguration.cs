@@ -85,6 +85,11 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.TraceParent).HasColumnName(_sqlDialect.ColTraceParent);
 
+            builder.Property(x => x.PreviousState).HasColumnName(_sqlDialect.ColPreviousState)
+                .HasMaxLength(XactJobPeriodic.MaxStateLength);
+            builder.Property(x => x.State).HasColumnName(_sqlDialect.ColState)
+                .HasMaxLength(XactJobPeriodic.MaxStateLength);
+
             builder.HasIndex(x => x.ProcessedAt)
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobHistoryTable}_{_sqlDialect.ColProcessedAt}");
 

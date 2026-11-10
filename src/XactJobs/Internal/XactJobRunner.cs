@@ -689,7 +689,8 @@ namespace XactJobs.Internal
                     var activePeriodicJob = await GetIfStillActiveAsync(dbContext, periodicJob, token)
                         .ConfigureAwait(false);
 
-                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException);
+                    // the state it started with, which a failed attempt leaves as it is
+                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException, periodicJob?.State);
 
                     await dbContext.SaveChangesAsync(token)
                         .ConfigureAwait(false);
@@ -776,6 +777,9 @@ namespace XactJobs.Internal
             var isFinished = false;
             var outcome = XactJobsMetrics.Interrupted;
 
+            // the run's state, before the run: on a failure the periodic job gets it back (it's the same instance the failure is recorded with)
+            var previousState = periodicJob?.State;
+
             using var scope = _scopeFactory.CreateScope();
 
             var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
@@ -801,7 +805,7 @@ namespace XactJobs.Internal
                 if (isSkipped)
                 {
                     // periodic job is inactive or deleted, or the continuation's condition isn't met
-                    RecordSkipped(dbContext, job, periodicJob, claimedAt, skipReason);
+                    RecordSkipped(dbContext, job, periodicJob, claimedAt, skipReason, previousState);
                 }
                 else
                 {
@@ -811,7 +815,7 @@ namespace XactJobs.Internal
                         dbContext.Attach(periodicJob);
                     }
 
-                    var context = new XactJobContext(job.GetOriginallyScheduledAt(claimedAt));
+                    var context = new XactJobContext(job.GetOriginallyScheduledAt(claimedAt), periodicJob);
 
                     // only while the job runs: the worker's own save, below, isn't checked
                     var saveCheck = _saveChecker.Subscribe(dbContext, job, _logger, GetQueueDisplayName());
@@ -829,11 +833,19 @@ namespace XactJobs.Internal
                     // detached means the job deleted its own periodic job and saved that, so there's no next run to schedule
                     var isPeriodicJobDeleted = periodicJob != null && dbContext.Entry(periodicJob).State == EntityState.Detached;
 
-                    var activePeriodicJob = isPeriodicJobDeleted
+                    // null: the periodic job is gone (or it's not a periodic run)
+                    var isActive = periodicJob == null || isPeriodicJobDeleted
                         ? null
-                        : await GetIfStillActiveAsync(dbContext, periodicJob, stoppingToken).ConfigureAwait(false);
+                        : await ReadIsActiveAsync(dbContext, periodicJob, stoppingToken).ConfigureAwait(false);
 
-                    RecordSuccess(dbContext, job, activePeriodicJob, claimedAt);
+                    // the state belongs to the periodic job's id, so a paused one or a changed definition keeps it too. If the periodic
+                    // job is deleted after this read, the update finds no row, and the run fails: its retry is then skipped
+                    if (isActive != null && context.IsPeriodicStateSet && context.PeriodicState != previousState)
+                    {
+                        periodicJob!.State = context.PeriodicState;
+                    }
+
+                    RecordSuccess(dbContext, job, isActive == true ? periodicJob : null, claimedAt, previousState, context.PeriodicState);
                 }
 
                 dbContext.Set<XactJob>().Remove(job);
@@ -862,6 +874,11 @@ namespace XactJobs.Internal
                 // not only an OperationCanceledException: a cancelled command can throw the provider's own exception (SqlClient's SqlException).
                 // Read before the rollback, so that a failure isn't taken for the shutdown if the shutdown only starts meanwhile
                 var isCancelledByShutdown = stoppingToken.IsCancellationRequested && XactJobCancelException.Find(ex) == null;
+
+                if (periodicJob != null)
+                {
+                    periodicJob.State = previousState;
+                }
 
                 if (dbContext.Database.CurrentTransaction != null)
                 {
@@ -943,10 +960,21 @@ namespace XactJobs.Internal
         {
             if (periodicJob == null || !periodicJob.IsActive) return null;
 
+            var isActive = await ReadIsActiveAsync(dbContext, periodicJob, cancellationToken)
+                .ConfigureAwait(false);
+
+            return isActive == true ? periodicJob : null;
+        }
+
+        /// <summary>
+        /// Whether the periodic job is active now, or null if it's gone.
+        /// </summary>
+        private static async Task<bool?> ReadIsActiveAsync(TDbContext dbContext, XactJobPeriodic periodicJob, CancellationToken cancellationToken)
+        {
             var state = dbContext.Entry(periodicJob).State;
 
             // changed by the job itself, and saved together with the run
-            if (state == EntityState.Modified) return periodicJob;
+            if (state == EntityState.Modified) return periodicJob.IsActive;
             if (state == EntityState.Deleted) return null;
 
             // a list, because the Oracle provider can't translate IsActive (it has a value converter) in other ways
@@ -956,26 +984,27 @@ namespace XactJobs.Internal
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            return isActive.Count == 1 && isActive[0] ? periodicJob : null;
+            return isActive.Count == 1 ? isActive[0] : null;
         }
 
-        private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt)
+        private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? previousState, string? state)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Completed, null, null);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Completed, null, null, previousState, state);
         }
 
-        private void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? reason)
+        private void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? reason, string? state)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Skipped, null, reason);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Skipped, null, reason, state, state);
         }
 
-        private XactJobStatus RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception ex)
+        private XactJobStatus RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception ex, string? state)
         {
-            return RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Failed, ex, null);
+            return RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Failed, ex, null, state, state);
         }
 
         /// <summary>
         /// Adds the history row, and the retry or the next periodic run. The caller removes the job's row.
+        /// The states are a periodic run's, before and after it (the same, unless it completed and set one).
         /// </summary>
         private XactJobStatus RecordProcessingAttempt(TDbContext dbContext,
                                                       XactJob job,
@@ -983,7 +1012,9 @@ namespace XactJobs.Internal
                                                       DateTime claimedAt,
                                                       ProcessingResult processingResult,
                                                       Exception? ex,
-                                                      string? message)
+                                                      string? message,
+                                                      string? previousState,
+                                                      string? state)
         {
             var status = processingResult switch
             {
@@ -1013,7 +1044,7 @@ namespace XactJobs.Internal
                 }
             }
 
-            var history = CreateHistory(job, status, errorCount, ex, cancel, message, claimedAt);
+            var history = CreateHistory(job, status, errorCount, ex, cancel, message, claimedAt, previousState, state);
 
             dbContext.Set<XactJobHistory>().Add(history);
 
@@ -1039,13 +1070,15 @@ namespace XactJobs.Internal
                                                     Exception? ex,
                                                     XactJobCancelException? cancel,
                                                     string? message,
-                                                    DateTime claimedAt)
+                                                    DateTime claimedAt,
+                                                    string? previousState,
+                                                    string? state)
         {
             var scheduledAt = job.IsAwaitingBatch ? claimedAt : job.ScheduledAt;
 
             if (cancel != null)
             {
-                return XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, cancel.Message, cancel.ToString(), scheduledAt);
+                return XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, cancel.Message, cancel.ToString(), scheduledAt, previousState, state);
             }
 
             var innerMostEx = ex;
@@ -1055,7 +1088,7 @@ namespace XactJobs.Internal
                 innerMostEx = innerMostEx.InnerException;
             }
 
-            return XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, innerMostEx?.Message ?? message, ex?.StackTrace, scheduledAt);
+            return XactJobHistory.CreateFromJob(job, DateTime.UtcNow, status, errorCount, innerMostEx?.Message ?? message, ex?.StackTrace, scheduledAt, previousState, state);
         }
 
         private static DateTime TruncateToMicroseconds(DateTime value)

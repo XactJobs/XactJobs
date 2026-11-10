@@ -140,6 +140,50 @@ and arguments format that XactJobs writes. The run happens at the next time on t
 After a periodic job is deleted, or its definition changes, the pending run of the old definition stays in the table until its scheduled
 time. A worker then skips it, adding a `Skipped` row to the history.
 
+### State between runs
+
+A run can leave a short state for the next run of the same periodic job, e.g. a watermark or a cursor. It gets it in
+`XactJobContext.PeriodicState`, and sets the next one with `SetPeriodicState`. The invoices and the state are saved together:
+
+```csharp
+public class InvoiceRun(AppDbContext db)
+{
+    public async Task CreateInvoicesAsync(XactJobContext context, CancellationToken cancellationToken)
+    {
+        // the last order the previous runs invoiced
+        var lastOrderId = long.Parse(context.PeriodicState ?? "0");
+
+        var orders = await db.Orders
+            .Where(o => o.Id > lastOrderId)
+            .OrderBy(o => o.Id)
+            .Take(500)
+            .ToListAsync(cancellationToken);
+
+        if (orders.Count == 0) return;
+
+        db.Invoices.AddRange(orders.Select(Invoice.For));
+
+        context.SetPeriodicState(orders[^1].Id.ToString());
+    }
+}
+
+dbContext.JobEnsurePeriodic<InvoiceRun>(
+    x => x.CreateInvoicesAsync(null!, CancellationToken.None),
+    "invoices",
+    Cron.MinuteInterval(5));
+```
+
+- The state is saved with the run's own changes, in the same transaction, and only if the run completes. A failed attempt leaves it as
+  it was, and its retry gets the same state.
+- A run that doesn't call `SetPeriodicState` keeps the state, and `null` clears it.
+- At most 2,000 characters (`XactJobPeriodic.MaxStateLength`). A longer one throws `ArgumentException`, which fails the attempt.
+- It belongs to the periodic job's id: a new definition, pausing and resuming keep it, and deleting the periodic job deletes it.
+  `JobEnsurePeriodic` and `WithPeriodicJob` never change it. To change it outside a run, update the `state` column of the periodic job
+  table.
+- The history has each run's state, before and after the run.
+- Only runs of periodic jobs have a state: in other jobs `PeriodicState` is null, and `SetPeriodicState` throws
+  `InvalidOperationException`. The dashboard can't retry a run that had a state, because it would run as a one-off job, without it.
+
 ### Pause, resume and delete
 
 Pausing and resuming are available in code, followed by `SaveChanges`:

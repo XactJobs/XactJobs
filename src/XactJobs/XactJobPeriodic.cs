@@ -61,6 +61,17 @@ namespace XactJobs
         /// </summary>
         public int Version { get; private set; }
 
+        /// <summary>
+        /// The longest state a periodic job can keep, in characters.
+        /// </summary>
+        public const int MaxStateLength = 2000;
+
+        /// <summary>
+        /// The state the last completed run left for the next one (<see cref="XactJobContext.PeriodicState"/>), or null. It
+        /// belongs to the periodic job's id: a change of its definition (<c>JobEnsurePeriodic</c>) keeps it.
+        /// </summary>
+        public string? State { get; internal set; }
+
         public XactJobPeriodic(string id,
                                DateTime createdAt,
                                DateTime updatedAt,

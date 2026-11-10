@@ -23,8 +23,22 @@ public record JobHistoryDto
     /// </summary>
     public DateTime? OriginallyScheduledAt { get; init; }
 
-    /// <summary>Failed and cancelled jobs can be run again, and so can continuations that were skipped.</summary>
-    public bool CanRetry => Status == XactJobStatus.Cancelled || IsSkippedContinuation;
+    /// <summary>A run of a periodic job: the state it started with.</summary>
+    public string? PreviousState { get; init; }
+
+    /// <summary>A run of a periodic job: the state after it (the same as <see cref="PreviousState"/>, unless it completed and set one).</summary>
+    public string? State { get; init; }
+
+    public bool HasState => PreviousState != null || State != null;
+
+    /// <summary>
+    /// Failed and cancelled jobs can be run again, and so can continuations that were skipped. Not a run of a periodic job
+    /// with a state: it would run as a one-off job, without its state.
+    /// </summary>
+    public bool CanRetry => IsRetryableStatus && !HasState;
+
+    /// <summary>Failed, cancelled, or a skipped continuation: what Retry is for, state or not.</summary>
+    public bool IsRetryableStatus => Status == XactJobStatus.Cancelled || IsSkippedContinuation;
 
     public bool IsSkippedContinuation => Status == XactJobStatus.Skipped && AwaitsBatchId != null;
     public string? DisplayCondition => DisplayNames.Condition(ContinuationCondition);

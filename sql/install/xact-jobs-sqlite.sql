@@ -1,4 +1,4 @@
--- XactJobs v0.5.0, SQLite: the whole schema, for a new installation.
+-- XactJobs v0.6.0, SQLite: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -63,7 +63,10 @@ CREATE TABLE "xact_jobs_job_history" (
   "continuation_condition" INTEGER NULL,
   "originally_scheduled_at" DATETIME NULL,
   -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
-  "trace_parent" TEXT NULL
+  "trace_parent" TEXT NULL,
+  -- a periodic run's state: the one it started with, and the one after it (the same, unless it completed and set one)
+  "previous_state" TEXT NULL,
+  "state" TEXT NULL
 );
 
 CREATE INDEX "ix_job_history_processed_at" ON "xact_jobs_job_history" ("processed_at");
@@ -84,5 +87,7 @@ CREATE TABLE "xact_jobs_job_periodic" (
   "method_args" TEXT NOT NULL,
   "queue" TEXT NOT NULL,
   "is_active" INTEGER NOT NULL,
-  "version" INTEGER NOT NULL DEFAULT 1
+  "version" INTEGER NOT NULL DEFAULT 1,
+  -- the state the last completed run left for the next one (XactJobContext.PeriodicState), at most 2000 characters
+  "state" TEXT NULL
 );

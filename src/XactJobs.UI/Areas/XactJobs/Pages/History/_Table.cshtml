@@ -48,6 +48,7 @@ else
                                         <i class="bi bi-arrow-repeat"></i> @job.PeriodicJobId
                                     </span>
                                 }
+                                <partial name="~/Areas/XactJobs/Pages/Partials/_StateBadge.cshtml" model="job" />
                                 <partial name="~/Areas/XactJobs/Pages/Partials/_BatchBadges.cshtml"
                                          model="new BatchBadgesModel(Model, job.BatchId, job.AwaitsBatchId, job.DisplayCondition)" />
                             </td>
