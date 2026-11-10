@@ -6,6 +6,49 @@
 ALTER TABLE "xact_jobs_job_history" ADD COLUMN "previous_state" TEXT NULL;
 ALTER TABLE "xact_jobs_job_history" ADD COLUMN "state" TEXT NULL;
 
+-- A job keeps its id across its retries (they move its row, instead of adding a new one), so the history has a row per attempt: the
+-- primary key is the id and the time it was processed, as on the other databases. SQLite can't change a primary key, so the table is
+-- copied into a new one.
+CREATE TABLE "xact_jobs_job_history_new" (
+  "id" INTEGER NOT NULL,
+  "processed_at" DATETIME NOT NULL,
+  "status" INTEGER NOT NULL,
+  "error_message" TEXT NULL,
+  "error_stack_trace" TEXT NULL,
+  "scheduled_at" DATETIME NOT NULL,
+  "type_name" TEXT NOT NULL,
+  "method_name" TEXT NOT NULL,
+  "method_args" TEXT NOT NULL,
+  "queue" TEXT NOT NULL,
+  "periodic_job_id" TEXT NULL,
+  "cron_expression" TEXT NULL,
+  "error_count" INTEGER NOT NULL,
+  "periodic_job_version" INTEGER,
+  "batch_id" TEXT NULL,
+  "awaits_batch_id" TEXT NULL,
+  "continuation_condition" INTEGER NULL,
+  "originally_scheduled_at" DATETIME NULL,
+  -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
+  "trace_parent" TEXT NULL,
+  -- a periodic run's state: the one it started with, and the one after it (the same, unless it completed and set one)
+  "previous_state" TEXT NULL,
+  "state" TEXT NULL,
+  -- a job keeps its id across its retries: a row per attempt
+  CONSTRAINT "pk_job_history" PRIMARY KEY ("id", "processed_at")
+);
+
+INSERT INTO "xact_jobs_job_history_new" ("id", "processed_at", "status", "error_message", "error_stack_trace", "scheduled_at", "type_name", "method_name", "method_args", "queue", "periodic_job_id", "cron_expression", "error_count", "periodic_job_version", "batch_id", "awaits_batch_id", "continuation_condition", "originally_scheduled_at", "trace_parent", "previous_state", "state")
+SELECT "id", "processed_at", "status", "error_message", "error_stack_trace", "scheduled_at", "type_name", "method_name", "method_args", "queue", "periodic_job_id", "cron_expression", "error_count", "periodic_job_version", "batch_id", "awaits_batch_id", "continuation_condition", "originally_scheduled_at", "trace_parent", "previous_state", "state"
+FROM "xact_jobs_job_history";
+
+DROP TABLE "xact_jobs_job_history";
+
+ALTER TABLE "xact_jobs_job_history_new" RENAME TO "xact_jobs_job_history";
+
+CREATE INDEX "ix_job_history_processed_at" ON "xact_jobs_job_history" ("processed_at");
+CREATE INDEX "ix_job_history_batch_id" ON "xact_jobs_job_history" ("batch_id") WHERE "batch_id" IS NOT NULL;
+CREATE INDEX "ix_job_history_awaits_batch_id" ON "xact_jobs_job_history" ("awaits_batch_id") WHERE "awaits_batch_id" IS NOT NULL;
+
 -- ============================
 -- Table storing recurring jobs
 -- ============================

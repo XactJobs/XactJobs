@@ -19,6 +19,52 @@ public sealed class SqliteInstallScriptTests
         Assert.Equal(string.Join("\n", versioned), string.Join("\n", installed));
     }
 
+    /// <summary>
+    /// v0.6.0 copies the history into a table with the new primary key (the id and the time it was processed): the rows are kept,
+    /// and a job can then have a row per attempt.
+    /// </summary>
+    [Fact]
+    public async Task V060_KeepsTheHistory_AndAllowsARowPerAttempt()
+    {
+        var scripts = GetVersionedScripts().ToList();
+        var v060 = Assert.Single(scripts, s => s.EndsWith("v0.6.0.sql"));
+
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+
+        await connection.OpenAsync();
+
+        foreach (var script in scripts.TakeWhile(s => s != v060))
+        {
+            await ExecuteAsync(connection, await File.ReadAllTextAsync(script));
+        }
+
+        const string insert = @"
+INSERT INTO ""xact_jobs_job_history"" (""id"", ""processed_at"", ""status"", ""scheduled_at"", ""type_name"", ""method_name"", ""method_args"", ""queue"", ""error_count"", ""batch_id"")
+VALUES (42, '{0}', 2, '2026-01-01 00:00:00', 'T', 'M()', '[]', 'q', 1, 'b')";
+
+        await ExecuteAsync(connection, string.Format(insert, "2026-01-01 00:00:01"));
+
+        await ExecuteAsync(connection, await File.ReadAllTextAsync(v060));
+
+        // the second attempt of the same job
+        await ExecuteAsync(connection, string.Format(insert, "2026-01-01 00:00:02"));
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = @"SELECT COUNT(*) FROM ""xact_jobs_job_history"" WHERE ""id"" = 42 AND ""batch_id"" = 'b' AND ""error_count"" = 1";
+
+        Assert.Equal(2L, await command.ExecuteScalarAsync());
+    }
+
+    private static async Task ExecuteAsync(SqliteConnection connection, string sql)
+    {
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = sql;
+
+        await command.ExecuteNonQueryAsync();
+    }
+
     private static async Task<List<string>> DescribeAsync(IEnumerable<string> scripts)
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
