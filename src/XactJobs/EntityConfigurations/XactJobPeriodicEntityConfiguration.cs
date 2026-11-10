@@ -55,6 +55,9 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.IsActive).HasColumnName(_sqlDialect.ColIsActive);
             builder.Property(x => x.Version).HasColumnName(_sqlDialect.ColVersion);
 
+            builder.Property(x => x.State).HasColumnName(_sqlDialect.ColState)
+                .HasMaxLength(XactJobPeriodic.MaxStateLength);
+
             if (_sqlDialect is OracleDialect)
             {
 

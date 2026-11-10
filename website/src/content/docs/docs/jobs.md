@@ -113,8 +113,8 @@ When the worker executes the job, it passes the correct stopping token. See [Sto
 ## XactJobContext
 
 In the same way, a method can take an `XactJobContext` parameter, with `null` passed when the job is enqueued. The worker passes the
-context of the run. For now it has `OriginallyScheduledAt`, the time (UTC) the job was originally scheduled for, which stays the same
-across its retries:
+context of the run. It has `OriginallyScheduledAt`, the time (UTC) the job was originally scheduled for, which stays the same
+across its retries, and for a run of a periodic job its id and its state (see [State between runs](../scheduling/#state-between-runs)):
 
 ```csharp
 public async Task SendDailyReportAsync(XactJobContext context, CancellationToken cancellationToken)

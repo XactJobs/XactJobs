@@ -7,7 +7,15 @@
             ? $"Run job #{job.Id} again, as a new job? It runs now, outside of any batch, and doesn't start continuations."
             : $"Run job #{job.Id} again, as a new job?";
 }
-@if (job.CanRetry)
+@if (job.IsRetryableStatus && job.HasState)
+{
+    <span class="d-inline-block" tabindex="0" title="A run of a periodic job with a state can't be retried: it would run as a one-off job, without its state">
+        <button class="btn btn-sm btn-outline-warning text-nowrap" disabled>
+            <i class="bi bi-arrow-counterclockwise"></i> Retry
+        </button>
+    </span>
+}
+else if (job.CanRetry)
 {
     <button class="btn btn-sm btn-outline-warning text-nowrap"
             hx-post="@Model.Owner.ApiUrl($"/history/{job.Id}/retry")"

@@ -1,0 +1,10 @@
+@model XactJobs.UI.Services.Models.JobHistoryDto
+@{
+    var job = Model;
+}
+@if (job.HasState)
+{
+    <span class="badge bg-body-secondary text-body-emphasis border" title="@(job.PreviousState == job.State ? $"State: {job.State ?? "(none)"}" : $"State before: {job.PreviousState ?? "(none)"}\nState after: {job.State ?? "(none)"}")">
+        <i class="bi bi-bookmark"></i> @(job.PreviousState == job.State ? "state" : "state changed")
+    </span>
+}

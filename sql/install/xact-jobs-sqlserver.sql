@@ -1,4 +1,4 @@
--- XactJobs v0.5.0, SQL Server: the whole schema, for a new installation.
+-- XactJobs v0.6.0, SQL Server: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 -- The filtered index needs QUOTED_IDENTIFIER and ANSI_NULLS on, to create it and to write to the table: SqlClient's defaults
@@ -65,6 +65,9 @@ CREATE TABLE [XactJobs].[JobHistory] (
   [OriginallyScheduledAt] datetime2 NULL,
   -- the W3C traceparent of the activity that enqueued the job, if any: its attempts' activities link to that trace
   [TraceParent] nvarchar(max) NULL,
+  -- a periodic run's state: the one it started with, and the one after it (the same, unless it completed and set one)
+  [PreviousState] nvarchar(2000) NULL,
+  [State] nvarchar(2000) NULL,
   CONSTRAINT [PK_JobHistory] PRIMARY KEY ([Id], [ProcessedAt])
 );
 
@@ -87,5 +90,7 @@ CREATE TABLE [XactJobs].[JobPeriodic] (
   [Queue] nvarchar(max) NOT NULL,
   [IsActive] bit NOT NULL,
   [Version] int NOT NULL CONSTRAINT [DF_XactJobs_JobPeriodic_Version] DEFAULT 1,
+  -- the state the last completed run left for the next one (XactJobContext.PeriodicState), at most 2000 characters
+  [State] nvarchar(2000) NULL,
   CONSTRAINT [PK_JobPeriodic] PRIMARY KEY ([Id])
 );

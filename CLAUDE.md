@@ -140,6 +140,13 @@ XactJobs is a .NET library for background job processing with full database tran
 - History rows get it only when it differs from their own scheduled time
 - Jobs get it as `XactJobContext.OriginallyScheduledAt`: a job method can take an `XactJobContext` parameter, which `XactJobSerializer` stores as null and `XactJobCompiler` fills in, like a `CancellationToken`
 
+### Periodic Job State
+
+- `XactJobPeriodic.State` (`state`, v0.6.0, at most `MaxStateLength` = 2000 characters, the most Oracle's `NVARCHAR2` holds): what the last completed run left for the next one. It belongs to the id: `JobEnsurePeriodic`/`WithPeriodicJob` and pausing never change it, deleting the periodic job deletes it. Not on the job rows: there's one pending run per periodic job, and the state is saved in the transaction that deletes the run's row
+- Jobs get it in `XactJobContext.PeriodicState`, from the periodic row loaded at the claim, and set it with `SetPeriodicState` (throws outside a periodic run, or above the limit). The runner copies it to the attached periodic row only if the run completes and the value changed, also when the periodic job was paused or its definition changed meanwhile; if it was deleted, it's dropped. On a failure, the periodic instance gets its state back (`RunJobAsync`), since the failure is recorded with it
+- The history has `previous_state` and `state` on every attempt: the state the run started with, and the one after it (the same unless it completed and set one)
+- The dashboard's Retry of a history row with a state is refused: it runs as a one-off job, which has no state. `PeriodicStateScenarios` runs on every database
+
 ### Saves Outside a Transaction
 
 - While a job runs, `XactJobRunner` subscribes `XactJobSaveChecker` to the `SavingChanges` event of the scoped `TDbContext` it created, and unsubscribes in a `finally` before its own save, which must never be checked

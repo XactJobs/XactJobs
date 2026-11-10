@@ -27,7 +27,15 @@ else
                     @foreach (var job in Model.Jobs.Items)
                     {
                         <tr>
-                            <td class="text-nowrap"><code>@job.Id</code></td>
+                            <td class="text-nowrap">
+                                <code>@job.Id</code>
+                                @if (job.State != null)
+                                {
+                                    <div class="small text-muted text-truncate" style="max-width: 16rem" title="State: @job.State">
+                                        <i class="bi bi-bookmark"></i> @job.State
+                                    </div>
+                                }
+                            </td>
                             <td title="@job.TypeName">@job.DisplayTypeName</td>
                             <td><code title="@job.MethodName">@job.DisplayMethodName</code></td>
                             <td><span class="badge bg-secondary">@job.DisplayQueue</span></td>

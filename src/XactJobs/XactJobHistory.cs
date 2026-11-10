@@ -11,6 +11,17 @@ namespace XactJobs
         public string? ErrorMessage { get; init; }
         public string? ErrorStackTrace { get; init; }
 
+        /// <summary>
+        /// A run of a periodic job: the state it started with (<see cref="XactJobPeriodic.State"/>).
+        /// </summary>
+        public string? PreviousState { get; init; }
+
+        /// <summary>
+        /// A run of a periodic job: the state after it. The same as <see cref="PreviousState"/>, unless the run completed and
+        /// set one.
+        /// </summary>
+        public string? State { get; init; }
+
         public XactJobHistory(long id,
                               DateTime processedAt,
                               XactJobStatus status,
@@ -66,7 +77,9 @@ namespace XactJobs
                                                      int errorCount,
                                                      string? errorMessage,
                                                      string? errorStackTrace,
-                                                     DateTime scheduledAt)
+                                                     DateTime scheduledAt,
+                                                     string? previousState = null,
+                                                     string? state = null)
         {
             return new XactJobHistory(job.Id,
                                       processedAt,
@@ -89,7 +102,9 @@ namespace XactJobs
 
                 // null when it's the same: e.g. the first attempt of a continuation, whose claim saved its claim time
                 OriginallyScheduledAt = job.OriginallyScheduledAt != scheduledAt ? job.OriginallyScheduledAt : null,
-                TraceParent = job.TraceParent
+                TraceParent = job.TraceParent,
+                PreviousState = previousState,
+                State = state
             };
         }
     }
