@@ -5,15 +5,14 @@ description: A measured drain rate on a small cloud VM, and the benchmarks in th
 
 ## Throughput
 
-On a Hetzner Cloud CX33 (cost-optimized, 4 shared vCPUs, AMD EPYC Rome, 8 GB of RAM), with PostgreSQL 16 in a container on the same
-machine (its default settings, so every commit waits for the disk), .NET 10 and EF Core 10, XactJobs drained a backlog of 20,000 no-op
-jobs at **2,300 to 2,600 jobs per second**. The best setting was 2 workers, `MaxDegreeOfParallelism` 4 and `WithBatchSize(100)`.
+On a Hetzner Cloud CX33 (cost-optimized, 4 shared vCPUs, AMD EPYC Rome, 8 GB of RAM), with PostgreSQL 16 in a container on the same machine
+(its default settings, so every commit waits for the disk), .NET 10 and EF Core 10, XactJobs drained a backlog of 20,000 no-op jobs at
+**about 3,000 jobs per second**. The settings: 2 workers, `MaxDegreeOfParallelism` 4, `WithBatchSize(100)`, and the context registered with
+`AddDbContextPool`; the benchmark connected to the container's address, not through docker's port proxy. With `AddDbContext` instead, it was
+about 2,400 to 2,600: the workers create a context for each job, and the pool reuses them. XactJobs gives each pooled context back as it got
+it.
 
 Each job is still its own transaction: its changes, the delete of its row and its history row commit together.
-
-Registering your context with `AddDbContextPool` instead of `AddDbContext` made the same drain about 20% faster, with 60% less memory
-allocated per job: the workers create a context for each job, and the pool reuses them. XactJobs gives each pooled context back as it got
-it.
 
 With real jobs, their own work sets the pace. A larger batch means fewer polls, which helps short jobs, at a cost for slow ones: see [Batch
 size](../queues-and-polling/#batch-size).

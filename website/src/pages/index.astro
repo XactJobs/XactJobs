@@ -297,8 +297,8 @@ const shots = [
       <div class="split">
         <div class="panel">
           <h3>Throughput</h3>
-          <p class="metric">2,300–2,600 <small>no-op jobs per second</small></p>
-          <p>Draining 20,000 jobs on a Hetzner Cloud CX33 (4 shared vCPUs, 8 GB) with PostgreSQL 16, each job in its own transaction.</p>
+          <p class="metric">~3,000 <small>no-op jobs per second</small></p>
+          <p>Draining 20,000 jobs on a Hetzner Cloud CX33 (4 shared vCPUs, 8 GB) with PostgreSQL 16, each job in its own transaction, with a pooled DbContext.</p>
           <a class="link" href={docs('throughput')}>The benchmark, to run on your machine</a>
         </div>
         <div class="panel status">
