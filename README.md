@@ -635,9 +635,12 @@ its slots, also when another worker is idle, and wait for their leases to expire
 another worker is free. When the worker stops, the jobs it holds that haven't started are released right away, for the other workers.
 
 ## Throughput
-On a Hetzner Cloud CX33 (cost-optimized, 4 shared vCPUs, AMD EPYC Rome, 8 GB of RAM), with PostgreSQL 16 in a container on the
-same machine (its default settings, so every commit waits for the disk), .NET 10 and EF Core 10, XactJobs drained a backlog of 20,000
-no-op jobs at **2,300 to 2,600 jobs per second**. The best setting was 2 workers, `MaxDegreeOfParallelism` 4 and `WithBatchSize(100)`.
+On a Hetzner Cloud CX33 (cost-optimized, 4 shared vCPUs, AMD EPYC Rome, 8 GB of RAM), with PostgreSQL 16 in a container on the same machine
+(its default settings, so every commit waits for the disk), .NET 10 and EF Core 10, XactJobs drained a backlog of 20,000 no-op jobs at
+**about 3,000 jobs per second**. The settings: 2 workers, `MaxDegreeOfParallelism` 4, `WithBatchSize(100)`, and the context registered with
+`AddDbContextPool`; the benchmark connected to the container's address, not through docker's port proxy. With `AddDbContext` instead, it was
+about 2,400 to 2,600: the workers create a context for each job, and the pool reuses them. XactJobs gives each pooled context back as it got
+it.
 Each job is still its own transaction: its changes, the delete of its row and its history row commit together.
 
 With real jobs, their own work sets the pace. The benchmark is in [src/XactJobs.Benchmarks](https://github.com/XactJobs/XactJobs/tree/main/src/XactJobs.Benchmarks), to measure on your own machine.
