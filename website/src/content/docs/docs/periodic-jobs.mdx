@@ -3,6 +3,8 @@ title: Periodic jobs
 description: Recurring jobs on cron schedules, from attributes, the options or code, safe on many nodes, with state between runs, reconciliation, pause and resume.
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
+
 Periodic (recurring) jobs run on a cron schedule. Mark the job methods with `[XactPeriodicJob]`: that's the simplest way, and they're
 ensured at startup. [`WithPeriodicJob`](#in-the-options) in the options does the same for jobs an attribute can't describe, and
 [`JobEnsurePeriodic`](#at-runtime) adds or changes them at runtime.
@@ -159,6 +161,13 @@ public class InvoiceRun(AppDbContext db)
 - The history has each run's state, before and after the run.
 - Only runs of periodic jobs have a state: in other jobs `PeriodicState` is null, and `SetPeriodicState` throws
   `InvalidOperationException`. The dashboard can't retry a run that had a state, because it would run as a one-off job, without it.
+
+The [dashboard](../dashboard/) shows each periodic job's state, and marks the runs in the history that had one (the badge's tooltip
+has the state before and after the run):
+
+<Screenshot name="periodic" alt="Periodic jobs: their cron expressions, next runs and states, one of them paused" />
+
+<Screenshot name="history" alt="Succeeded jobs, with the runs of periodic jobs whose state changed" />
 
 ## Pause, resume and delete
 
