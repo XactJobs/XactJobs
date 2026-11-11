@@ -42,6 +42,8 @@
 	<ItemGroup>
 		<!-- the benchmarks measure the serializer, the compiler and the save check directly -->
 		<InternalsVisibleTo Include="XactJobs.Benchmarks" />
+		<!-- the tests check the attributes of methods that can't be periodic jobs, which no assembly scan of theirs may find -->
+		<InternalsVisibleTo Include="XactJobs.Tests" />
 	</ItemGroup>
 
 	<!-- EF Core 10 only targets net10.0, and EF Core 9 targets net8.0 -->

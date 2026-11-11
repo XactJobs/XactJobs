@@ -48,6 +48,7 @@
     <ProjectReference Include="..\XactJobs\XactJobs.csproj" />
     <!-- the dashboard's queries and actions run on every database too, in Databases/ -->
     <ProjectReference Include="..\XactJobs.UI\XactJobs.UI.csproj" />
+    <ProjectReference Include="..\XactJobs.Tests.PeriodicJobs\XactJobs.Tests.PeriodicJobs.csproj" />
   </ItemGroup>
 
   <ItemGroup>

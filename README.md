@@ -101,10 +101,42 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 });
 ```
 
-This is the safe way to do it with several nodes starting at the same time, because the nodes take turns under a lock.
-`JobEnsurePeriodic` can't take that lock, since the changes are only saved later by your `SaveChanges`. If several nodes
-call it at the same time, it's still safe for an existing job whose definition didn't change, but for a new job, or a changed definition (a new version), all of them
-except the first get a duplicate key error from `SaveChanges`.
+Or mark the job methods with `[XactPeriodicJob]`, and add their assembly in the options:
+
+```csharp
+public class ReportJobs
+{
+    [XactPeriodicJob("daily_report", CronExpressions.Daily)]
+    public Task SendDailyAsync(CancellationToken cancellationToken) => Task.CompletedTask; // the report
+
+    // one method, two periodic jobs: each one's config is passed to the string parameter
+    [XactPeriodicJob("export_eu", CronExpressions.Hourly, Config = "eu")]
+    [XactPeriodicJob("export_us", CronExpressions.Hourly, Config = "us", Queue = QueueNames.LongRunning)]
+    public Task ExportAsync(string region, CancellationToken cancellationToken) => Task.CompletedTask; // the export of the region
+}
+
+builder.Services.AddXactJobs<AppDbContext>(options =>
+{
+    options
+        .WithLongRunningQueue()
+        .WithPeriodicJobsFromAssemblyOf<ReportJobs>(); // or WithPeriodicJobsFromAssembly(assembly)
+});
+```
+
+Each attribute is the same as a `WithPeriodicJob` with a call of the method, so a job can move from one to the other without
+changing its definition. The method is public, static or of a concrete class with a public constructor, not generic, and returns
+void or a Task. Its parameters can be a `CancellationToken`, an `XactJobContext`, and one string for the config. Attribute arguments
+must be constants: `CronExpressions` has the common schedules (`EverySecond`, `EveryMinute`, `Hourly`, `Daily`, `Weekly`, `Monthly`).
+`AddXactJobs` checks them, and throws with all the problems it finds: a method that can't be a job, an invalid cron expression, an id
+used twice (also with `WithPeriodicJob`), a queue that isn't configured.
+
+Removing an attribute doesn't delete its periodic job, whose runs keep running (and fail if the method is gone too): delete it by its
+id instead, e.g. with `JobDeletePeriodicAsync`, in place of the attribute.
+
+Both are the safe way to do it with several nodes starting at the same time, because the nodes take turns under a lock.
+`JobEnsurePeriodic` can't take that lock, since the changes are only saved later by your `SaveChanges`. If several nodes call it
+at the same time, it's still safe for an existing job whose definition didn't change, but for a new job, or a changed definition (a
+new version), all of them except the first get a duplicate key error from `SaveChanges`.
 
 Each run of a periodic job schedules the next one. Each node also checks every 5 minutes (`WithPeriodicJobReconciliationInterval`)
 for active periodic jobs without a pending run, and schedules their next run. So a periodic job recovers if its pending
