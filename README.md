@@ -78,30 +78,8 @@ dbContext.SaveChanges();
 ```
 
 ### Recurring jobs
-Recurring jobs run periodically according to the specified cron schedule.
-
-```csharp
-dbContext.JobEnsurePeriodic(
-    () => Greeter.Say("Recurring!"),
-    "my_recurring_job",
-    Cron.Daily());
-
-dbContext.SaveChanges();
-```
-
-If the periodic jobs are known at startup, define them in the options instead:
-
-```csharp
-builder.Services.AddXactJobs<UserDbContext>(options =>
-{
-    options.WithPeriodicJob(
-        () => Greeter.Say("Recurring!"),
-        "my_recurring_job",
-        Cron.Daily());
-});
-```
-
-Or mark the job methods with `[XactPeriodicJob]`, and add their assembly in the options:
+Recurring jobs run periodically according to the specified cron schedule. Mark the job methods with `[XactPeriodicJob]`, and add
+their assembly in the options:
 
 ```csharp
 public class ReportJobs
@@ -123,20 +101,45 @@ builder.Services.AddXactJobs<AppDbContext>(options =>
 });
 ```
 
-Each attribute is the same as a `WithPeriodicJob` with a call of the method, so a job can move from one to the other without
-changing its definition. The method is public, static or of a concrete class with a public constructor, not generic, and returns
-void or a Task. Its parameters can be a `CancellationToken`, an `XactJobContext`, and one string for the config. Attribute arguments
-must be constants: `CronExpressions` has the common schedules (`EverySecond`, `EveryMinute`, `Hourly`, `Daily`, `Weekly`, `Monthly`).
-`AddXactJobs` checks them, and throws with all the problems it finds: a method that can't be a job, an invalid cron expression, an id
-used twice (also with `WithPeriodicJob`), a queue that isn't configured.
+The method is public, static or of a concrete class with a public constructor, not generic, and returns void or a Task. Its
+parameters can be a `CancellationToken`, an `XactJobContext`, and one string for the config. Attribute arguments must be constants:
+`CronExpressions` has the common schedules (`EverySecond`, `EveryMinute`, `Hourly`, `Daily`, `Weekly`, `Monthly`). `AddXactJobs`
+checks them, and throws with all the problems it finds: a method that can't be a job, an invalid cron expression, an id used twice
+(also with `WithPeriodicJob`), a queue that isn't configured.
 
 Removing an attribute doesn't delete its periodic job, whose runs keep running (and fail if the method is gone too): delete it by its
 id instead, e.g. with `JobDeletePeriodicAsync`, in place of the attribute.
 
-Both are the safe way to do it with several nodes starting at the same time, because the nodes take turns under a lock.
-`JobEnsurePeriodic` can't take that lock, since the changes are only saved later by your `SaveChanges`. If several nodes call it
-at the same time, it's still safe for an existing job whose definition didn't change, but for a new job, or a changed definition (a
-new version), all of them except the first get a duplicate key error from `SaveChanges`.
+For a job an attribute can't describe, e.g. with arguments that aren't constants, define it in the options with a lambda:
+
+```csharp
+builder.Services.AddXactJobs<AppDbContext>(options =>
+{
+    options.WithPeriodicJob<ReportJobs>(
+        x => x.ExportAsync("eu", CancellationToken.None),
+        "export_eu",
+        builder.Configuration["Reports:ExportSchedule"] ?? CronExpressions.Hourly);
+});
+```
+
+An attribute is the same as a `WithPeriodicJob` with a call of the method, so a job can move from one to the other without
+changing its definition.
+
+To add or change a periodic job at runtime, e.g. for schedules your users create, use `JobEnsurePeriodic`:
+
+```csharp
+dbContext.JobEnsurePeriodic<ReportJobs>(
+    x => x.ExportAsync("apac", CancellationToken.None),
+    "export_apac",
+    Cron.Daily(new TimeSpan(9, 30, 0)));
+
+dbContext.SaveChanges();
+```
+
+Attributes and `WithPeriodicJob` are the safe way to do it with several nodes starting at the same time, because the nodes take turns
+under a lock. `JobEnsurePeriodic` can't take that lock, since the changes are only saved later by your `SaveChanges`. If several nodes
+call it at the same time, it's still safe for an existing job whose definition didn't change, but for a new job, or a changed
+definition (a new version), all of them except the first get a duplicate key error from `SaveChanges`.
 
 Each run of a periodic job schedules the next one. Each node also checks every 5 minutes (`WithPeriodicJobReconciliationInterval`)
 for active periodic jobs without a pending run, and schedules their next run. So a periodic job recovers if its pending
@@ -163,6 +166,7 @@ A run can leave a short state for the next run of the same periodic job, e.g. a 
 ```csharp
 public class InvoiceRun(AppDbContext db)
 {
+    [XactPeriodicJob("invoices", "0 */5 * * * *")]
     public async Task CreateInvoicesAsync(XactJobContext context, CancellationToken cancellationToken)
     {
         // the last order the previous runs invoiced
@@ -181,11 +185,6 @@ public class InvoiceRun(AppDbContext db)
         context.SetPeriodicState(orders[^1].Id.ToString());
     }
 }
-
-dbContext.JobEnsurePeriodic<InvoiceRun>(
-    x => x.CreateInvoicesAsync(null!, CancellationToken.None),
-    "invoices",
-    Cron.MinuteInterval(5));
 ```
 
 - The state is saved with the run's own changes, in the same transaction, and only if the run completes. A failed attempt leaves it as
@@ -193,8 +192,8 @@ dbContext.JobEnsurePeriodic<InvoiceRun>(
 - A run that doesn't call `SetPeriodicState` keeps the state, and `null` clears it.
 - At most 2,000 characters (`XactJobPeriodic.MaxStateLength`). A longer one throws `ArgumentException`, which fails the attempt.
 - It belongs to the periodic job's id: a new definition, pausing and resuming keep it, and deleting the periodic job deletes it.
-  `JobEnsurePeriodic` and `WithPeriodicJob` never change it. To change it outside a run, update the `state` column of the periodic job
-  table.
+  Attributes, `WithPeriodicJob` and `JobEnsurePeriodic` never change it. To change it outside a run, update the `state` column of the
+  periodic job table.
 - The history has each run's state, before and after the run.
 - Only runs of periodic jobs have a state: in other jobs `PeriodicState` is null, and `SetPeriodicState` throws
   `InvalidOperationException`. The dashboard can't retry a run that had a state, because it would run as a one-off job, without it.
@@ -666,10 +665,10 @@ The API endpoints that change data require an antiforgery token, which the dashb
 - **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
 - **Periodic** - the periodic jobs, with their next run and their state
-  - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts again, even if `JobEnsurePeriodic` or `WithPeriodicJob` defines it
+  - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts again, even if an attribute, `WithPeriodicJob` or `JobEnsurePeriodic` defines it
   - *Resume* schedules the next run
   - *Trigger* makes the pending run due now, so the job keeps a single schedule
-  - *Delete* deletes the definition. A periodic job defined in code is added again when the application starts
+  - *Delete* deletes the definition. A periodic job defined with an attribute or `WithPeriodicJob` is added again when the application starts
 
 ![Scheduled jobs: running, scheduled and retrying jobs, with their queues](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/scheduled.png)
 
