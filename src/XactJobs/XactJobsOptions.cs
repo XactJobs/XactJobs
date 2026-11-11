@@ -86,6 +86,11 @@ namespace XactJobs
         public int PeriodicJobReconciliationIntervalInSeconds { get; set; } = 300;
 
         /// <summary>
+        /// The assemblies whose methods with <see cref="XactPeriodicJobAttribute"/> are periodic jobs. Read when the services are added.
+        /// </summary>
+        public List<System.Reflection.Assembly> PeriodicJobAssemblies { get; set; } = [];
+
+        /// <summary>
         /// What the worker does when a job calls <c>SaveChanges</c> on its scoped <typeparamref name="TDbContext"/> outside a transaction,
         /// which loses the exactly-once database effects. Default <see cref="XactJobSaveCheck.Warn"/>. Applies to all the queues.
         /// </summary>

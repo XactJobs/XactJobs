@@ -67,7 +67,7 @@ dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks --
 dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 3000 --runs 5
 ```
 
-The library has `InternalsVisibleTo` for the benchmarks, which call the serializer, the compiler and the save check directly.
+The library has `InternalsVisibleTo` for the benchmarks, which call the serializer, the compiler and the save check directly, and for the tests (the attribute scanner's checks).
 
 ## Website
 
@@ -171,6 +171,14 @@ XactJobs is a .NET library for background job processing with full database tran
 - `sql/v<version>/xact-jobs-<database>-v<version>.sql` - one per schema change and database, to upgrade an installation. Released ones never change
 - `sql/install/xact-jobs-<database>.sql` - the whole latest schema, for a new installation. A schema change updates it too, and its version in the header: `InstallScriptIntegrationTests` (and `SqliteInstallScriptTests`) check on every database that it creates the same schema as the versioned scripts
 - The EF model must match them too (the EF migrations route): `ModelIndexTests`, and `SchemaGeneratedFromTheModel_IsAcceptedByTheDatabase` on MySQL
+
+### Periodic Jobs from Attributes
+
+- `[XactPeriodicJob(id, cron, Queue, Config)]` on methods, found by `WithPeriodicJobsFromAssembly(assembly)` / `WithPeriodicJobsFromAssemblyOf<T>()` (no default assembly: the calling assembly is unreliable). `Internal/XactPeriodicJobScanner` runs in `AddXactJobs`, once the options are complete (the queues may be configured after the call), and adds each one to `PeriodicJobs` of the default queue or of its isolated queue, as the expression of a call of the method (`x => x.Run("config", default, default)`), so the serializer stores exactly what `WithPeriodicJob` would: moving a job between them must not change its definition (a new version)
+- It checks everything and throws one `InvalidOperationException` with all the problems: the method's shape (public; static, or a concrete type with a public constructor, since the compiler creates it with its first constructor; not generic; void or Task, not async void; parameters only CancellationToken, XactJobContext and one string, which gets `Config`, null if not set), the cron expression, ids used twice (also with `WithPeriodicJob`, in any queue), queues that aren't configured
+- Removing an attribute doesn't delete the periodic job (documented: delete it by its id in its place)
+- `CronExpressions`: constants for attributes (`Cron`'s methods can't be attribute arguments)
+- Tests: `PeriodicJobAttributeTests`. The assembly scan uses `XactJobs.Tests.PeriodicJobs`, which must hold only valid attributes; the invalid ones are private nested types in the test assembly, checked with the scanner's internal `Find` (`InternalsVisibleTo` XactJobs.Tests), and that assembly is never scanned
 
 ### Periodic Job Scheduler
 

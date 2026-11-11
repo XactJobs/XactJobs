@@ -124,6 +124,25 @@ namespace XactJobs
         }
 
         /// <summary>
+        /// Adds the methods of the assembly with <see cref="XactPeriodicJobAttribute"/> as periodic jobs, in the default queue or the
+        /// attribute's queue. They're checked when the services are added (<c>AddXactJobs</c>), which throws with all the problems found:
+        /// a method that can't be a job, an invalid cron expression, an id used twice (also with <c>WithPeriodicJob</c>), a queue that
+        /// isn't configured.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithPeriodicJobsFromAssembly(System.Reflection.Assembly assembly)
+        {
+            ArgumentNullException.ThrowIfNull(assembly);
+
+            Options.PeriodicJobAssemblies.Add(assembly);
+            return this;
+        }
+
+        /// <summary>
+        /// <see cref="WithPeriodicJobsFromAssembly"/> with the assembly of <typeparamref name="T"/>.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithPeriodicJobsFromAssemblyOf<T>() => WithPeriodicJobsFromAssembly(typeof(T).Assembly);
+
+        /// <summary>
         /// What the worker does when a job calls <c>SaveChanges</c> on its scoped <typeparamref name="TDbContext"/> outside a transaction:
         /// warn (the default), throw, or ignore it. Applies to all the queues.
         /// </summary>

@@ -18,6 +18,9 @@ public static class ServiceCollectionExtensions
 
         configureOptions?.Invoke(optionsBuilder);
 
+        // once the queues and the other periodic jobs are known
+        XactPeriodicJobScanner.AddTo(optionsBuilder.Options);
+
         services.AddSingleton(optionsBuilder.Options);
         services.AddSingleton(CreateQuickPollChannels(optionsBuilder.Options));
 
