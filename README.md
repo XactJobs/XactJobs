@@ -674,7 +674,9 @@ The API endpoints that change data require an antiforgery token, which the dashb
 
 ![A failed job's error message and stack trace](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/failed-job.png)
 
-![Periodic jobs: their cron expressions and next runs, one of them paused](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/periodic.png)
+![Periodic jobs: their cron expressions, next runs and states, one of them paused](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/periodic.png)
+
+![Succeeded jobs, with the runs of periodic jobs whose state changed](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/history.png)
 
 ![Active batches: their progress, failed jobs and waiting continuations](https://raw.githubusercontent.com/XactJobs/XactJobs/main/docs/images/batches.png)
 
