@@ -8,8 +8,8 @@ description: Isolated queues with their own workers, how workers poll and pick u
 XactJobs can run isolated workers for named queues. A job goes to a queue when it's enqueued:
 
 ```csharp
-dbContext.JobEnqueue(() => Greeter.Say("Job 1"), QueueNames.Priority);
-dbContext.JobEnqueue(() => Greeter.Say("Job 2"), QueueNames.LongRunning);
+dbContext.JobEnqueue(() => Console.WriteLine("Job 1"), QueueNames.Priority);
+dbContext.JobEnqueue(() => Console.WriteLine("Job 2"), QueueNames.LongRunning);
 
 dbContext.SaveChanges();
 ```
@@ -93,7 +93,7 @@ public class YourWorkerOrController
         // Your business logic uses _dbContext, as usual.
 
         // Enqueue the job through _quickPoll (instead of DbContext)
-        _quickPoll.JobEnqueue(() => Greeter.Say("QuickPoll"));
+        _quickPoll.JobEnqueue(() => Console.WriteLine("QuickPoll"));
 
         // Save changes through _quickPoll
         // (this calls DbContext.SaveChanges and notifies the workers)

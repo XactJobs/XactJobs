@@ -168,20 +168,13 @@ All the options are in the [configuration reference](../configuration/).
 
 ## 4. Enqueue a job
 
-A job is a public method. Enqueue it on your `DbContext`, next to your business data, and save. `JobEnqueue` and the other methods
-are extension methods in the `XactJobs` namespace (`using XactJobs;`):
-
-```csharp
-public static class Greeter
-{
-    public static void Say(string message) => Console.WriteLine(message);
-}
-```
+A job is a call of a public method, e.g. `Console.WriteLine`. Enqueue it on your `DbContext`, next to your business data, and
+save. `JobEnqueue` and the other methods are extension methods in the `XactJobs` namespace (`using XactJobs;`):
 
 ```csharp
 // ... other business logic
 dbContext.JobEnqueue(
-    () => Greeter.Say("Fire-and-forget!"));
+    () => Console.WriteLine("Fire-and-forget!"));
 
 dbContext.SaveChanges();
 ```

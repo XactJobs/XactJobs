@@ -45,14 +45,6 @@ Feedback and issue reports are very welcome, especially from production use.
 XactJobs was started in 2025, and written without AI. Newer releases are developed with AI, and the changes are reviewed by a human.
 
 ## Features
-The examples below use this simple job:
-
-```csharp
-public static class Greeter
-{
-    public static void Say(string message) => Console.WriteLine(message);
-}
-```
 
 ### Fire and Forget Jobs
 Fire-and-forget jobs are executed once by a background worker, in its next poll. Each worker polls every 6 seconds by default (`WithPollingInterval`),
@@ -61,7 +53,7 @@ and the workers of a queue take turns, so with the default 2 workers the queue i
 ```csharp
 // ... other business logic
 dbContext.JobEnqueue(
-    () => Greeter.Say("Fire-and-forget!"));
+    () => Console.WriteLine("Fire-and-forget!"));
 
 dbContext.SaveChanges();
 ```
@@ -71,7 +63,7 @@ Delayed jobs are executed once after the specified time interval.
 
 ```csharp
 dbContext.JobScheduleIn(
-    () => Greeter.Say("Delayed!"),
+    () => Console.WriteLine("Delayed!"),
     TimeSpan.FromDays(7));
 
 dbContext.SaveChanges();
@@ -202,8 +194,8 @@ public class InvoiceRun(AppDbContext db)
 Adding multiple jobs before saving changes will enqueue all jobs in a single transaction.
 
 ```csharp
-dbContext.JobEnqueue(() => Greeter.Say("Job 1"));
-dbContext.JobEnqueue(() => Greeter.Say("Job 2"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 1"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 2"));
 
 dbContext.SaveChanges();
 ```
@@ -286,11 +278,11 @@ Jobs participate in DbContext transactions, just like the regular entities in EF
 using var tx = dbContext.Database.BeginTransaction();
 
 // some business logic
-dbContext.JobEnqueue(() => Greeter.Say("Job 1"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 1"));
 dbContext.SaveChanges();
 
 // some more business logic
-dbContext.JobEnqueue(() => Greeter.Say("Job 2"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 2"));
 dbContext.SaveChanges();
 
 tx.Commit();
@@ -298,8 +290,8 @@ tx.Commit();
 ### Isolated Queues
 XactJobs can be configured to run isolated workers for named queues.
 ```csharp
-dbContext.JobEnqueue(() => Greeter.Say("Job 1"), QueueNames.Priority);
-dbContext.JobEnqueue(() => Greeter.Say("Job 2"), QueueNames.LongRunning);
+dbContext.JobEnqueue(() => Console.WriteLine("Job 1"), QueueNames.Priority);
+dbContext.JobEnqueue(() => Console.WriteLine("Job 2"), QueueNames.LongRunning);
 
 dbContext.SaveChanges();
 ```
@@ -328,7 +320,7 @@ public class YourWorkerOrController
         // Your business logic uses _dbContext, as usual.
 
         // Enqueue the job through _quickPoll (instead of DbContext)
-        _quickPoll.JobEnqueue(() => Greeter.Say("QuickPoll"));
+        _quickPoll.JobEnqueue(() => Console.WriteLine("QuickPoll"));
 
         // Save changes through _quickPoll
         // (this calls DbContext.SaveChanges and notifies the workers)

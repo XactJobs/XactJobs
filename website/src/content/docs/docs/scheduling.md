@@ -3,15 +3,6 @@ title: Scheduling
 description: Fire-and-forget and delayed jobs, and several jobs in one transaction.
 ---
 
-The examples use this simple job:
-
-```csharp
-public static class Greeter
-{
-    public static void Say(string message) => Console.WriteLine(message);
-}
-```
-
 Every method below only adds rows to the `DbContext`: nothing is scheduled until your `SaveChanges` commits.
 
 ## Fire and forget
@@ -23,7 +14,7 @@ Fire-and-forget jobs are executed once by a background worker, in its next poll.
 ```csharp
 // ... other business logic
 dbContext.JobEnqueue(
-    () => Greeter.Say("Fire-and-forget!"));
+    () => Console.WriteLine("Fire-and-forget!"));
 
 dbContext.SaveChanges();
 ```
@@ -34,11 +25,11 @@ Delayed jobs are executed once after the specified time interval, or at the spec
 
 ```csharp
 dbContext.JobScheduleIn(
-    () => Greeter.Say("Delayed!"),
+    () => Console.WriteLine("Delayed!"),
     TimeSpan.FromDays(7));
 
 dbContext.JobScheduleAt(
-    () => Greeter.Say("At a time!"),
+    () => Console.WriteLine("At a time!"),
     new DateTime(2027, 1, 1, 9, 0, 0, DateTimeKind.Utc));
 
 dbContext.SaveChanges();
@@ -51,8 +42,8 @@ dbContext.SaveChanges();
 Adding multiple jobs before saving changes enqueues all of them in a single transaction:
 
 ```csharp
-dbContext.JobEnqueue(() => Greeter.Say("Job 1"));
-dbContext.JobEnqueue(() => Greeter.Say("Job 2"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 1"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 2"));
 
 dbContext.SaveChanges();
 ```
@@ -65,11 +56,11 @@ Jobs participate in DbContext transactions, just like the regular entities in EF
 using var tx = dbContext.Database.BeginTransaction();
 
 // some business logic
-dbContext.JobEnqueue(() => Greeter.Say("Job 1"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 1"));
 dbContext.SaveChanges();
 
 // some more business logic
-dbContext.JobEnqueue(() => Greeter.Say("Job 2"));
+dbContext.JobEnqueue(() => Console.WriteLine("Job 2"));
 dbContext.SaveChanges();
 
 tx.Commit();
