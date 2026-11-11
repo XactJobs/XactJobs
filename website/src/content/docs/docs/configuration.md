@@ -40,7 +40,7 @@ these defaults, not from the default queue's settings.
 | `WithShutdownTimeout(seconds)` | 10 | Seconds running jobs get to finish on stop, before they are cancelled. 0 cancels them immediately |
 | `ClearLeaseTimeoutInSeconds` | 10 | How long the workers wait to clear the leases on stop. No builder method: set `options.Options.ClearLeaseTimeoutInSeconds` |
 | `WithRetryStrategy(strategy)` | `DefaultRetryStrategy` | When a failed job runs again: see [Failures and retries](../failures-and-retries/) |
-| `WithPeriodicJob(job, id, cron)` | none | A periodic job ensured at startup, on this queue: see [Periodic jobs](../scheduling/#periodic-jobs) |
+| `WithPeriodicJob(job, id, cron)` | none | A periodic job ensured at startup, on this queue: see [Periodic jobs](../periodic-jobs/#in-the-options) |
 
 ## All the queues
 
@@ -48,6 +48,7 @@ these defaults, not from the default queue's settings.
 |---|---|---|
 | `WithHistoryRetentionPeriodInDays(days)` | none: the history is kept | Adds the periodic job `xj_history_cleanup`, which deletes the older history every hour, except the history of the batches that continuations still wait for |
 | `WithPeriodicJobReconciliationInterval(seconds)` | 300 | Seconds between each node's checks for active periodic jobs without a pending run |
+| `WithPeriodicJobsFromAssembly(assembly)`, `WithPeriodicJobsFromAssemblyOf<T>()` | none | The periodic jobs of the `[XactPeriodicJob]` methods in the assembly, ensured at startup: see [Periodic jobs](../periodic-jobs/#attributes) |
 | `WithSaveOutsideTransaction(check)` | `XactJobSaveCheck.Warn` | When a job saves without a transaction: `Warn`, `Throw` or `Ignore`. See [the save check](../unit-of-work/#the-save-check) |
 | `WithJobTagsInMetrics(enabled?)` | off | Also tags the jobs' metrics with the job's type and method. See [Metrics, traces and logs](../observability/) |
 | `WithPriorityQueue(configure?)` | not started | Workers for `QueueNames.Priority`: 2, polling every 4 seconds |

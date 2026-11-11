@@ -12,6 +12,7 @@ export const sidebar = [
     label: 'Guides',
     items: [
       { label: 'Scheduling', slug: 'docs/scheduling' },
+      { label: 'Periodic jobs', slug: 'docs/periodic-jobs' },
       { label: 'Batches and continuations', slug: 'docs/batches-and-continuations' },
       { label: 'Queues and polling', slug: 'docs/queues-and-polling' },
       { label: 'Failures, retries and stopping', slug: 'docs/failures-and-retries' },

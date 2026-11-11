@@ -74,10 +74,10 @@ The other options (page size, title, refresh interval) are in the [configuration
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
 - **Periodic**: the periodic jobs, with their next run and their state
   - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts
-    again, even if `JobEnsurePeriodic` or `WithPeriodicJob` defines it
+    again, even if an attribute, `WithPeriodicJob` or `JobEnsurePeriodic` defines it
   - *Resume* schedules the next run
   - *Trigger* makes the pending run due now, so the job keeps a single schedule
-  - *Delete* deletes the definition. A periodic job defined in code is added again when the application starts
+  - *Delete* deletes the definition. A periodic job defined with an attribute or `WithPeriodicJob` is added again when the application starts
 
 A job that is running can't be changed: the dashboard never touches a job a worker has leased.
 
