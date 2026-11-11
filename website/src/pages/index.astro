@@ -191,13 +191,13 @@ const shots = [
       <div class="section-head">
         <p class="eyebrow">Getting started</p>
         <h2 id="start-title">Three steps</h2>
-        <p class="lead">Tables in your database, two lines at startup, and jobs next to your data.</p>
+        <p class="lead">Three tables in your database, two lines at startup, and jobs next to your data.</p>
       </div>
       <ol class="steps" role="list">
         <li class="step">
           <span class="step-num" aria-hidden="true">1</span>
           <h3>Create the tables</h3>
-          <p>Run the install script for your database, from <a href={`${GITHUB_URL}/tree/main/sql`}>sql/</a>.</p>
+          <p>Only three: the jobs, the periodic jobs and the history. Run the install script for your database, from <a href={`${GITHUB_URL}/tree/main/sql`}>sql/</a>.</p>
           <DbTabs id="create" tabs={createTables} />
           <p>Or include them in your EF migrations, with <code>ApplyXactJobsConfigurations(..., excludeFromMigrations: false)</code>.</p>
           <a class="step-more" href={docs('getting-started') + '#2-create-the-tables'}>Install and upgrade scripts</a>
