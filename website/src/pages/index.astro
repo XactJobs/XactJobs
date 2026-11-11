@@ -10,12 +10,14 @@ import { GITHUB_URL } from '../../site.config.mjs';
 import dashboard from '../../../docs/images/dashboard.png';
 import scheduled from '../../../docs/images/scheduled.png';
 import failedJob from '../../../docs/images/failed-job.png';
+import history from '../../../docs/images/history.png';
 import periodic from '../../../docs/images/periodic.png';
 import batches from '../../../docs/images/batches.png';
 import batch from '../../../docs/images/batch.png';
 import dashboardDark from '../../../docs/images/dashboard-dark.png';
 import scheduledDark from '../../../docs/images/scheduled-dark.png';
 import failedJobDark from '../../../docs/images/failed-job-dark.png';
+import historyDark from '../../../docs/images/history-dark.png';
 import periodicDark from '../../../docs/images/periodic-dark.png';
 import batchesDark from '../../../docs/images/batches-dark.png';
 import batchDark from '../../../docs/images/batch-dark.png';
@@ -132,8 +134,9 @@ const features = [
 const shots = [
   { id: 'dashboard', label: 'Dashboard', image: dashboard, dark: dashboardDark, path: '/XactJobs', alt: 'The dashboard: due, running, succeeded and failed jobs, and the jobs processed per hour' },
   { id: 'scheduled', label: 'Scheduled', image: scheduled, dark: scheduledDark, path: '/XactJobs/Scheduled', alt: 'Scheduled jobs: running, scheduled and retrying jobs, with their queues' },
+  { id: 'succeeded', label: 'Succeeded', image: history, dark: historyDark, path: '/XactJobs/History', alt: 'Succeeded jobs, with the runs of periodic jobs whose state changed' },
   { id: 'failed', label: 'Failed job', image: failedJob, dark: failedJobDark, path: '/XactJobs/History', alt: "A failed job's error message and stack trace" },
-  { id: 'periodic', label: 'Periodic', image: periodic, dark: periodicDark, path: '/XactJobs/Periodic', alt: 'Periodic jobs: their cron expressions and next runs, one of them paused' },
+  { id: 'periodic', label: 'Periodic', image: periodic, dark: periodicDark, path: '/XactJobs/Periodic', alt: 'Periodic jobs: their cron expressions, next runs and states, one of them paused' },
   { id: 'batches', label: 'Batches', image: batches, dark: batchesDark, path: '/XactJobs/Batches', alt: 'Active batches: their progress, failed jobs and waiting continuations' },
   { id: 'batch', label: 'Batch', image: batch, dark: batchDark, path: '/XactJobs/Batch', alt: 'A batch: its jobs left, the continuations that wait for it, and its history' },
 ];
