@@ -219,11 +219,11 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
 
     private string PeriodicJobIndex => Provider switch
     {
-        Db.PostgreSql => @"(using|Bitmap Index Scan on) ix_job_periodic_job_id\b",
-        Db.SqlServer => @"Index=""\[IX_Job_PeriodicJobId\]""",
-        Db.Oracle => @"\|\s*IX_JOB_PERIODIC_JOB_ID\s",
-        Db.MySql => throw new InvalidOperationException("MySQL has no index of the periodic job column"),
-        _ => @"USING (COVERING )?INDEX ix_job_periodic_job_id\b",
+        Db.PostgreSql => @"(using|Bitmap Index Scan on) ix_job_periodic_job_id_version\b",
+        Db.SqlServer => @"Index=""\[IX_Job_PeriodicJobId_Version\]""",
+        Db.Oracle => @"\|\s*IX_JOB_PERIODIC_JOB_ID_VERSION\s",
+        Db.MySql => @"^table=\w+ type=(const|eq_ref|ref|range) key=ix_job_periodic_job_id_version$",
+        _ => @"USING (COVERING )?INDEX ix_job_periodic_job_id_version\b",
     };
 
     // either of the batch columns' indexes: of the batch's jobs, or of its continuations
@@ -235,8 +235,6 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
         Db.MySql => @"^table=\w+ type=(const|eq_ref|ref|range) key=ix_job_(awaits_)?batch_id$",
         _ => @"USING (COVERING )?INDEX ix_job_(awaits_)?batch_id\b",
     };
-
-    public bool HasPeriodicJobIndex => Provider != Db.MySql;
 
     private enum Db { PostgreSql, SqlServer, Oracle, MySql, Sqlite }
 
@@ -255,7 +253,7 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
     /// <summary>
     /// The plan uses the index, and doesn't read the whole job table, nor the whole of another of its indexes. Reading the whole
     /// index of the periodic job column is fine: it holds only the runs of periodic jobs. So do the batch columns' indexes, which hold
-    /// only the rows of batches and continuations, except on MySQL (no filtered indexes): reading all of MySQL's reads every job.
+    /// only the rows of batches and continuations, except on MySQL (no filtered indexes): reading all of one of MySQL's reads every job.
     /// </summary>
     private void AssertUsesTheIndex(string index, string sql, string plan)
     {
@@ -278,11 +276,11 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
                 return XDocument.Parse(plan).Descendants(ns + "RelOp")
                     .Where(op => (string?)op.Attribute("PhysicalOp") is "Clustered Index Scan" or "Table Scan" or "Index Scan")
                     .SelectMany(op => op.Elements().Where(e => e.Name.LocalName is "IndexScan" or "TableScan").Elements(ns + "Object"))
-                    .Any(o => (string?)o.Attribute("Table") == "[Job]" && (string?)o.Attribute("Index") is not ("[IX_Job_PeriodicJobId]" or "[IX_Job_BatchId]" or "[IX_Job_AwaitsBatchId]"));
+                    .Any(o => (string?)o.Attribute("Table") == "[Job]" && (string?)o.Attribute("Index") is not ("[IX_Job_PeriodicJobId_Version]" or "[IX_Job_BatchId]" or "[IX_Job_AwaitsBatchId]"));
 
             case Db.Oracle:
                 return Regex.IsMatch(plan, @"TABLE ACCESS (STORAGE )?FULL\s*\|\s*XACT_JOBS_JOB\s")
-                    || Regex.IsMatch(plan, @"INDEX (FAST )?FULL SCAN\s*\|\s*(?!(IX_JOB_PERIODIC_JOB_ID|IX_JOB_BATCH_ID|IX_JOB_AWAITS_BATCH_ID)\s)\w+\s");
+                    || Regex.IsMatch(plan, @"INDEX (FAST )?FULL SCAN\s*\|\s*(?!(IX_JOB_PERIODIC_JOB_ID_VERSION|IX_JOB_BATCH_ID|IX_JOB_AWAITS_BATCH_ID)\s)\w+\s");
 
             case Db.MySql:
                 return JobTableAliases(sql, "`xact_jobs_job`", "`")
@@ -290,7 +288,7 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
 
             default:
                 return JobTableAliases(sql, "\"xact_jobs_job\"", "\"")
-                    .Any(alias => Regex.IsMatch(plan, $@"^SCAN {Regex.Escape(alias)}( USING (COVERING )?INDEX (?!(ix_job_periodic_job_id|ix_job_batch_id|ix_job_awaits_batch_id)\b)\w+.*)?$", RegexOptions.Multiline));
+                    .Any(alias => Regex.IsMatch(plan, $@"^SCAN {Regex.Escape(alias)}( USING (COVERING )?INDEX (?!(ix_job_periodic_job_id_version|ix_job_batch_id|ix_job_awaits_batch_id)\b)\w+.*)?$", RegexOptions.Multiline));
         }
     }
 

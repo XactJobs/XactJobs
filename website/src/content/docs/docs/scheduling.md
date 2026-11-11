@@ -127,7 +127,7 @@ The `Cron` class builds the common ones:
 
 Defining periodic jobs in the options is the safe way to do it with several nodes starting at the same time, because the nodes take
 turns under a lock. `JobEnsurePeriodic` can't take that lock, since the changes are only saved later by your `SaveChanges`. If several
-nodes call it at the same time, it's still safe for an existing job (only the definition saved last runs), but for a new job all of them
+nodes call it at the same time, it's still safe for an existing job whose definition didn't change, but for a new job, or a changed definition (a new version), all of them
 except the first get a duplicate key error from `SaveChanges`.
 
 ### Reconciliation
@@ -139,6 +139,14 @@ and arguments format that XactJobs writes. The run happens at the next time on t
 
 After a periodic job is deleted, or its definition changes, the pending run of the old definition stays in the table until its scheduled
 time. A worker then skips it, adding a `Skipped` row to the history.
+
+### One pending run
+
+A periodic job has at most one pending run of each version: the job table has a unique index on the periodic job and its version.
+If two pending runs are saved at the same time, e.g. two resumes of a paused job, or the dashboard's *Trigger* of a job without a pending
+run while a node's reconciliation schedules it, only the first is saved: the other `SaveChanges` throws a `DbUpdateException`, for which
+`ex.IsUniqueKeyViolation()` (namespace `XactJobs`) returns true. The dashboard answers it with a conflict, and the reconciliation runs
+again.
 
 ### State between runs
 

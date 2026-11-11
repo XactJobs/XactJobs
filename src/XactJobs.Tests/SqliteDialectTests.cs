@@ -82,18 +82,20 @@ public class SqliteDialectTests
 
         // Assert: only the batch columns, the periodic job, and the queue with the scheduled time for the claims (the primary key is only the id)
         Assert.Equal(
-            [nameof(XactJob.AwaitsBatchId), nameof(XactJob.BatchId), nameof(XactJob.PeriodicJobId), nameof(XactJob.Queue), nameof(XactJob.ScheduledAt)],
+            [nameof(XactJob.AwaitsBatchId), nameof(XactJob.BatchId), nameof(XactJob.PeriodicJobId), nameof(XactJob.PeriodicJobVersion), nameof(XactJob.Queue), nameof(XactJob.ScheduledAt)],
             indexes.SelectMany(i => i.Properties).Select(p => p.Name).Order());
 
-        var claimIndex = Assert.Single(indexes, i => i.Properties.Count == 2);
+        var claimIndex = Assert.Single(indexes, i => i.Properties[0].Name == nameof(XactJob.Queue));
 
         Assert.Equal([nameof(XactJob.Queue), nameof(XactJob.ScheduledAt)], claimIndex.Properties.Select(p => p.Name));
         Assert.Equal("ix_job_queue_scheduled_at", claimIndex.GetDatabaseName());
 
-        // only the rows of periodic jobs
-        var periodicIndex = Assert.Single(indexes, i => i.Properties.Count == 1 && i.Properties[0].Name == nameof(XactJob.PeriodicJobId));
+        // one pending run per periodic job and version, only the rows of periodic jobs
+        var periodicIndex = Assert.Single(indexes, i => i.Properties[0].Name == nameof(XactJob.PeriodicJobId));
 
-        Assert.Equal("ix_job_periodic_job_id", periodicIndex.GetDatabaseName());
+        Assert.Equal([nameof(XactJob.PeriodicJobId), nameof(XactJob.PeriodicJobVersion)], periodicIndex.Properties.Select(p => p.Name));
+        Assert.True(periodicIndex.IsUnique);
+        Assert.Equal("ix_job_periodic_job_id_version", periodicIndex.GetDatabaseName());
         Assert.Equal("\"periodic_job_id\" IS NOT NULL", periodicIndex.GetFilter());
     }
 

@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Data.SqlClient;
+using MySql.Data.MySqlClient;
 using Npgsql;
 using XactJobs.Internal;
 
@@ -43,6 +44,7 @@ public static class DrainBenchmark
             BatchSize: args.Contains("--batch-size") ? GetOption(args, "--batch-size", 1) : null,
             Postgres: GetString(args, "--postgres"),
             SqlServer: GetString(args, "--sqlserver"),
+            MySql: GetString(args, "--mysql"),
             Log: args.Contains("--log"),
             ContextPool: args.Contains("--context-pool"));
         var listSql = args.Contains("--sql");
@@ -54,7 +56,7 @@ public static class DrainBenchmark
                           $"{(settings.BatchSize != null ? $", claiming batches of {settings.BatchSize}" : "")}" +
                           $"{(settings.ContextPool ? ", pooled contexts" : "")}, median of {runs} runs after a warm-up");
         Console.WriteLine($".NET {Environment.Version}, EF Core {GetVersion(typeof(DbContext))}, XactJobs {GetVersion(typeof(XactJob))}, " +
-                          $"{(settings.Postgres != null ? "PostgreSQL" : settings.SqlServer != null ? "SQL Server" : "SQLite in memory")}, {Environment.ProcessorCount} processors");
+                          $"{(settings.Postgres != null ? "PostgreSQL" : settings.SqlServer != null ? "SQL Server" : settings.MySql != null ? "MySQL" : "SQLite in memory")}, {Environment.ProcessorCount} processors");
 #if DEBUG
         Console.WriteLine("WARNING: a Debug build. Run with -c Release.");
 #endif
@@ -241,7 +243,7 @@ public static class DrainBenchmark
             {
                 var db = scope.ServiceProvider.GetRequiredService<BenchDbContext>();
 
-                // the worker's claim, with its locking (FOR UPDATE SKIP LOCKED on PostgreSQL, READPAST on SQL Server)
+                // the worker's claim, with its locking (FOR UPDATE SKIP LOCKED on PostgreSQL and MySQL, READPAST on SQL Server)
                 var dialect = db.Database.ProviderName.ToSqlDialect();
 
                 claimed = await dialect.ClaimJobsAsync(db, QueueNames.Default, 1, leaser, LeaseDurationInSeconds, CancellationToken.None);
@@ -300,7 +302,7 @@ public static class DrainBenchmark
     }
 
     // the plain EF baseline doesn't batch: each of its slots claims one job
-    private sealed record DrainSettings(int Workers, int Parallelism, int? BatchSize, string? Postgres, string? SqlServer, bool Log, bool ContextPool);
+    private sealed record DrainSettings(int Workers, int Parallelism, int? BatchSize, string? Postgres, string? SqlServer, string? MySql, bool Log, bool ContextPool);
 
     /// <summary>
     /// The context, created for each scope, or with <c>--context-pool</c> reused from a pool (AddDbContextPool), for both drains.
@@ -524,6 +526,7 @@ public static class DrainBenchmark
         {
             BenchDatabase database = settings.Postgres != null ? new PostgresDatabase(settings.Postgres)
                 : settings.SqlServer != null ? new SqlServerDatabase(settings.SqlServer)
+                : settings.MySql != null ? new MySqlDatabase(settings.MySql)
                 : new InMemoryDatabase();
 
             await database.CreateSchemaAsync();
@@ -707,6 +710,48 @@ public static class DrainBenchmark
             await connection.OpenAsync();
 
             await using var command = new SqlCommand(sql, connection);
+
+            await command.ExecuteNonQueryAsync();
+        }
+    }
+
+    /// <summary>
+    /// A new MySQL database on the server of the connection string, with the schema from the install script, and fresh statistics.
+    /// The official provider (MySql.EntityFrameworkCore), which supports EF Core 10. Dropped afterwards, with its pool cleared.
+    /// </summary>
+    private sealed class MySqlDatabase(string serverConnectionString) : BenchDatabase
+    {
+        private readonly string _name = $"bench_{Guid.NewGuid():N}";
+
+        private string ConnectionString => new MySqlConnectionStringBuilder(serverConnectionString) { Database = _name }.ConnectionString;
+
+        public override DbContextOptionsBuilder Configure(DbContextOptionsBuilder options) => options.UseMySQL(ConnectionString);
+
+        protected override async Task CreateSchemaAsync()
+        {
+            await ExecuteAsync(serverConnectionString, $"CREATE DATABASE `{_name}`");
+            await ExecuteAsync(ConnectionString, await File.ReadAllTextAsync(GetScript("install", "xact-jobs-mysql.sql")));
+        }
+
+        protected override Task AnalyzeAsync() => ExecuteAsync(ConnectionString, "ANALYZE TABLE `xact_jobs_job`, `xact_jobs_job_history`");
+
+        public override async ValueTask DisposeAsync()
+        {
+            await using (var connection = new MySqlConnection(ConnectionString))
+            {
+                MySqlConnection.ClearPool(connection);
+            }
+
+            await ExecuteAsync(serverConnectionString, $"DROP DATABASE IF EXISTS `{_name}`");
+        }
+
+        private static async Task ExecuteAsync(string connectionString, string sql)
+        {
+            await using var connection = new MySqlConnection(connectionString);
+
+            await connection.OpenAsync();
+
+            await using var command = new MySqlCommand(sql, connection);
 
             await command.ExecuteNonQueryAsync();
         }

@@ -103,7 +103,7 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 
 This is the safe way to do it with several nodes starting at the same time, because the nodes take turns under a lock.
 `JobEnsurePeriodic` can't take that lock, since the changes are only saved later by your `SaveChanges`. If several nodes
-call it at the same time, it's still safe for an existing job (only the definition saved last runs), but for a new job all of them
+call it at the same time, it's still safe for an existing job whose definition didn't change, but for a new job, or a changed definition (a new version), all of them
 except the first get a duplicate key error from `SaveChanges`.
 
 Each run of a periodic job schedules the next one. Each node also checks every 5 minutes (`WithPeriodicJobReconciliationInterval`)
@@ -114,6 +114,14 @@ missed runs are not caught up.
 
 After a periodic job is deleted, or its definition changes, the pending run of the old definition stays in the table until its
 scheduled time. A worker then skips it, adding a `Skipped` row to the history.
+
+#### One Pending Run
+
+A periodic job has at most one pending run of each version: the job table has a unique index on the periodic job and its version.
+If two pending runs are saved at the same time, e.g. two resumes of a paused job, or the dashboard's *Trigger* of a job without a pending
+run while a node's reconciliation schedules it, only the first is saved: the other `SaveChanges` throws a `DbUpdateException`, for which
+`ex.IsUniqueKeyViolation()` (namespace `XactJobs`) returns true. The dashboard answers it with a conflict, and the reconciliation runs
+again.
 
 #### State Between Runs
 
@@ -361,6 +369,13 @@ history's state columns empty.
 v0.6.0 also keeps a job's id across its retries and the dashboard's *Run now* (the row moves to its new time, instead of being replaced by
 a new one), so the history has a row per attempt with the same id. On SQLite, the script copies the history into a table whose primary key
 is the id and the time it was processed, as on the other databases: without it, the second attempt of a job can't be recorded.
+
+The script also adds a unique index on the periodic job and its version in the job table, so a periodic job has at most one pending run
+of each version (see [One pending run](#one-pending-run)). It replaces the index of the periodic job column. Runs from before v0.1.4, without a
+version, get version 1, which is how XactJobs reads them. If a periodic job already has two pending runs of one version, creating the
+index fails: run the script so that it stops at the first error, delete the extra runs (the script has the query that finds them), and run
+it again. On MySQL, which has no filtered indexes, it's a full index, and the script changes the column from `longtext`, which can't be
+indexed, to `varchar(255)`, the type of the periodic job's id: that copies the job table.
 
 For v0.5.0, run the script first: it adds a column for the trace that enqueued a job (see [Metrics, Traces and Logs](#metrics-traces-and-logs)),
 which v0.5.0 writes. A worker of an older version leaves it empty in the retries and the history.

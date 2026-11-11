@@ -26,7 +26,8 @@ namespace XactJobs.EntityConfigurations
                 _ => null
             };
 
-            return filter != null ? index.HasFilter(filter) : index;
+            // also null explicitly: Oracle's provider gives a unique index of nullable columns an IS NOT NULL filter of its own
+            return index.HasFilter(filter);
         }
     }
 }

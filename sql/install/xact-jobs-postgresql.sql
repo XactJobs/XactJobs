@@ -37,8 +37,9 @@ CREATE TABLE xact_jobs.job (
 CREATE INDEX ix_job_batch_id ON xact_jobs.job (batch_id) WHERE batch_id IS NOT NULL;
 CREATE INDEX ix_job_awaits_batch_id ON xact_jobs.job (awaits_batch_id) WHERE awaits_batch_id IS NOT NULL;
 
--- the runs of a periodic job: only the rows of periodic jobs, so the other jobs' inserts and deletes don't write to it
-CREATE INDEX ix_job_periodic_job_id ON xact_jobs.job (periodic_job_id) WHERE periodic_job_id IS NOT NULL;
+-- the runs of a periodic job, one pending run per version: only the rows of periodic jobs, so the other jobs' inserts and deletes
+-- don't write to it
+CREATE UNIQUE INDEX ix_job_periodic_job_id_version ON xact_jobs.job (periodic_job_id, periodic_job_version) WHERE periodic_job_id IS NOT NULL;
 
 -- ===============================
 -- Table storing execution history
