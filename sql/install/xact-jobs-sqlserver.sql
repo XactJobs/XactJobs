@@ -37,8 +37,9 @@ CREATE TABLE [XactJobs].[Job] (
 CREATE INDEX [IX_Job_BatchId] ON [XactJobs].[Job] ([BatchId]) WHERE [BatchId] IS NOT NULL;
 CREATE INDEX [IX_Job_AwaitsBatchId] ON [XactJobs].[Job] ([AwaitsBatchId]) WHERE [AwaitsBatchId] IS NOT NULL;
 
--- the runs of a periodic job: only the rows of periodic jobs, so the other jobs' inserts and deletes don't write to it
-CREATE INDEX [IX_Job_PeriodicJobId] ON [XactJobs].[Job] ([PeriodicJobId]) WHERE [PeriodicJobId] IS NOT NULL;
+-- the runs of a periodic job, one pending run per version: only the rows of periodic jobs, so the other jobs' inserts and deletes
+-- don't write to it
+CREATE UNIQUE INDEX [IX_Job_PeriodicJobId_Version] ON [XactJobs].[Job] ([PeriodicJobId], [PeriodicJobVersion]) WHERE [PeriodicJobId] IS NOT NULL;
 
 -- ===============================
 -- Table storing execution history

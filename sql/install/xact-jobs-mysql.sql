@@ -16,7 +16,7 @@ CREATE TABLE `xact_jobs_job` (
   `type_name` longtext CHARACTER SET utf8mb4 NOT NULL,
   `method_name` longtext CHARACTER SET utf8mb4 NOT NULL,
   `method_args` longtext CHARACTER SET utf8mb4 NOT NULL,
-  `periodic_job_id` longtext CHARACTER SET utf8mb4 NULL,
+  `periodic_job_id` varchar(255) CHARACTER SET utf8mb4 NULL,
   `cron_expression` longtext CHARACTER SET utf8mb4 NULL,
   `error_count` int NOT NULL,
   `periodic_job_version` int NULL,
@@ -34,6 +34,9 @@ CREATE TABLE `xact_jobs_job` (
 -- batches and continuations
 CREATE INDEX `ix_job_batch_id` ON `xact_jobs_job` (`batch_id`);
 CREATE INDEX `ix_job_awaits_batch_id` ON `xact_jobs_job` (`awaits_batch_id`);
+
+-- the runs of a periodic job, one pending run per version. MySQL has no filtered indexes: every job writes to it
+CREATE UNIQUE INDEX `ix_job_periodic_job_id_version` ON `xact_jobs_job` (`periodic_job_id`, `periodic_job_version`);
 
 -- ===============================
 -- Table storing execution history

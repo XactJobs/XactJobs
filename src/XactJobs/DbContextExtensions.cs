@@ -267,7 +267,9 @@ namespace XactJobs
         /// <para>
         /// Pausing removes the pending runs that are not running at the moment, so a paused job doesn't fill the history with skipped runs.
         /// A run in progress finishes, and doesn't schedule the next one if the job is still paused by then.
-        /// Resuming schedules the next run, unless there already is one.
+        /// Resuming schedules the next run, unless there already is one. If it's resumed twice at the same time, the second save fails
+        /// with a <see cref="DbUpdateException"/> for which <see cref="DbExceptionExtensions.IsUniqueKeyViolation"/> is true: a periodic
+        /// job has at most one pending run of each version.
         /// </para>
         /// The active state is kept when the periodic job is ensured again, e.g. when the application starts.
         /// </summary>

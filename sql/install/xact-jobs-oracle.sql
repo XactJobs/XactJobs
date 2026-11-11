@@ -33,9 +33,9 @@ CREATE TABLE "XACT_JOBS_JOB" (
 CREATE INDEX "IX_JOB_BATCH_ID" ON "XACT_JOBS_JOB" ("BATCH_ID");
 CREATE INDEX "IX_JOB_AWAITS_BATCH_ID" ON "XACT_JOBS_JOB" ("AWAITS_BATCH_ID");
 
--- the runs of a periodic job: Oracle doesn't store the rows where all the index's columns are null, so it holds only the rows
--- of periodic jobs, and the other jobs' inserts and deletes don't write to it
-CREATE INDEX "IX_JOB_PERIODIC_JOB_ID" ON "XACT_JOBS_JOB" ("PERIODIC_JOB_ID");
+-- the runs of a periodic job, one pending run per version: Oracle doesn't store the rows where all the index's columns are null,
+-- so it holds only the rows of periodic jobs, and the other jobs' inserts and deletes don't write to it
+CREATE UNIQUE INDEX "IX_JOB_PERIODIC_JOB_ID_VERSION" ON "XACT_JOBS_JOB" ("PERIODIC_JOB_ID", "PERIODIC_JOB_VERSION");
 
 -- ===============================
 -- Table storing execution history

@@ -407,7 +407,14 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             return PeriodicJobNotFound(id);
         }
 
-        await db.SaveChangesAsync(ct);
+        if (!isActive)
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        else if (!await TrySavePeriodicRunAsync(ct))
+        {
+            return ActionResultDto.Conflict($"Periodic job '{id}' got a pending run at the same time: it was resumed already.");
+        }
 
         return ActionResultDto.Done(isActive ? $"Periodic job '{id}' resumed." : $"Periodic job '{id}' paused.");
     }
@@ -459,11 +466,35 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         db.Set<XactJob>().Add(job);
 
-        await db.SaveChangesAsync(ct);
+        if (!await TrySavePeriodicRunAsync(ct))
+        {
+            return ActionResultDto.Conflict($"Periodic job '{id}' got a pending run at the same time. Trigger it again to run it now.");
+        }
 
         NotifyQueue(job.Queue);
 
         return ActionResultDto.Done($"Periodic job '{id}' triggered as job #{job.Id}.");
+    }
+
+    /// <summary>
+    /// Saves a new run of a periodic job. The job table has one pending run per periodic job and version (a unique index): if another
+    /// one was added at the same time (by another request, the app, or the scheduler's reconciliation), the save fails.
+    /// </summary>
+    /// <returns>False if it failed because of that run.</returns>
+    private async Task<bool> TrySavePeriodicRunAsync(CancellationToken ct)
+    {
+        try
+        {
+            await db.SaveChangesAsync(ct);
+
+            return true;
+        }
+        catch (DbUpdateException ex) when (ex.IsUniqueKeyViolation())
+        {
+            db.ChangeTracker.Clear();
+
+            return false;
+        }
     }
 
     public async Task<ActionResultDto> DeletePeriodicJobAsync(string id, CancellationToken ct = default)

@@ -94,7 +94,7 @@ namespace XactJobs.EntityConfigurations
                 .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColAwaitsBatchId}")
                 .WhereNotNull(_sqlDialect, _sqlDialect.ColAwaitsBatchId);
 
-            ConfigurePeriodicJobIdIndex(builder);
+            ConfigurePeriodicJobIndex(builder);
 
             if (_isOfficialMySqlProvider)
             {
@@ -112,17 +112,29 @@ namespace XactJobs.EntityConfigurations
         }
 
         /// <summary>
-        /// To find the runs of a periodic job (e.g. when it's paused, or ensured at start), without reading the whole table.
-        /// Only the rows of periodic jobs, one pending run each: the other jobs' inserts and deletes don't write to it.
+        /// One pending run per periodic job and version: a second one fails to save with a unique key violation (e.g. two resumes at
+        /// the same time), instead of running the job twice. It also finds the runs of a periodic job (e.g. when it's paused, or ensured
+        /// at start) without reading the whole table.
+        /// Filtered to the rows of periodic jobs where the database can, so the other jobs' inserts and deletes don't write to it.
+        /// Oracle leaves out the rows where all its columns are null on its own. MySQL has no filtered indexes: there it's a full one,
+        /// written by every job, on a column that has to be a varchar to be indexed.
         /// </summary>
-        private void ConfigurePeriodicJobIdIndex(EntityTypeBuilder<XactJob> builder)
+        private void ConfigurePeriodicJobIndex(EntityTypeBuilder<XactJob> builder)
         {
-            // MySQL has no filtered indexes, and a full one would be written by every job
-            if (_sqlDialect is MySqlDialect) return;
+            if (_sqlDialect is MySqlDialect)
+            {
+                builder.Property(x => x.PeriodicJobId).HasMaxLength(PeriodicJobIdMaxLengthMySql);
+            }
 
-            builder.HasIndex(x => x.PeriodicJobId)
-                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}")
+            builder.HasIndex(x => new { x.PeriodicJobId, x.PeriodicJobVersion })
+                .IsUnique()
+                .HasDatabaseName($"{_sqlDialect.IndexPrefix}_{_sqlDialect.XactJobTable}_{_sqlDialect.ColPeriodicJobId}_{_sqlDialect.ColVersion}")
                 .WhereNotNull(_sqlDialect, _sqlDialect.ColPeriodicJobId);
         }
+
+        /// <summary>
+        /// The length of the periodic table's id on MySQL (a string key is a varchar(255)).
+        /// </summary>
+        private const int PeriodicJobIdMaxLengthMySql = 255;
     }
 }

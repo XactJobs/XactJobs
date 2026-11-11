@@ -56,6 +56,68 @@ VALUES (42, '{0}', 2, '2026-01-01 00:00:00', 'T', 'M()', '[]', 'q', 1, 'b')";
         Assert.Equal(2L, await command.ExecuteScalarAsync());
     }
 
+    private const string InsertPeriodicRun = @"
+INSERT INTO ""xact_jobs_job"" (""scheduled_at"", ""queue"", ""type_name"", ""method_name"", ""method_args"", ""periodic_job_id"", ""error_count"", ""periodic_job_version"")
+VALUES ('{0}', 'q', 'T', 'M()', '[]', 'p', 0, {1})";
+
+    [Fact]
+    public async Task V060_GivesTheRunsWithoutAVersionTheFirst()
+    {
+        await using var connection = await OpenBeforeV060Async();
+
+        await ExecuteAsync(connection, string.Format(InsertPeriodicRun, "2026-01-01 00:00:00", "NULL"));
+
+        await ExecuteAsync(connection, await File.ReadAllTextAsync(GetV060Script()));
+
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = @"SELECT ""periodic_job_version"" FROM ""xact_jobs_job"" WHERE ""periodic_job_id"" = 'p'";
+
+        Assert.Equal(1L, await command.ExecuteScalarAsync());
+
+        // a second run of that version is refused
+        var ex = await Assert.ThrowsAsync<SqliteException>(() => ExecuteAsync(connection, string.Format(InsertPeriodicRun, "2026-01-01 00:01:00", "1")));
+
+        Assert.True(ex.IsUniqueKeyViolation());
+    }
+
+    [Fact]
+    public async Task V060_FailsOnTwoRunsOfAVersion_BeforeChangingTheOtherTables()
+    {
+        await using var connection = await OpenBeforeV060Async();
+
+        // the same version: with and without it
+        await ExecuteAsync(connection, string.Format(InsertPeriodicRun, "2026-01-01 00:00:00", "1"));
+        await ExecuteAsync(connection, string.Format(InsertPeriodicRun, "2026-01-01 00:01:00", "NULL"));
+
+        var ex = await Assert.ThrowsAsync<SqliteException>(async () => await ExecuteAsync(connection, await File.ReadAllTextAsync(GetV060Script())));
+
+        Assert.True(ex.IsUniqueKeyViolation());
+
+        // the history doesn't have the new columns yet: the script can run again once the extra run is deleted
+        await using var command = connection.CreateCommand();
+
+        command.CommandText = @"SELECT COUNT(*) FROM pragma_table_info('xact_jobs_job_history') WHERE name = 'state'";
+
+        Assert.Equal(0L, await command.ExecuteScalarAsync());
+    }
+
+    private static string GetV060Script() => Assert.Single(GetVersionedScripts(), s => s.EndsWith("v0.6.0.sql"));
+
+    private static async Task<SqliteConnection> OpenBeforeV060Async()
+    {
+        var connection = new SqliteConnection("Data Source=:memory:");
+
+        await connection.OpenAsync();
+
+        foreach (var script in GetVersionedScripts().TakeWhile(s => !s.EndsWith("v0.6.0.sql")))
+        {
+            await ExecuteAsync(connection, await File.ReadAllTextAsync(script));
+        }
+
+        return connection;
+    }
+
     private static async Task ExecuteAsync(SqliteConnection connection, string sql)
     {
         await using var command = connection.CreateCommand();

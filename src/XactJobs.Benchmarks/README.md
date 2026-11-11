@@ -86,3 +86,11 @@ XactJobs overhead                    ...
       --sqlserver "Server=127.0.0.1;User ID=sa;Password=Bench_pass1!;TrustServerCertificate=True"
   docker rm -f xactjobs-bench-mssql
   ```
+- `--mysql <connection string>` does the same on MySQL, with the official provider (MySql.EntityFrameworkCore): a new `bench_…` database for each drain, dropped at the end. The user needs to create and drop databases. For example:
+
+  ```bash
+  docker run -d --name xactjobs-bench-mysql -e MYSQL_ROOT_PASSWORD=bench -p 127.0.0.1:3306:3306 mysql:8.4.13
+  dotnet run --no-build -c Release -f net10.0 --project src/XactJobs.Benchmarks -- drain --jobs 10000 --runs 3 --workers 2 --parallelism 4 \
+      --mysql "Server=127.0.0.1;User ID=root;Password=bench"
+  docker rm -f xactjobs-bench-mysql
+  ```

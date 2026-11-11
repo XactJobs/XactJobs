@@ -36,8 +36,9 @@ CREATE INDEX "ix_job_awaits_batch_id" ON "xact_jobs_job" ("awaits_batch_id") WHE
 -- the claims look for a queue's due jobs, oldest first: without this index, every claim reads and sorts the whole table
 CREATE INDEX "ix_job_queue_scheduled_at" ON "xact_jobs_job" ("queue", "scheduled_at");
 
--- the runs of a periodic job: only the rows of periodic jobs, so the other jobs' inserts and deletes don't write to it
-CREATE INDEX "ix_job_periodic_job_id" ON "xact_jobs_job" ("periodic_job_id") WHERE "periodic_job_id" IS NOT NULL;
+-- the runs of a periodic job, one pending run per version: only the rows of periodic jobs, so the other jobs' inserts and deletes
+-- don't write to it
+CREATE UNIQUE INDEX "ix_job_periodic_job_id_version" ON "xact_jobs_job" ("periodic_job_id", "periodic_job_version") WHERE "periodic_job_id" IS NOT NULL;
 
 -- ===============================
 -- Table storing execution history

@@ -39,7 +39,6 @@ namespace XactJobs.DependencyInjection
                         .ConfigureAwait(false);
 
                     periodicJobsEnsured = true;
-
                     await Task.Delay(ReconciliationInterval, stoppingToken)
                         .ConfigureAwait(false);
                 }
@@ -47,6 +46,13 @@ namespace XactJobs.DependencyInjection
                 {
                     // stopping: a cancelled command can also throw the provider's own exception (SqlClient's SqlException)
                     return;
+                }
+                catch (Exception ex) when (ex.IsUniqueKeyViolation())
+                {
+                    // a periodic job got its pending run at the same time, outside of the cycle's lock (e.g. resumed, or ensured by the
+                    // app): the unique index of the runs refused the cycle's one, and the cycle was rolled back. Again right away: it
+                    // finds that run, and doesn't schedule another
+                    Logger.LogDebug(ex, "A periodic job got a pending run at the same time, running the cycle again");
                 }
                 catch (Exception ex)
                 {

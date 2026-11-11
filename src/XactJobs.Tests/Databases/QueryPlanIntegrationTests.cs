@@ -48,13 +48,7 @@ public abstract class QueryPlanIntegrationTests(DatabaseFixture fixture) : IAsyn
     public Task DashboardJobLookups_UseThePrimaryKey() => _scenarios.DashboardJobLookups_UseThePrimaryKey();
 
     [DockerFact]
-    public async Task PeriodicJobQueries_UseThePeriodicJobIndex()
-    {
-        // MySQL has no index of the periodic job column (no filtered indexes, and a full one would be written by every job)
-        if (fixture.Dialect is XactJobs.Internal.SqlDialects.MySqlDialect) return;
-
-        await _scenarios.PeriodicJobQueries_UseThePeriodicJobIndex();
-    }
+    public Task PeriodicJobQueries_UseThePeriodicJobIndex() => _scenarios.PeriodicJobQueries_UseThePeriodicJobIndex();
 
     [DockerFact]
     public Task BatchQueries_UseTheBatchIndexes() => _scenarios.BatchQueries_UseTheBatchIndexes();

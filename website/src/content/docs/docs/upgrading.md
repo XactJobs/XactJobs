@@ -32,6 +32,13 @@ v0.6.0 also keeps a job's id across its retries and the dashboard's *Run now* (t
 a new one), so the history has a row per attempt with the same id. On SQLite, the script copies the history into a table whose primary key
 is the id and the time it was processed, as on the other databases: without it, the second attempt of a job can't be recorded.
 
+The script also adds a unique index on the periodic job and its version in the job table, so a periodic job has at most one pending run
+of each version (see [One pending run](../scheduling/#one-pending-run)). It replaces the index of the periodic job column. Runs from before v0.1.4, without a
+version, get version 1, which is how XactJobs reads them. If a periodic job already has two pending runs of one version, creating the
+index fails: run the script so that it stops at the first error, delete the extra runs (the script has the query that finds them), and run
+it again. On MySQL, which has no filtered indexes, it's a full index, and the script changes the column from `longtext`, which can't be
+indexed, to `varchar(255)`, the type of the periodic job's id: that copies the job table.
+
 ## v0.5.0
 
 Run the script first: it adds a column for the trace that enqueued a job (see [Metrics, traces and logs](../observability/#traces)),
