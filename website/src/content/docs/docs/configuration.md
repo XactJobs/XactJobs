@@ -62,13 +62,13 @@ it removes the cleanup job when it starts. Versions before 0.3.0 always added it
 ## The model
 
 ```csharp
-modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, excludeFromMigrations: true, schema: null);
+modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, includeInMigrations: false, schema: null);
 ```
 
 | Parameter | Default | Description |
 |---|---|---|
 | `providerName` | | `Database.ProviderName`: the entity configurations depend on the database |
-| `excludeFromMigrations` | `true` | `false` includes the XactJobs tables in your EF migrations |
+| `includeInMigrations` | `false` | `true` includes the XactJobs tables in your EF migrations, instead of the [SQL scripts](../getting-started/#2-create-the-tables) |
 | `schema` | `xact_jobs` on PostgreSQL, `XactJobs` on SQL Server | The schema of XactJobs' tables, for [several apps in one database](../databases/#several-apps-in-one-database). PostgreSQL and SQL Server only |
 
 ## Dashboard

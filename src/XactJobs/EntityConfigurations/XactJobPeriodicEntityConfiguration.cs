@@ -12,18 +12,18 @@ namespace XactJobs.EntityConfigurations
     public class XactJobPeriodicEntityConfiguration : IEntityTypeConfiguration<XactJobPeriodic>
     {
         private readonly ISqlDialect _sqlDialect;
-        private readonly bool _excludeFromMigrations;
+        private readonly bool _includeInMigrations;
 
         /// <param name="schema">The schema of XactJobs' tables, or null for the default (PostgreSQL and SQL Server only).</param>
-        public XactJobPeriodicEntityConfiguration(string? providerName, bool excludeFromMigrations = true, string? schema = null)
+        public XactJobPeriodicEntityConfiguration(string? providerName, bool includeInMigrations = false, string? schema = null)
         {
             _sqlDialect = providerName.ToSqlDialect(schema);
-            _excludeFromMigrations = excludeFromMigrations;
+            _includeInMigrations = includeInMigrations;
         }
 
         public void Configure(EntityTypeBuilder<XactJobPeriodic> builder)
         {
-            builder.Metadata.SetIsTableExcludedFromMigrations(_excludeFromMigrations);
+            builder.Metadata.SetIsTableExcludedFromMigrations(!_includeInMigrations);
 
             if (_sqlDialect.HasSchemaSupport)
             {

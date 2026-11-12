@@ -15,7 +15,7 @@ public class UiTestDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, excludeFromMigrations: false);
+        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, includeInMigrations: true);
     }
 }
 
