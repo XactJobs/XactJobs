@@ -216,6 +216,6 @@ public sealed class AppBDbContext(DbContextOptions<AppBDbContext> options) : DbC
 
         var schema = Database.ProviderName!.Contains("Npgsql") ? "app_b" : "AppB";
 
-        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, excludeFromMigrations: false, schema: schema);
+        modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, includeInMigrations: true, schema: schema);
     }
 }

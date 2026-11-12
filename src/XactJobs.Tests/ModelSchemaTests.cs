@@ -98,7 +98,7 @@ public class ModelSchemaTests
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, excludeFromMigrations: false, schema: schema);
+            modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName, includeInMigrations: true, schema: schema);
         }
 
         public string? Schema => schema;

@@ -199,7 +199,7 @@ const shots = [
           <h3>Create the tables</h3>
           <p>Only three: the jobs, the periodic jobs and the history. Run the install script for your database, from <a href={`${GITHUB_URL}/tree/main/sql`}>sql/</a>.</p>
           <DbTabs id="create" tabs={createTables} />
-          <p>Or include them in your EF migrations, with <code>ApplyXactJobsConfigurations(..., excludeFromMigrations: false)</code>.</p>
+          <p>Or include them in your EF migrations, with <code>ApplyXactJobsConfigurations(..., includeInMigrations: true)</code>.</p>
           <a class="step-more" href={docs('getting-started') + '#2-create-the-tables'}>Install and upgrade scripts</a>
         </li>
         <li class="step">

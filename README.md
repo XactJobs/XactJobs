@@ -427,7 +427,7 @@ public class UserDbContext: DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyXactJobsConfigurations(Database.ProviderName,
-            excludeFromMigrations: false); // <--- key part here
+            includeInMigrations: true); // <--- key part here
 
         // Apply your entity configurations...
     }
