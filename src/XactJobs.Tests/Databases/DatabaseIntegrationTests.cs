@@ -874,6 +874,44 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         Assert.False(_logs.HasErrors, _logs.ToString());
     }
 
+    /// <summary>
+    /// The time zone is stored with the periodic job, and read back as the same definition: ensuring it again keeps its version.
+    /// </summary>
+    [DockerFact]
+    public async Task PeriodicJob_InATimeZone_RoundTrips_AndKeepsItsVersion()
+    {
+        var host = CreateHost();
+
+        var schedule = new XactCronSchedule("0 0 9 * * *", "America/New_York");
+
+        var version = await WithDbAsync(host, async db =>
+        {
+            var periodicJob = await db.JobEnsurePeriodicAsync<IntegrationJob>(x => x.Run(), "time-zone", schedule, CancellationToken.None);
+
+            await db.SaveChangesAsync();
+
+            return periodicJob.Version;
+        });
+
+        var (stored, scheduledAt) = await WithDbAsync(host, async db =>
+        {
+            var periodicJob = await db.JobEnsurePeriodicAsync<IntegrationJob>(x => x.Run(), "time-zone", schedule, CancellationToken.None);
+
+            await db.SaveChangesAsync();
+
+            var run = await db.Jobs.SingleAsync(j => j.PeriodicJobId == "time-zone");
+
+            return (periodicJob, run.ScheduledAt);
+        });
+
+        Assert.Equal("America/New_York", stored.TimeZone);
+        Assert.Equal(version, stored.Version);
+
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(scheduledAt, DateTimeKind.Utc), TimeZoneInfo.FindSystemTimeZoneById("America/New_York"));
+
+        Assert.Equal((9, 0, 0), (local.Hour, local.Minute, local.Second));
+    }
+
     [DockerFact]
     public async Task WithRetryingExecutionStrategy_PeriodicJobsFromOptionsAreCreated()
     {

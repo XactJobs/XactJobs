@@ -273,4 +273,63 @@ public class SqlitePeriodicJobTests : IDisposable
         Assert.Equal(3, periodicJobCount);
         Assert.Equal(3, scheduledJobCount); // Each periodic job creates a scheduled job
     }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_InATimeZone_StoresIt_AndRunsAtTheLocalTime()
+    {
+        var zagreb = TimeZoneInfo.FindSystemTimeZoneById("Europe/Zagreb");
+
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "zagreb", new XactCronSchedule("0 0 9 * * *", "Europe/Zagreb"), CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        _context.ChangeTracker.Clear();
+
+        Assert.Equal("Europe/Zagreb", (await _context.PeriodicJobs.SingleAsync()).TimeZone);
+
+        var run = await _context.Jobs.SingleAsync();
+        var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(run.ScheduledAt, DateTimeKind.Utc), zagreb);
+
+        Assert.Equal((9, 0, 0), (local.Hour, local.Minute, local.Second));
+        Assert.True(run.ScheduledAt > DateTime.UtcNow);
+    }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_WithoutATimeZone_StoresNull()
+    {
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "utc", "0 0 9 * * *", CancellationToken.None);
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "utc-explicit", new XactCronSchedule("0 0 9 * * *", "UTC"), CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.All(await _context.PeriodicJobs.ToListAsync(), p => Assert.Null(p.TimeZone));
+    }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_ChangingTheTimeZone_ChangesTheDefinition()
+    {
+        var utc = await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "moving", "0 0 9 * * *", CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        var versionInUtc = utc.Version;
+
+        // the same schedule (UTC is no time zone) keeps the version and the run
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "moving", new XactCronSchedule("0 0 9 * * *", TimeZoneInfo.Utc), CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.Equal(versionInUtc, (await _context.PeriodicJobs.SingleAsync()).Version);
+        Assert.Equal(1, await _context.Jobs.CountAsync());
+
+        // a time zone is a new version, with a run of its own
+        var zoned = await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "moving", new XactCronSchedule("0 0 9 * * *", "America/New_York"), CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.Equal("America/New_York", zoned.TimeZone);
+        Assert.NotEqual(versionInUtc, zoned.Version);
+        Assert.True(await _context.Jobs.AnyAsync(j => j.PeriodicJobId == "moving" && j.PeriodicJobVersion == zoned.Version));
+    }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_RefusesADefaultSchedule()
+    {
+        await Assert.ThrowsAsync<ArgumentException>(() => _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "default", default(XactCronSchedule), CancellationToken.None));
+    }
 }

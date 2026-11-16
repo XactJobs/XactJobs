@@ -69,7 +69,7 @@ namespace XactJobs.Internal
             };
         }
 
-        internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, string id, string cronExp, string? queue)
+        internal static XactJobPeriodic FromExpressionPeriodic(LambdaExpression lambdaExp, string id, XactCronSchedule schedule, string? queue)
         {
             var (typeName, methodName, methodArgs) = Serialize(lambdaExp);
 
@@ -78,13 +78,14 @@ namespace XactJobs.Internal
             return new XactJobPeriodic(id,
                                        now,
                                        now,
-                                       cronExp,
+                                       schedule.CronExpression,
                                        typeName,
                                        methodName,
                                        methodArgs,
                                        queue ?? QueueNames.Default,
                                        isActive: true,
-                                       XactJobPeriodic.NewVersion());
+                                       XactJobPeriodic.NewVersion(),
+                                       schedule.TimeZone);
         }
 
         /// <summary>

@@ -43,9 +43,9 @@ namespace XactJobs.DependencyInjection
                                                              XactJobsOptionsBase<TDbContext> options,
                                                              CancellationToken stoppingToken)
         {
-            foreach (var (name, (lambdaExp, cronExp)) in options.PeriodicJobs)
+            foreach (var (name, (lambdaExp, schedule)) in options.PeriodicJobs)
             {
-                await db.JobAddOrUpdatePeriodicAsync(lambdaExp, name, cronExp, queueName, stoppingToken)
+                await db.JobAddOrUpdatePeriodicAsync(lambdaExp, name, schedule, queueName, stoppingToken)
                     .ConfigureAwait(false);
             }
         }

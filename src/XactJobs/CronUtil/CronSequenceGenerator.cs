@@ -26,8 +26,8 @@ namespace XactJobs.CronUtil
 
 		private bool _isIntervalBased;
 
-		public CronSequenceGenerator(string expression, string? timeZoneInfoId = null)
-			: this(expression, string.IsNullOrWhiteSpace(timeZoneInfoId) ? TimeZoneInfo.Local : TimeZoneInfo.FindSystemTimeZoneById(timeZoneInfoId))
+		public CronSequenceGenerator(string expression)
+			: this(expression, TimeZoneInfo.Utc)
 		{
 		}
 
@@ -39,78 +39,135 @@ namespace XactJobs.CronUtil
 			Parse();
         }
 
+		/// <summary>
+		/// The first time of the sequence after <paramref name="dateTimeUtc"/>, in whole seconds. The expression is matched with the
+		/// local times of the time zone. When the clocks go forward, the local times they skip give the end of the gap (once, for all
+		/// of them). When they go back, a local time that occurs twice gives the first one, and also the second one if the expression
+		/// has an interval in its seconds, minutes or hours, so that the interval goes on. Like Hangfire (Cronos) and Quartz.NET 4.
+		/// </summary>
 		public DateTime NextUtc(DateTime dateTimeUtc)
 		{
 			if (dateTimeUtc.Kind != DateTimeKind.Utc) throw new ArgumentException("Only UTC times can be used", nameof(dateTimeUtc));
 
 			var truncatedUtc = dateTimeUtc.TruncateToSeconds();
 
-			var dateTime = TimeZoneInfo.ConvertTimeFromUtc(truncatedUtc, _timeZoneInfo);
+			var local = DateTime.SpecifyKind(TimeZoneInfo.ConvertTimeFromUtc(truncatedUtc, _timeZoneInfo), DateTimeKind.Unspecified);
 
-			var offsets = new List<TimeSpan>();
-
-			if (_timeZoneInfo.IsAmbiguousTime(dateTime))
+			if (!_timeZoneInfo.IsAmbiguousTime(local))
 			{
-				offsets.AddRange(_timeZoneInfo.GetAmbiguousTimeOffsets(dateTime));
-			}
-			else
-			{
-				offsets.Add(_timeZoneInfo.GetUtcOffset(dateTime));
+				return ToUtc(FindNext(local.AddSeconds(1)));
 			}
 
-			var possibleResults = new List<DateTime?>();
+			// the clocks went back, or will go back soon: the local times between the start and the end of the overlap occur twice,
+			// first with the daylight offset, then with the standard one
+			var (daylightOffset, standardOffset) = GetAmbiguousOffsets(local);
 
-			DateTime nextDateTime, originalDateTime;
-			foreach (var offset in offsets) 
+			var transitionUtc = FindTransitionUtc(Utc(local - daylightOffset), Utc(local - standardOffset));
+
+			var overlapStart = Local(transitionUtc + standardOffset);
+			var overlapEnd = Local(transitionUtc + daylightOffset);
+
+			var next = FindNext(local.AddSeconds(1));
+
+			if (truncatedUtc < transitionUtc)
 			{
-				nextDateTime = originalDateTime = DateTime.SpecifyKind(truncatedUtc.Add(offset), DateTimeKind.Unspecified);
-				
-				DoNext(ref nextDateTime, nextDateTime.Year);
+				// the first time through the overlap
+				if (next < overlapEnd) return Utc(next - daylightOffset);
 
-				if (nextDateTime == originalDateTime)
+				if (_isIntervalBased)
 				{
-					// We arrived at the original timestamp - round up to the next whole second and try again...
-					nextDateTime = nextDateTime.AddSeconds(1);
-					DoNext(ref nextDateTime, nextDateTime.Year);
+					var second = FindNext(overlapStart);
+
+					if (second < overlapEnd) return Utc(second - standardOffset);
 				}
 
-				// try to skip invalid time for the time zone
-				while (_timeZoneInfo.IsInvalidTime(nextDateTime))
-				{
-					nextDateTime = nextDateTime.AddSeconds(1);
-					DoNext(ref nextDateTime, nextDateTime.Year);
-				}
+				return ToUtc(next);
+			}
 
-				if (_timeZoneInfo.IsAmbiguousTime(nextDateTime))
-				{
-					var nextOffsets = _timeZoneInfo.GetAmbiguousTimeOffsets(nextDateTime);
+			// the second time through the overlap
+			if (_isIntervalBased && next < overlapEnd) return Utc(next - standardOffset);
 
-					if (_isIntervalBased)
-					{
-						foreach (var nextOffset in nextOffsets)
-						{
-							possibleResults.Add(DateTime.SpecifyKind(nextDateTime.Subtract(nextOffset), DateTimeKind.Utc));
-						}
-					}
-					else
-                    {
-						// if the expression is not interval based (doesn't have */- in sec, min, hour field)
-						// we only use one of the intervals (the last one), which has the largest offset and yields smallest time after subtract.
-						possibleResults.Add(DateTime.SpecifyKind(nextDateTime.Subtract(nextOffsets.Last()), DateTimeKind.Utc));
-                    }
+			return ToUtc(FindNext(overlapEnd));
+		}
+
+		/// <summary>
+		/// The first local time of the sequence at or after <paramref name="local"/>.
+		/// </summary>
+		private DateTime FindNext(DateTime local)
+		{
+			var next = local;
+
+			DoNext(ref next, next.Year);
+
+			return next;
+		}
+
+		/// <summary>
+		/// The time of a local time of the sequence: the end of the gap for a time the clocks skip, the first one for a time that occurs
+		/// twice (the second one is found by <see cref="NextUtc"/> when it's needed).
+		/// </summary>
+		private DateTime ToUtc(DateTime local)
+		{
+			if (_timeZoneInfo.IsInvalidTime(local))
+			{
+				// the transition is within 14 hours (the largest offset) of the local time
+				var limit = TimeSpan.FromHours(15);
+
+				return FindTransitionUtc(Utc(local - limit), Utc(local + limit));
+			}
+
+			if (_timeZoneInfo.IsAmbiguousTime(local))
+			{
+				return Utc(local - GetAmbiguousOffsets(local).Daylight);
+			}
+
+			return Utc(local - _timeZoneInfo.GetUtcOffset(local));
+		}
+
+		private (TimeSpan Daylight, TimeSpan Standard) GetAmbiguousOffsets(DateTime local)
+		{
+			var offsets = _timeZoneInfo.GetAmbiguousTimeOffsets(local);
+
+			return (offsets.Max(), offsets.Min());
+		}
+
+		/// <summary>
+		/// The first whole second after <paramref name="fromUtc"/> with the offset of <paramref name="toUtc"/>, which differs from the
+		/// offset of <paramref name="fromUtc"/>: the time of the one transition between them.
+		/// </summary>
+		private DateTime FindTransitionUtc(DateTime fromUtc, DateTime toUtc)
+		{
+			var offset = _timeZoneInfo.GetUtcOffset(toUtc);
+
+			if (_timeZoneInfo.GetUtcOffset(fromUtc) == offset)
+			{
+				throw new InvalidOperationException($"No change of the offset of time zone '{_timeZoneInfo.Id}' between {fromUtc:O} and {toUtc:O}");
+			}
+
+			var low = fromUtc.TruncateToSeconds();
+			var high = toUtc.TruncateToSeconds();
+
+			// the offset at low differs, the offset at high is the new one
+			while (high - low > TimeSpan.FromSeconds(1))
+			{
+				var middle = low.AddSeconds(Math.Floor((high - low).TotalSeconds / 2));
+
+				if (_timeZoneInfo.GetUtcOffset(middle) == offset)
+				{
+					high = middle;
 				}
 				else
 				{
-					var nextOffset = _timeZoneInfo.GetUtcOffset(nextDateTime);
-					possibleResults.Add(DateTime.SpecifyKind(nextDateTime.Subtract(nextOffset), DateTimeKind.Utc));
+					low = middle;
 				}
 			}
 
-			return possibleResults
-				.OrderBy(utc => utc)
-				.FirstOrDefault(utc => utc > dateTimeUtc)
-				?? throw new Exception("Possible bug in code - couldn't find next cron time");
+			return high;
 		}
+
+		private static DateTime Utc(DateTime dateTime) => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+
+		private static DateTime Local(DateTime dateTime) => DateTime.SpecifyKind(dateTime, DateTimeKind.Unspecified);
 
 		/// <summary>
 		/// Determine whether the specified expression represents a valid cron pattern.
@@ -322,7 +379,7 @@ namespace XactJobs.CronUtil
 						bits.Set(i, true);
 					}
 
-					isInterval = range[0] != range[1];
+					isInterval |= range[0] != range[1];
 				}
 				else
 				{

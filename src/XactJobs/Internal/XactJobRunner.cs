@@ -1069,7 +1069,16 @@ namespace XactJobs.Internal
                 && periodicJob.IsCompatibleWith(job) 
                 && dbContext.Entry(periodicJob).State != EntityState.Deleted)
             {
-                dbContext.ScheduleNextRun(periodicJob);
+                try
+                {
+                    dbContext.ScheduleNextRun(periodicJob);
+                }
+                catch (Exception scheduleEx) when (scheduleEx is TimeZoneNotFoundException or InvalidTimeZoneException)
+                {
+                    // the run is recorded without its next one: the scheduler's reconciliation schedules it, on a node that knows the time zone
+                    _logger.LogError(scheduleEx, "{Queue}: Failed scheduling the next run of periodic job {Id}: this node doesn't know its time zone {TimeZone}",
+                        GetQueueDisplayName(), periodicJob.Id, periodicJob.TimeZone);
+                }
             }
 
             return status;

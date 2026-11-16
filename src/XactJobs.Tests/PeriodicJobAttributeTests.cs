@@ -39,8 +39,8 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
         Assert.Equal(["attr_a", "attr_b", "attr_static"], options.PeriodicJobs.Keys.Order());
         Assert.Equal(["attr_isolated"], options.IsolatedQueues[AttributeJobs.IsolatedQueue].PeriodicJobs.Keys);
 
-        Assert.Equal(CronExpressions.EverySecond, options.PeriodicJobs["attr_a"].CronExpression);
-        Assert.Equal(CronExpressions.Daily, options.PeriodicJobs["attr_static"].CronExpression);
+        Assert.Equal(CronExpressions.EverySecond, options.PeriodicJobs["attr_a"].Schedule);
+        Assert.Equal(CronExpressions.Daily, options.PeriodicJobs["attr_static"].Schedule);
     }
 
     [Fact]
@@ -107,6 +107,7 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
     [InlineData(typeof(TwoStrings), "more than one string parameter")]
     [InlineData(typeof(ConfigWithoutString), "it has a config, but no string parameter for it")]
     [InlineData(typeof(InvalidCron), "invalid cron expression 'every day'")]
+    [InlineData(typeof(UnknownTimeZone), "unknown time zone 'Nowhere/Atlantis'")]
     [InlineData(typeof(EmptyId), "the id is empty")]
     [InlineData(typeof(DuplicateId), "the id is also on")]
     public void Find_RefusesWhatCantBeAPeriodicJob(Type type, string error)
@@ -119,6 +120,21 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
     }
 
     [Fact]
+    public void Find_GivesTheScheduleItsTimeZone()
+    {
+        var errors = new List<string>();
+
+        var definition = Assert.Single(XactPeriodicJobScanner.Find([typeof(InTimeZone)], errors));
+
+        Assert.Empty(errors);
+        Assert.Equal(new XactCronSchedule(CronExpressions.Daily, "Europe/Zagreb"), definition.Schedule);
+
+        var stored = XactJobSerializer.FromExpressionPeriodic(definition.JobExpression, definition.Id, definition.Schedule, null);
+
+        Assert.Equal("Europe/Zagreb", stored.TimeZone);
+    }
+
+    [Fact]
     public void Find_AcceptsAStringWithoutConfig_WhichGetsNull()
     {
         var errors = new List<string>();
@@ -127,7 +143,7 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
 
         Assert.Empty(errors);
 
-        var stored = XactJobSerializer.FromExpressionPeriodic(definition.JobExpression, definition.Id, definition.CronExpression, null);
+        var stored = XactJobSerializer.FromExpressionPeriodic(definition.JobExpression, definition.Id, definition.Schedule, null);
 
         Assert.Equal("[null]", stored.MethodArgs);
     }
@@ -266,6 +282,18 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
     private sealed class InvalidCron
     {
         [XactPeriodicJob("invalid_cron", "every day")]
+        public void Run() { }
+    }
+
+    private sealed class UnknownTimeZone
+    {
+        [XactPeriodicJob("unknown_time_zone", CronExpressions.Daily, TimeZone = "Nowhere/Atlantis")]
+        public void Run() { }
+    }
+
+    private sealed class InTimeZone
+    {
+        [XactPeriodicJob("in_time_zone", CronExpressions.Daily, TimeZone = "Europe/Zagreb")]
         public void Run() { }
     }
 

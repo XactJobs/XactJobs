@@ -14,7 +14,7 @@ namespace XactJobs.Internal
     /// </summary>
     internal static class XactPeriodicJobScanner
     {
-        internal sealed record Definition(string Id, string CronExpression, string? Queue, LambdaExpression JobExpression);
+        internal sealed record Definition(string Id, XactCronSchedule Schedule, string? Queue, LambdaExpression JobExpression);
 
         /// <summary>
         /// Adds the periodic jobs of the options' assemblies to the options: the default queue's, or their isolated queue's. Called once
@@ -54,7 +54,7 @@ namespace XactJobs.Internal
                     continue;
                 }
 
-                queueOptions.PeriodicJobs[definition.Id] = (definition.JobExpression, definition.CronExpression);
+                queueOptions.PeriodicJobs[definition.Id] = (definition.JobExpression, definition.Schedule);
             }
 
             if (errors.Count > 0)
@@ -102,7 +102,7 @@ namespace XactJobs.Internal
 
                         ids[attribute.Id] = method;
 
-                        definitions.Add(new Definition(attribute.Id, attribute.CronExpression, attribute.Queue, BuildExpression(type, method, attribute.Config)));
+                        definitions.Add(new Definition(attribute.Id, new XactCronSchedule(attribute.CronExpression, attribute.TimeZone), attribute.Queue, BuildExpression(type, method, attribute.Config)));
                     }
                 }
             }
@@ -161,6 +161,15 @@ namespace XactJobs.Internal
             catch (Exception ex)
             {
                 return $"invalid cron expression '{attribute.CronExpression}': {ex.Message}";
+            }
+
+            try
+            {
+                CronTimeZones.Normalize(attribute.TimeZone);
+            }
+            catch (Exception ex)
+            {
+                return $"unknown time zone '{attribute.TimeZone}': {ex.Message}";
             }
 
             return null;

@@ -951,6 +951,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             CreatedAt = p.CreatedAt,
             UpdatedAt = p.UpdatedAt,
             CronExpression = p.CronExpression,
+            TimeZone = p.TimeZone,
             TypeName = p.TypeName,
             MethodName = p.MethodName,
             Queue = p.Queue,

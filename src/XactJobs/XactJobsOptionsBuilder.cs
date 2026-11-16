@@ -70,27 +70,27 @@ namespace XactJobs
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob([InstantHandle] Expression<Action> jobExpression, string id, string cronExpression)
+        public TBuilder WithPeriodicJob([InstantHandle] Expression<Action> jobExpression, string id, XactCronSchedule schedule)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[id] = (jobExpression, schedule);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob<T>( [InstantHandle] Expression<Action<T>> jobExpression, string id, string cronExpression)
+        public TBuilder WithPeriodicJob<T>( [InstantHandle] Expression<Action<T>> jobExpression, string id, XactCronSchedule schedule)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[id] = (jobExpression, schedule);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob([InstantHandle] Expression<Func<Task>> jobExpression, string id, string cronExpression)
+        public TBuilder WithPeriodicJob([InstantHandle] Expression<Func<Task>> jobExpression, string id, XactCronSchedule schedule)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[id] = (jobExpression, schedule);
             return (this as TBuilder)!;
         }
 
-        public TBuilder WithPeriodicJob<T>([InstantHandle] Expression<Func<T, Task>> jobExpression, string id, string cronExpression)
+        public TBuilder WithPeriodicJob<T>([InstantHandle] Expression<Func<T, Task>> jobExpression, string id, XactCronSchedule schedule)
         {
-            Options.PeriodicJobs[id] = (jobExpression, cronExpression);
+            Options.PeriodicJobs[id] = (jobExpression, schedule);
             return (this as TBuilder)!;
         }
     }

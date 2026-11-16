@@ -18,7 +18,7 @@ namespace XactJobs
     /// </para>
     /// </summary>
     /// <param name="id">The periodic job's id: the same on every node, and unique among the attributes and <c>WithPeriodicJob</c>.</param>
-    /// <param name="cronExpression">The schedule, in UTC, with seconds, e.g. one of <see cref="CronExpressions"/>.</param>
+    /// <param name="cronExpression">The schedule, with seconds, e.g. one of <see cref="CronExpressions"/>: in UTC, or in <see cref="TimeZone"/>.</param>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = true, Inherited = false)]
     public sealed class XactPeriodicJobAttribute(string id, string cronExpression) : Attribute
     {
@@ -30,6 +30,12 @@ namespace XactJobs
         /// The queue: the default queue if it's not set, or an isolated queue, which must be configured.
         /// </summary>
         public string? Queue { get; set; }
+
+        /// <summary>
+        /// The time zone of the cron expression, e.g. Europe/Zagreb: UTC if it's not set. See <see cref="XactCronSchedule"/> for
+        /// daylight saving time.
+        /// </summary>
+        public string? TimeZone { get; set; }
 
         /// <summary>
         /// Passed to the method's string parameter, which it needs then. Stored with the periodic job's definition: changing it

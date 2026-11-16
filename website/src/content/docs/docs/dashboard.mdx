@@ -72,7 +72,7 @@ The other options (page size, title, refresh interval) are in the [configuration
     worker, it keeps the time the job was originally scheduled for
 - **Batches**: the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
-- **Periodic**: the periodic jobs, with their next run and their state
+- **Periodic**: the periodic jobs, with their schedule and its time zone, their next run and their state
   - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts
     again, even if an attribute, `WithPeriodicJob` or `JobEnsurePeriodic` defines it
   - *Resume* schedules the next run

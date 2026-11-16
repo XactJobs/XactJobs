@@ -134,8 +134,8 @@ dbContext.JobEnsurePeriodic<ReportSender>(
   that attempt, after its lease expired, gets the same value.
 - The dashboard's *Run now*, *Trigger* and *Retry* keep it too.
 
-The cron slot and `OriginallyScheduledAt` are in UTC, because cron expressions are evaluated in UTC. So a daily run at midnight in a time
-zone east of UTC, written as its UTC time (e.g. `0 0 22 * * *` for UTC+2), has the previous day's UTC date. If that's confusing, format
-the key with the full time, e.g. `:yyyyMMddHHmmss`.
+`OriginallyScheduledAt` is in UTC, also for a schedule in a [time zone](../periodic-jobs/#time-zones). So a daily run at midnight in a
+time zone east of UTC has the previous day's UTC date. Convert it to the schedule's time zone for the local date
+(`TimeZoneInfo.ConvertTimeFromUtc`), or format the key with the full time, e.g. `:yyyyMMddHHmmss`.
 
 [Idempotent external calls](../idempotent-external-calls/) shows how to use it.
