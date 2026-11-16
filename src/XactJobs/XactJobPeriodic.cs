@@ -30,6 +30,11 @@ namespace XactJobs
         public string CronExpression { get; private set; }
 
         /// <summary>
+        /// The time zone of the cron expression: an IANA id (e.g. Europe/Zagreb), or null for UTC. See <see cref="XactCronSchedule"/>.
+        /// </summary>
+        public string? TimeZone { get; private set; }
+
+        /// <summary>
         /// Assembly qualified name of the declaring type
         /// </summary>
         public string TypeName { get; private set; }
@@ -81,7 +86,8 @@ namespace XactJobs
                                string methodArgs,
                                string queue,
                                bool isActive,
-                               int version)
+                               int version,
+                               string? timeZone = null)
         {
             Id = id;
             CreatedAt = createdAt;
@@ -93,6 +99,7 @@ namespace XactJobs
             Queue = queue;
             IsActive = isActive;
             Version = version;
+            TimeZone = timeZone;
         }
 
         internal void UpdateDefinition(XactJobPeriodic job)
@@ -102,6 +109,7 @@ namespace XactJobs
             MethodName = job.MethodName;
             MethodArgs = job.MethodArgs;
             CronExpression = job.CronExpression;
+            TimeZone = job.TimeZone;
             Queue = job.Queue;
 
             var previousVersion = Version;
@@ -127,6 +135,7 @@ namespace XactJobs
                 && MethodName == job.MethodName 
                 && MethodArgs == job.MethodArgs 
                 && CronExpression == job.CronExpression 
+                && TimeZone == job.TimeZone
                 && Queue == job.Queue;
         }
 

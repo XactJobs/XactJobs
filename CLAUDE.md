@@ -180,6 +180,13 @@ XactJobs is a .NET library for background job processing with full database tran
 - `CronExpressions`: constants for attributes (`Cron`'s methods can't be attribute arguments)
 - Tests: `PeriodicJobAttributeTests`. The assembly scan uses `XactJobs.Tests.PeriodicJobs`, which must hold only valid attributes; the invalid ones are private nested types in the test assembly, checked with the scanner's internal `Find` (`InternalsVisibleTo` XactJobs.Tests), and that assembly is never scanned
 
+### Time Zones of Periodic Jobs
+
+- `XactCronSchedule` (public record struct): a cron expression and a time zone id. A string converts to it implicitly (UTC), so the ensure methods, `WithPeriodicJob` and `XactJobsOptions.PeriodicJobs` take it in place of the cron expression. `[XactPeriodicJob(..., TimeZone = "...")]` for attributes (a struct can't be an attribute argument)
+- `XactJobPeriodic.TimeZone` (`time_zone`, v0.8.0, at most `CronTimeZones.MaxIdLength`): null is UTC. Only on the periodic table: a change of it is a new version (`IsCompatibleWith`), which already makes the pending run of the old one incompatible. `CronTimeZones.Normalize` stores UTC (or a zone with its rules) as null, so it doesn't change the definition of existing jobs, and a Windows id as its IANA id
+- `ScheduleNextRun` builds the generator with `CronTimeZones.Find`. A node without the zone (no tzdata) throws `TimeZoneNotFoundException`: the runner catches it after a run (logs, no next run), the reconciliation schedules it on a node that knows the zone
+- `CronSequenceGenerator.NextUtc` matches the zone's local times, like Hangfire (Cronos) and Quartz.NET 4: times in a spring-forward gap run once, at the end of the gap; times that occur twice run the first time, and the second time too if the seconds, minutes or hours have an interval (`*`, a range or a step, also in a list). `CronSequenceGeneratorTests` has fixed 2025 transitions (Zagreb, New York, Sydney, Lord Howe's half hour)
+
 ### Periodic Job Scheduler
 
 - `XactJobsCronScheduler` ensures the periodic jobs from the options at start, and reconciles them every interval, in a transaction that holds a lock (`ISqlDialect.AcquireTableLockAsync`), so that nodes don't do it at the same time

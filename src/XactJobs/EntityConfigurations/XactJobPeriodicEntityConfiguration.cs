@@ -47,6 +47,9 @@ namespace XactJobs.EntityConfigurations
 
             builder.Property(x => x.CronExpression).HasColumnName(_sqlDialect.ColCronExpression);
 
+            builder.Property(x => x.TimeZone).HasColumnName(_sqlDialect.ColTimeZone)
+                .HasMaxLength(CronUtil.CronTimeZones.MaxIdLength);
+
             builder.Property(x => x.TypeName).HasColumnName(_sqlDialect.ColTypeName);
             builder.Property(x => x.MethodName).HasColumnName(_sqlDialect.ColMethodName);
             builder.Property(x => x.MethodArgs).HasColumnName(_sqlDialect.ColMethodArgs);

@@ -80,11 +80,12 @@ dbContext.SaveChanges();
 ```
 
 Ensuring it again with another definition updates it. `JobEnsurePeriodicAsync` does the same with an async lookup, and both have an
-overload with a queue before the cron expression. With several nodes, see [Several nodes](#several-nodes).
+overload with a queue before the schedule. With several nodes, see [Several nodes](#several-nodes).
 
 ## Cron expressions
 
-Cron expressions have 6 fields, starting with the seconds: `second minute hour day-of-month month day-of-week`, evaluated in UTC.
+Cron expressions have 6 fields, starting with the seconds: `second minute hour day-of-month month day-of-week`, evaluated in UTC,
+or in the schedule's [time zone](#time-zones).
 `CronExpressions` has constants for attributes, and the `Cron` class builds others:
 
 | Helper | Expression |
@@ -96,6 +97,53 @@ Cron expressions have 6 fields, starting with the seconds: `second minute hour d
 | `Cron.Daily(new TimeSpan(9, 30, 0))` | `0 30 9 * * *` |
 | `Cron.Weekly(DayOfWeek.Monday)` | `0 0 0 * * 1` |
 | `Cron.Weekly(DayOfWeek.Monday, new TimeSpan(8, 0, 0), DayOfWeek.Thursday)` | `0 0 8 * * 1,4` |
+
+## Time zones
+
+Wherever a cron expression goes, an `XactCronSchedule` can go instead, with the expression and a time zone. A cron expression on its own
+is in UTC.
+
+```csharp
+public class ReportJobs
+{
+    // every day at 9:00 in Zagreb, in winter and in summer
+    [XactPeriodicJob("daily_report", "0 0 9 * * *", TimeZone = "Europe/Zagreb")]
+    public Task SendDailyReportAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public Task ExportAsync(string region, CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+builder.Services.AddXactJobs<AppDbContext>(options =>
+{
+    options.WithPeriodicJobsFromAssemblyOf<ReportJobs>();
+
+    options.WithPeriodicJob<ReportJobs>(
+        x => x.ExportAsync("us", CancellationToken.None),
+        "export_us",
+        new XactCronSchedule(Cron.Daily(new TimeSpan(6, 0, 0)), "America/New_York"));
+});
+
+dbContext.JobEnsurePeriodic<ReportJobs>(
+    x => x.ExportAsync("apac", CancellationToken.None),
+    "export_apac",
+    new XactCronSchedule(Cron.Daily(new TimeSpan(9, 30, 0)), "Australia/Sydney"));
+```
+
+- The time zone is stored by its IANA id (e.g. `Europe/Zagreb`). A Windows id is stored as its IANA id when the system can convert it,
+  and UTC, or a zone with the same rules, as no time zone. An unknown id throws `TimeZoneNotFoundException` (`AddXactJobs` lists it with
+  the other problems of the attributes). `new XactCronSchedule(expression, TimeZoneInfo)` takes a `TimeZoneInfo` too.
+- Every node that runs the jobs must know the time zone: on Linux, the `tzdata` package, which some container images (e.g. Alpine) leave
+  out. A node that doesn't know it logs an error, and leaves the next run to a node that does (the [reconciliation](#reconciliation)).
+- Changing the time zone changes the definition (a new version), like changing the expression.
+
+When the clocks change for daylight saving time, it works like Hangfire and Quartz.NET 4:
+
+- Going forward, the times they skip run once, at the end of the gap: a job at 2:30 runs at 3:00 on the day 2:00 becomes 3:00.
+- Going back, a time that occurs twice runs the first time only, unless the expression has an interval in its seconds, minutes or hours
+  (`*`, a range or a step, e.g. `0 */15 * * * *` or `0 0 * * * *`): it then runs both times, so the interval goes on in real time.
+
+`XactJobContext.OriginallyScheduledAt`, a run's cron slot, is in UTC also then: convert it with `TimeZoneInfo.ConvertTimeFromUtc` for the
+local date.
 
 ## Several nodes
 

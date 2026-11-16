@@ -42,6 +42,7 @@ namespace XactJobs.Internal.SqlDialects
         public string ColBatchId { get; } = "BATCH_ID";
         public string ColTraceParent { get; } = "TRACE_PARENT";
         public string ColState { get; } = "STATE";
+        public string ColTimeZone { get; } = "TIME_ZONE";
         public string ColPreviousState { get; } = "PREVIOUS_STATE";
         public string ColAwaitsBatchId { get; } = "AWAITS_BATCH_ID";
         public string ColContinuationCondition { get; } = "CONTINUATION_CONDITION";

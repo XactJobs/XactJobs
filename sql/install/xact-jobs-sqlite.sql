@@ -1,4 +1,4 @@
--- XactJobs v0.6.0, SQLite: the whole schema, for a new installation.
+-- XactJobs v0.8.0, SQLite: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -92,5 +92,7 @@ CREATE TABLE "xact_jobs_job_periodic" (
   "is_active" INTEGER NOT NULL,
   "version" INTEGER NOT NULL DEFAULT 1,
   -- the state the last completed run left for the next one (XactJobContext.PeriodicState), at most 2000 characters
-  "state" TEXT NULL
+  "state" TEXT NULL,
+  -- the time zone of the cron expression: an IANA id (e.g. Europe/Zagreb), or null for UTC
+  "time_zone" TEXT NULL
 );

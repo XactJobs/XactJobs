@@ -6,6 +6,8 @@ public record PeriodicJobDto
     public DateTime CreatedAt { get; init; }
     public DateTime UpdatedAt { get; init; }
     public string CronExpression { get; init; } = "";
+    /// <summary>The time zone of the cron expression (an IANA id), or null for UTC.</summary>
+    public string? TimeZone { get; init; }
     public string TypeName { get; init; } = "";
     public string MethodName { get; init; } = "";
     public string Queue { get; init; } = "";
