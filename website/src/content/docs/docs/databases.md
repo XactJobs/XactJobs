@@ -20,6 +20,12 @@ each one (SQLite in-process, the others in containers).
 Run the scripts with `QUOTED_IDENTIFIER` and `ANSI_NULLS` on, which are SqlClient's and SSMS's defaults (`sqlcmd` needs `-I`): the job
 table has a filtered index. Writing to the table needs them on as well.
 
+SqlClient's connection pool doesn't reset a connection's isolation level: a connection your app left at `SERIALIZABLE` or `SNAPSHOT`
+(with `SET TRANSACTION ISOLATION LEVEL`, or a transaction started with that level) keeps it when it's used again. XactJobs' claims
+and transactions set `READ COMMITTED`, so they work on such connections. A job's code runs on your `DbContext`, at the level
+its connection has, like the rest of your app: set the level your code needs, or keep the connections of other levels in a pool of their
+own (a connection string that differs, such as another `Application Name`).
+
 ## PostgreSQL
 
 The job table is a high-churn queue: every job inserts, updates and deletes a row. Aggressive autovacuum settings for this table are

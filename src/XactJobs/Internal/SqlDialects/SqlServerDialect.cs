@@ -62,7 +62,13 @@ namespace XactJobs.Internal.SqlDialects
             return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchJobsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
         }
 
+        // The claims set their isolation level: SqlClient's pool doesn't reset it (sp_reset_connection keeps it), so a connection an app
+        // left at SERIALIZABLE or SNAPSHOT would come back with it, and READPAST is only allowed in READ COMMITTED and REPEATABLE READ
+        // (error 650). In the same batch, so it costs no round trip.
+        private const string ReadCommitted = "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;";
+
         public (string Sql, object[] Parameters) GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
+{ReadCommitted}
 WITH cte AS (
     SELECT TOP ({{0}}) [{ColId}], [{ColQueue}], [{ColScheduledAt}]
     FROM [{XactJobSchema}].[{XactJobTable}] WITH (UPDLOCK, READPAST, ROWLOCK)
@@ -92,6 +98,7 @@ INNER JOIN cte ON -- we need to join on the entire PK
         // row, and can miss a row that a retry or Run now moves (the scheduled time is part of the key) to a place it already passed.
         // Only that batch's range: other batches and other jobs aren't blocked.
         public (string Sql, object[] Parameters) GetFetchContinuationsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt) => ($@"
+{ReadCommitted}
 WITH cte AS (
     SELECT TOP ({{0}}) c.[{ColId}], c.[{ColQueue}], c.[{ColScheduledAt}]
     FROM [{XactJobSchema}].[{XactJobTable}] AS c WITH (UPDLOCK, READPAST, ROWLOCK)

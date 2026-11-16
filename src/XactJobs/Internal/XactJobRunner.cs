@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Data;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
@@ -680,7 +681,8 @@ namespace XactJobs.Internal
                 {
                     dbContext.ChangeTracker.Clear();
 
-                    await using var transaction = await dbContext.Database.BeginTransactionAsync(token)
+                    // an explicit level: a pooled connection keeps the one an app's transaction left on it (SqlClient doesn't reset it)
+                    await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token)
                         .ConfigureAwait(false);
 
                     dbContext.Attach(job);

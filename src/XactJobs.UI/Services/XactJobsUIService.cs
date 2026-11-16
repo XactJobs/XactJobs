@@ -1,3 +1,4 @@
+using System.Data;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using XactJobs.UI.Services.Models;
@@ -575,7 +576,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         {
             db.ChangeTracker.Clear();
 
-            await using var transaction = await db.Database.BeginTransactionAsync(token);
+            // an explicit level: a pooled connection keeps the one an app's transaction left on it (SqlClient doesn't reset it)
+            await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token);
 
             var now = DateTime.UtcNow;
 
