@@ -331,7 +331,108 @@ public abstract class MySqlIntegrationTests(MySqlFixtureBase fixture) : Database
 }
 
 [Collection(SqlServerCollection.Name)]
-public sealed class SqlServerIntegrationTests(SqlServerFixture fixture) : DatabaseIntegrationTests(fixture);
+public sealed class SqlServerIntegrationTests(SqlServerFixture fixture) : DatabaseIntegrationTests(fixture)
+{
+    // SqlClient's pool doesn't reset a session's isolation level (sp_reset_connection keeps it): a connection an app's transaction
+    // left at SERIALIZABLE comes back with it. The claims use READPAST, which SERIALIZABLE refuses (error 650).
+
+    private const int PoolSize = 3;
+    private const string LeakQueue = "leak-test";
+
+    private static readonly SqlServerDialect Dialect = new();
+
+    [DockerFact]
+    public async Task Claims_OnConnectionsLeftAtSerializable_Succeed()
+    {
+        await LeaveThePoolAtSerializableAsync();
+
+        await using (var db = CreateLeakyDb())
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddMinutes(-1), "T", "M()", "[]", LeakQueue));
+            db.Jobs.Add(new XactJob(0, XactJobBase.AwaitingBatchScheduledAt, "T", "M()", "[]", LeakQueue)
+            {
+                AwaitsBatchId = Guid.NewGuid(),
+                ContinuationCondition = XactJobContinuation.OnSuccess
+            });
+
+            await db.SaveChangesAsync();
+        }
+
+        await LeaveThePoolAtSerializableAsync();
+
+        await using (var db = CreateLeakyDb())
+        {
+            Assert.Single(await Dialect.ClaimJobsAsync(db, LeakQueue, 10, Guid.NewGuid(), 60, CancellationToken.None));
+        }
+
+        await LeaveThePoolAtSerializableAsync();
+
+        await using (var db = CreateLeakyDb())
+        {
+            Assert.Single(await Dialect.ClaimContinuationsAsync(db, LeakQueue, 10, Guid.NewGuid(), 60, DateTime.UtcNow, CancellationToken.None));
+        }
+    }
+
+    /// <summary>
+    /// Opens every connection of the pool at once, so they're all different ones, and leaves each at SERIALIZABLE, as an app's
+    /// transaction would. A statement without parameters is sent as a batch (not a call of sp_executesql), so its SET stays on the session.
+    /// </summary>
+    private async Task LeaveThePoolAtSerializableAsync()
+    {
+        List<TestDbContext> contexts = [];
+
+        try
+        {
+            for (var i = 0; i < PoolSize; i++)
+            {
+                var db = CreateLeakyDb();
+
+                contexts.Add(db);
+
+                await db.Database.OpenConnectionAsync();
+                await db.Database.ExecuteSqlRawAsync("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE");
+            }
+        }
+        finally
+        {
+            foreach (var db in contexts) await db.DisposeAsync();
+        }
+
+        // the leak this is about: a connection from the pool is still at SERIALIZABLE (4)
+        await using var check = CreateLeakyDb();
+
+        var level = await check.Database.SqlQueryRaw<short>("SELECT transaction_isolation_level AS Value FROM sys.dm_exec_sessions WHERE session_id = @@SPID").SingleAsync();
+
+        Assert.Equal(4, level);
+    }
+
+    private TestDbContext CreateLeakyDb()
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>();
+
+        options.UseSqlServer(GetLeakyConnectionString());
+
+        return new TestDbContext(options.Options);
+    }
+
+    /// <summary>
+    /// A pool of its own, with a few connections: the ones left at SERIALIZABLE are the only ones it has.
+    /// </summary>
+    private string GetLeakyConnectionString()
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>();
+
+        fixture.Configure(options, retryOnFailure: false);
+
+        using var db = new TestDbContext(options.Options);
+
+        return new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(db.Database.GetConnectionString())
+        {
+            MaxPoolSize = PoolSize,
+            ApplicationName = "isolation-leak-test"
+        }.ConnectionString;
+    }
+}
 
 [Collection(OracleCollection.Name)]
 public sealed class OracleIntegrationTests(OracleFixture fixture) : DatabaseIntegrationTests(fixture);

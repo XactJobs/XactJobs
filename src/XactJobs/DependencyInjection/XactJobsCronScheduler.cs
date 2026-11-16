@@ -1,6 +1,7 @@
 ﻿// Copyright (c) 2025 XactJobs
 // Licensed under the MIT License. See LICENSE in the repository root.
 
+using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -90,7 +91,8 @@ namespace XactJobs.DependencyInjection
             {
                 db.ChangeTracker.Clear(); // in case this is a retry
 
-                using var tx = await db.Database.BeginTransactionAsync(token)
+                // an explicit level: a pooled connection keeps the one an app's transaction left on it (SqlClient doesn't reset it)
+                using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token)
                     .ConfigureAwait(false);
 
                 await dialect.AcquireTableLockAsync(db, dialect.XactJobSchema, dialect.XactJobPeriodicTable, token)
