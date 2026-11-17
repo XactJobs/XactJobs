@@ -12,6 +12,9 @@ namespace XactJobs
     {
         private string? _periodicState;
 
+        /// <summary>The job method's <see cref="XactRetryAttribute"/>, set when the method is found: for the attempt's failure.</summary>
+        internal XactJobRetry? Retry { get; set; }
+
         internal XactJobContext(DateTime originallyScheduledAt) : this(originallyScheduledAt, null)
         {
         }

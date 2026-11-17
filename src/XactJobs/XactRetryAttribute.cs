@@ -1,6 +1,8 @@
 ﻿// Copyright (c) 2025 XactJobs
 // Licensed under the MIT License. See LICENSE in the repository root.
 
+using System.Reflection;
+
 namespace XactJobs
 {
     /// <summary>
@@ -25,7 +27,32 @@ namespace XactJobs
 
         public IReadOnlyList<int> RetrySeconds { get; } = retrySeconds ?? [];
 
-        /// <summary>The strategy it describes. Throws <see cref="ArgumentOutOfRangeException"/> if it's invalid.</summary>
-        internal DefaultRetryStrategy ToRetryStrategy() => new(MaxRetries, [.. RetrySeconds]);
+        /// <summary>
+        /// The retries of a job method: its attribute's strategy, or why the attribute is invalid. Null without one. Read from the method
+        /// the runner calls (an override inherits it), by the runner and by the checks at enqueue and at start.
+        /// </summary>
+        internal static XactJobRetry? ReadFrom(MethodInfo method)
+        {
+            var attribute = method.GetCustomAttribute<XactRetryAttribute>(inherit: true);
+
+            if (attribute == null) return null;
+
+            return DefaultRetryStrategy.Validate(attribute.MaxRetries, attribute.RetrySeconds) is { } error
+                ? new XactJobRetry(null, error)
+                : new XactJobRetry(new DefaultRetryStrategy(attribute.MaxRetries, [.. attribute.RetrySeconds]), null);
+        }
+    }
+
+    /// <summary>A job method's <see cref="XactRetryAttribute"/>: its strategy, or why it's invalid (then the queue's strategy is used).</summary>
+    internal sealed class XactJobRetry(IRetryStrategy? strategy, string? invalidReason)
+    {
+        private int _isInvalidReasonLogged;
+
+        public IRetryStrategy? Strategy { get; } = strategy;
+
+        public string? InvalidReason { get; } = invalidReason;
+
+        /// <summary>True the first time only: an invalid attribute is logged once per method.</summary>
+        public bool TryMarkInvalidReasonLogged() => Interlocked.Exchange(ref _isInvalidReasonLogged, 1) == 0;
     }
 }

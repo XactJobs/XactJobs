@@ -5,70 +5,14 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
 
 namespace XactJobs.Internal
 {
     internal class XactJobCompiler
     {
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, ParameterInfo[])> _compiledJobs = new();
-
-        /// <summary>Per job method, its <see cref="XactRetryAttribute"/>'s strategy, or null without one.</summary>
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, IRetryStrategy?> _retryStrategies = new();
-
-        /// <summary>
-        /// The strategy of the job method's <see cref="XactRetryAttribute"/>, or null without one. Only when an attempt fails. Throws if
-        /// the method can't be found (not cached, as for running it). An invalid attribute (changed since the job was enqueued, which
-        /// refuses an invalid one) is cached as none, and throws <see cref="ArgumentOutOfRangeException"/> only the first time, for the
-        /// log.
-        /// </summary>
-        public static IRetryStrategy? FindRetryStrategy(XactJob job)
-        {
-            var argCount = CountArguments(job.MethodArgs);
-
-            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, argCount);
-
-            if (_retryStrategies.TryGetValue(key, out var strategy))
-            {
-                return strategy;
-            }
-
-            var (_, method) = job.ToMethodInfo(argCount);
-
-            try
-            {
-                strategy = method.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
-            }
-            catch (ArgumentOutOfRangeException)
-            {
-                if (_retryStrategies.TryAdd(key, null)) throw;
-
-                return null;
-            }
-
-            return _retryStrategies.GetOrAdd(key, strategy);
-        }
-
-        /// <summary>The number of elements of the arguments' JSON array, without parsing them into a document.</summary>
-        private static int CountArguments(string methodArgs)
-        {
-            var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(methodArgs));
-
-            reader.Read();
-
-            var count = 0;
-
-            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-            {
-                count++;
-
-                // an object or an array argument: to its end
-                reader.Skip();
-            }
-
-            return count;
-        }
+        /// <summary>Per job method: its delegate, its parameters, and its <see cref="XactRetryAttribute"/> (null without one).</summary>
+        private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, ParameterInfo[], XactJobRetry?)> _compiledJobs = new();
 
         public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
@@ -95,11 +39,14 @@ namespace XactJobs.Internal
             var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
 
             // static, with the job as the factory's argument: a lambda capturing it would be allocated also when the job is cached
-            var (compiledFunc, parameters) = _compiledJobs.GetOrAdd(key, static (key, job) =>
+            var (compiledFunc, parameters, retry) = _compiledJobs.GetOrAdd(key, static (key, job) =>
             {
                 var (type, method) = job.ToMethodInfo(key.ArgCount);
-                return (BuildJobDelegate(type, method), method.GetParameters());
+                return (BuildJobDelegate(type, method), method.GetParameters(), XactRetryAttribute.ReadFrom(method));
             }, job);
+
+            // before the arguments, which can fail too: a failed attempt is retried as its method says
+            context.Retry = retry;
 
             // set the args
             for (var i = 0; i < args.Length; i++)

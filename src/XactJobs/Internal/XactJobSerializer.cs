@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2025 XactJobs
+// Copyright (c) 2025 XactJobs
 // Licensed under the MIT License. See LICENSE in the repository root.
 
 using System.Buffers;
@@ -107,38 +107,37 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// The problem with the <see cref="XactRetryAttribute"/> of a job expression's method, or null. See
-        /// <see cref="CheckRetryAttribute(Type, MethodInfo)"/>.
+        /// The problem with the <see cref="XactRetryAttribute"/> of a job expression's method, or null. An expression that isn't a job is
+        /// refused where it's saved, as before: here it's null. See <see cref="CheckRetryAttribute(Type, MethodInfo)"/>.
         /// </summary>
         internal static string? CheckRetryAttribute(LambdaExpression jobExpression)
         {
-            var call = GetMethodCall(jobExpression);
+            if (TryGetMethodCall(jobExpression) is not { } call) return null;
 
-            var jobType = call.Object?.Type
-                ?? call.Method.DeclaringType
-                ?? throw new NotSupportedException($"The job method {call.Method.Name} has no declaring type.");
+            var jobType = call.Object?.Type ?? call.Method.DeclaringType;
 
-            return CheckRetryAttribute(jobType, call.Method);
+            return jobType == null ? null : CheckRetryAttribute(jobType, call.Method);
         }
 
         /// <summary>
         /// The problem with the <see cref="XactRetryAttribute"/> the runner reads for a call of the method on the job type, or null. It's
-        /// read from the method the runner finds there: an override's, where the expression has the method it overrides.
+        /// read from the method the runner finds there: an override's, where the expression has the method it overrides. If the runner
+        /// wouldn't find one, from the expression's method: the job fails then anyway, for that reason.
         /// </summary>
         internal static string? CheckRetryAttribute(Type jobType, MethodInfo method)
         {
-            var runMethod = FindMethod(jobType, GetMethodSignature(method), method.GetParameters().Length);
+            MethodInfo runMethod;
 
             try
             {
-                runMethod.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
-
-                return null;
+                runMethod = FindMethod(jobType, GetMethodSignature(method), method.GetParameters().Length);
             }
-            catch (ArgumentOutOfRangeException ex)
+            catch (Exception ex) when (ex is MissingMethodException or AmbiguousMatchException)
             {
-                return ex.Message;
+                runMethod = method;
             }
+
+            return XactRetryAttribute.ReadFrom(runMethod)?.InvalidReason;
         }
 
         /// <summary>The stored <c>MethodName</c> of a method: <c>Name(System.String, System.Nullable`1[System.Int32])</c>.</summary>
@@ -179,6 +178,12 @@ namespace XactJobs.Internal
 
         private static MethodCallExpression GetMethodCall(LambdaExpression lambdaExp)
         {
+            return TryGetMethodCall(lambdaExp)
+                ?? throw new ArgumentException($"A job must be a method call, e.g. () => MyJobs.Send(id) or x => x.RunAsync(id), not {lambdaExp.Body}.", nameof(lambdaExp));
+        }
+
+        private static MethodCallExpression? TryGetMethodCall(LambdaExpression lambdaExp)
+        {
             var body = lambdaExp.Body;
 
             // e.g. a Task<int> returned as a Task
@@ -187,8 +192,7 @@ namespace XactJobs.Internal
                 body = converted;
             }
 
-            return body as MethodCallExpression
-                ?? throw new ArgumentException($"A job must be a method call, e.g. () => MyJobs.Send(id) or x => x.RunAsync(id), not {body}.", nameof(lambdaExp));
+            return body as MethodCallExpression;
         }
 
         #region Arguments
