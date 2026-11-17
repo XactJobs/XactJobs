@@ -27,6 +27,11 @@ Until 1.0 the API can still change between minor versions (0.x). Breaking change
 No script. `IRetryStrategy.GetRetryTimeUtc` gets the attempt's exception, as a third parameter: add it to your own strategies
 (`GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception)`).
 
+Cron expressions take `L`, `LW`, `nW`, `dayL` and `day#n` in the day fields (see [Cron expressions](../periodic-jobs/#cron-expressions)).
+Use them only once all the workers run v0.9.0. A worker of an older version that claims a run of such a periodic job runs it, then
+fails to schedule its next run: the run counts as failed and is retried, so the job runs again and again, until all the workers are
+upgraded.
+
 `DefaultRetryStrategy` counts retries instead of attempts, so that the number matches its list of waits: `maxAttempts: 5` is now
 `maxRetries: 4`, and its property `MaxAttempts` is `MaxRetries`. A positional argument still compiles, with the new meaning: check
 `new DefaultRetryStrategy(1)`, which was one attempt (no retries), and is now one retry. The default is now 10 retries (11 attempts, one more than before), the last one an hour after the 10th attempt. It refuses negative retries and

@@ -206,6 +206,117 @@ public sealed class CronSequenceGeneratorTests
         Assert.NotEqual(new XactCronSchedule(CronExpressions.Hourly, Zagreb), schedule);
     }
 
+    [Theory]
+    // L: the last day of the month, L-n: n days before it
+    [InlineData("0 0 0 L * *", "2025-01-15T00:00:00Z", "2025-01-31T00:00:00Z")]
+    [InlineData("0 0 0 L * *", "2025-01-31T00:00:00Z", "2025-02-28T00:00:00Z")]
+    [InlineData("0 0 0 L * *", "2028-02-10T00:00:00Z", "2028-02-29T00:00:00Z")]
+    [InlineData("0 0 0 L-2 * *", "2025-04-01T00:00:00Z", "2025-04-28T00:00:00Z")]
+    [InlineData("0 0 0 1,L * *", "2025-01-15T00:00:00Z", "2025-01-31T00:00:00Z")]
+    [InlineData("0 0 0 1,L * *", "2025-01-31T00:00:00Z", "2025-02-01T00:00:00Z")]
+    [InlineData("0 30 18 l * *", "2025-06-01T00:00:00Z", "2025-06-30T18:30:00Z")]
+    // LW: the last weekday of the month (31 May 2025 is a Saturday, 31 August a Sunday)
+    [InlineData("0 0 0 LW * *", "2025-05-01T00:00:00Z", "2025-05-30T00:00:00Z")]
+    [InlineData("0 0 0 LW * *", "2025-08-01T00:00:00Z", "2025-08-29T00:00:00Z")]
+    [InlineData("0 0 0 LW * *", "2025-01-01T00:00:00Z", "2025-01-31T00:00:00Z")]
+    // nW: the weekday nearest the day, in its month (15 March 2025 is a Saturday, 15 June a Sunday, 1 March a Saturday)
+    [InlineData("0 0 0 15W * *", "2025-03-01T00:00:00Z", "2025-03-14T00:00:00Z")]
+    [InlineData("0 0 0 15W * *", "2025-06-01T00:00:00Z", "2025-06-16T00:00:00Z")]
+    [InlineData("0 0 0 15W * *", "2025-01-01T00:00:00Z", "2025-01-15T00:00:00Z")]
+    [InlineData("0 0 0 1W * *", "2025-02-28T00:00:00Z", "2025-03-03T00:00:00Z")]
+    [InlineData("0 0 0 31W * *", "2025-08-01T00:00:00Z", "2025-08-29T00:00:00Z")]
+    // a month without the day has no nearest weekday to it: April has no 31st
+    [InlineData("0 0 0 31W * *", "2025-04-01T00:00:00Z", "2025-05-30T00:00:00Z")]
+    // nL: the month's last day of the week
+    [InlineData("0 0 0 * * FRIL", "2025-01-01T00:00:00Z", "2025-01-31T00:00:00Z")]
+    [InlineData("0 0 0 * * 5L", "2025-02-01T00:00:00Z", "2025-02-28T00:00:00Z")]
+    [InlineData("0 0 0 * * 0L", "2025-01-01T00:00:00Z", "2025-01-26T00:00:00Z")]
+    [InlineData("0 0 0 * * 7L", "2025-01-01T00:00:00Z", "2025-01-26T00:00:00Z")]
+    // n#k: the month's k-th day of the week
+    [InlineData("0 0 0 * * FRI#3", "2025-01-01T00:00:00Z", "2025-01-17T00:00:00Z")]
+    [InlineData("0 0 0 * * fri#3", "2025-01-17T00:00:00Z", "2025-02-21T00:00:00Z")]
+    [InlineData("0 0 0 * * 1#1", "2025-01-01T00:00:00Z", "2025-01-06T00:00:00Z")]
+    [InlineData("0 0 0 * * MON#5", "2025-01-01T00:00:00Z", "2025-03-31T00:00:00Z")]
+    [InlineData("0 0 0 * * MON#1,FRIL", "2025-01-07T00:00:00Z", "2025-01-31T00:00:00Z")]
+    // a fifth Friday in February: a leap year whose February starts on a Friday
+    [InlineData("0 0 0 * FEB FRI#5", "2025-01-01T00:00:00Z", "2036-02-29T00:00:00Z")]
+    // more than a year apart: the 1st of a 31-day month, if it's a Friday (1 October 2027, then 1 December 2028)
+    [InlineData("0 0 0 L-30 * FRI", "2027-10-01T00:00:00Z", "2028-12-01T00:00:00Z")]
+    // 40 years apart: the next Friday 29 February after 2188 is in 2228 (2200 isn't a leap year)
+    [InlineData("0 0 0 * FEB FRI#5", "2188-03-01T00:00:00Z", "2228-02-29T00:00:00Z")]
+    // with the other field: both match (the last day of the month, if it's a Friday)
+    [InlineData("0 0 0 L * FRI", "2025-02-01T00:00:00Z", "2025-02-28T00:00:00Z")]
+    [InlineData("0 0 0 L * FRI", "2025-03-01T00:00:00Z", "2025-10-31T00:00:00Z")]
+    [InlineData("0 0 0 ? * FRI#3", "2025-01-01T00:00:00Z", "2025-01-17T00:00:00Z")]
+    public void DaysOfTheMonth_GiveTheNextTimeAfter(string expression, string from, string expected)
+    {
+        Assert.Equal(Utc(expected), Next(expression, TimeZoneInfo.Utc, from));
+    }
+
+    [Fact]
+    public void LastDayOfTheMonth_IsTheLocalOne()
+    {
+        // 9:00 in Zagreb on 31 January (CET, +1) and on 31 March (CEST, +2)
+        Assert.Equal(Utc("2025-01-31T08:00:00Z"), Next("0 0 9 L * *", Zone(Zagreb), "2025-01-15T00:00:00Z"));
+        Assert.Equal(Utc("2025-03-31T07:00:00Z"), Next("0 0 9 L * *", Zone(Zagreb), "2025-03-15T00:00:00Z"));
+    }
+
+    [Theory]
+    [InlineData("0 0 0 L-31 * *")]
+    [InlineData("0 0 0 L-x * *")]
+    [InlineData("0 0 0 32W * *")]
+    [InlineData("0 0 0 0W * *")]
+    [InlineData("0 0 0 1-5W * *")]
+    [InlineData("0 0 0 W * *")]
+    [InlineData("0 0 0 3L * *")]
+    [InlineData("0 0 0 1#2 * *")]
+    [InlineData("0 0 0 * * L")]
+    [InlineData("0 0 0 * * 8L")]
+    [InlineData("0 0 0 * * FRI#6")]
+    [InlineData("0 0 0 * * FRI#0")]
+    [InlineData("0 0 0 * * 1-5#2")]
+    [InlineData("0 0 0 * * FRIW")]
+    [InlineData("0 0 0 * * MON-FRIL")]
+    [InlineData("0 0 0 +15W * *")]
+    [InlineData("0 0 0 L-+3 * *")]
+    [InlineData("0 0 0 * * 5#+3")]
+    [InlineData("0 0 0 * * -1L")]
+    [InlineData("0 0 0 1,? * *")]
+    [InlineData("0 0 0 ?,L * *")]
+    [InlineData("0 0 0 * * ?,FRI#3")]
+    public void DaysOfTheMonth_Invalid_AreRefused(string expression)
+    {
+        Assert.False(CronSequenceGenerator.IsValidExpression(expression));
+    }
+
+    [Fact]
+    public void AnImpossibleDay_IsRefused()
+    {
+        // never: the search stops after 50 years
+        Assert.Throws<ArgumentException>(() => Next("0 0 0 30 FEB *", TimeZoneInfo.Utc, "2025-01-01T00:00:00Z"));
+        Assert.Throws<ArgumentException>(() => Next("0 0 0 L-29 FEB *", TimeZoneInfo.Utc, "2025-01-01T00:00:00Z"));
+        // the 1st is never the month's last Friday
+        Assert.Throws<ArgumentException>(() => Next("0 0 0 1 * FRIL", TimeZoneInfo.Utc, "2025-01-01T00:00:00Z"));
+    }
+
+    [Fact]
+    public void DayNames_AreReadTheSameInEveryCulture()
+    {
+        var culture = CultureInfo.CurrentCulture;
+
+        try
+        {
+            // a Turkish upper case of "fri" is "FRİ", with a dotted capital I
+            CultureInfo.CurrentCulture = new CultureInfo("tr-TR");
+
+            Assert.Equal(Utc("2025-01-17T00:00:00Z"), Next("0 0 0 * jan fri#3", TimeZoneInfo.Utc, "2025-01-01T00:00:00Z"));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = culture;
+        }
+    }
+
     private static DateTime Next(string expression, TimeZoneInfo zone, string from)
     {
         return new CronSequenceGenerator(expression, zone).NextUtc(Utc(from));
