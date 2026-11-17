@@ -257,7 +257,7 @@ public class SqliteJobFailureRecordingTests : IAsyncLifetime
 
     private sealed class FixedRetryStrategy(DateTime? retryAt) : IRetryStrategy
     {
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => retryAt;
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => retryAt;
     }
 
     private sealed class CapturingLoggerProvider : ILoggerProvider

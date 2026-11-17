@@ -149,7 +149,7 @@ public abstract class PostgresJobTransactionTests(PostgresFixture fixture) : IAs
                 .WithWorkerCount(1)
                 .WithPollingInterval(1)
                 .WithShutdownTimeout(0)
-                .WithRetryStrategy(new DefaultRetryStrategy(maxAttempts: 1));
+                .WithRetryStrategy(new DefaultRetryStrategy(maxRetries: 0));
         });
 
         builder.Services.AddSingleton(_state);

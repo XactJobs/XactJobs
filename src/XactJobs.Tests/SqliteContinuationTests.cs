@@ -710,7 +710,7 @@ public class SqliteContinuationTests : IAsyncLifetime
     {
         public const int MaxAttempts = 3;
 
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount)
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception)
         {
             return newErrorCount < MaxAttempts ? DateTime.UtcNow.AddMilliseconds(200) : null;
         }

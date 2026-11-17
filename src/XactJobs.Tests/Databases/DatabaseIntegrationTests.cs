@@ -1204,7 +1204,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
                 .WithPollingInterval(1)
                 .WithShutdownTimeout(0)
                 .WithPeriodicJobReconciliationInterval(1)
-                .WithRetryStrategy(new DefaultRetryStrategy(maxAttempts: 1));
+                .WithRetryStrategy(new DefaultRetryStrategy(maxRetries: 0));
 
             configure?.Invoke(options);
         });
@@ -1427,7 +1427,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
 
     private sealed class FixedRetryStrategy(DateTime retryAt) : IRetryStrategy
     {
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => retryAt;
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => retryAt;
     }
 
     private protected sealed class LogCapture : ILoggerProvider, ILogger

@@ -12,6 +12,37 @@ namespace XactJobs.Internal
     internal class XactJobCompiler
     {
         private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, ParameterInfo[])> _compiledJobs = new();
+
+        /// <summary>Per job method, its <see cref="XactRetryAttribute"/>'s strategy, or null without one.</summary>
+        private static readonly ConcurrentDictionary<XactJobDispatchKey, IRetryStrategy?> _retryStrategies = new();
+
+        /// <summary>
+        /// The strategy of the job method's <see cref="XactRetryAttribute"/>, or null without one. Only when an attempt fails. Throws if
+        /// the method can't be found (not cached, as for running it), or <see cref="ArgumentOutOfRangeException"/> if the attribute is
+        /// invalid (it changed since the job was enqueued, which refuses an invalid one).
+        /// </summary>
+        public static IRetryStrategy? FindRetryStrategy(XactJob job)
+        {
+            int argCount;
+
+            using (var jsonArgs = JsonDocument.Parse(job.MethodArgs))
+            {
+                argCount = jsonArgs.RootElement.GetArrayLength();
+            }
+
+            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, argCount);
+
+            if (_retryStrategies.TryGetValue(key, out var strategy))
+            {
+                return strategy;
+            }
+
+            var (_, method) = job.ToMethodInfo(argCount);
+
+            strategy = method.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
+
+            return _retryStrategies.GetOrAdd(key, strategy);
+        }
         
         public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {

@@ -294,7 +294,7 @@ public sealed class SqliteObservabilityTests : IAsyncLifetime
 
     private sealed class RetryOnceNow : IRetryStrategy
     {
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => newErrorCount == 1 ? DateTime.UtcNow : null;
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => newErrorCount == 1 ? DateTime.UtcNow : null;
     }
 
     /// <summary>

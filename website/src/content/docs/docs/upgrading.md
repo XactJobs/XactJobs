@@ -22,6 +22,16 @@ On SQL Server, run the scripts with `QUOTED_IDENTIFIER` and `ANSI_NULLS` on, whi
 Until 1.0 the API can still change between minor versions (0.x). Breaking changes are listed in the
 [release notes](https://github.com/XactJobs/XactJobs/releases), with how to migrate.
 
+## v0.9.0
+
+No script. `IRetryStrategy.GetRetryTimeUtc` gets the attempt's exception, as a third parameter: add it to your own strategies
+(`GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception)`).
+
+`DefaultRetryStrategy` counts retries instead of attempts, so that the number matches its list of waits: `maxAttempts: 5` is now
+`maxRetries: 4`, and its property `MaxAttempts` is `MaxRetries`. The default is now 10 retries (11 attempts, one more than before), the last one an hour after the 10th attempt. It refuses negative retries and
+waits, and uses its default waits when given none (before, it failed recording the first retry, and the job ran again only when its lease
+expired).
+
 ## v0.8.0
 
 Run the script first: it adds the column for the time zone of a periodic job's schedule (see [Time zones](../periodic-jobs/#time-zones)).
