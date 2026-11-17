@@ -696,7 +696,7 @@ The API endpoints that change data require an antiforgery token, which the dashb
   - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead.
     A cancelled job of a batch counts as a failed job of the batch, and if it was the last one, the batch's continuations start
 - **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts, and skipped runs and continuations, with the reason
-  - *Retry* enqueues a failed or cancelled job, or a skipped continuation, again as a new job. A run of a periodic job is enqueued as a one-off job
+  - *Retry* enqueues a failed or cancelled job, or a skipped one that isn't a periodic run (a continuation whose condition wasn't met, a job a filter skipped), again as a new job. A run of a periodic job is enqueued as a one-off job
     (not one that had a state, which it would run without), and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations. Like a retry by a worker, it keeps the time the job was originally scheduled for
 - **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
@@ -736,7 +736,7 @@ All under the API base path (`/api/XactJobs` by default):
 | POST | `/jobs/{id}/cancel?queue=&scheduledAt=` | Cancel a pending job |
 | GET | `/history?category=&page=&pageSize=&queue=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped` |
 | GET | `/history/{id}` | A history row |
-| POST | `/history/{id}/retry` | Enqueue a failed or cancelled job, or a skipped continuation, again |
+| POST | `/history/{id}/retry` | Enqueue a failed or cancelled job, or a skipped one that isn't a periodic run, again |
 | GET | `/batches?state=&page=&pageSize=` | Batches: `active` or `finished` |
 | GET | `/batches/{id}` | A batch with its jobs, history and continuations |
 | GET | `/periodic?page=&pageSize=` | Periodic jobs |
@@ -840,7 +840,7 @@ builder.Services.AddXactJobs<AppDbContext>(options =>
 });
 ```
 
-A filter's exception is the job's failure. It can catch the job's exception and throw another, e.g. `XactJobCancelException`, but not swallow it: the attempt fails anyway, because the job's changes can't be saved as a completed job's. Not calling `next` completes the job without running it. A failure handler runs after the job's place on the worker is freed; its exceptions are logged, and can't change the job's outcome. The details are on the website: [Job filters and failure handlers](https://xactjobs.com/docs/filters/).
+A filter's exception is the job's failure. It can catch the job's exception and throw another, e.g. `XactJobCancelException`, but not swallow it: the attempt fails anyway, because the job's changes can't be saved as a completed job's. Not calling `next` completes the job without running it, and `context.Skip(reason)` records the run as skipped, e.g. on a holiday. A failure handler runs after the job's place on the worker is freed; its exceptions are logged, and can't change the job's outcome. The details are on the website: [Job filters and failure handlers](https://xactjobs.com/docs/filters/).
 
 ## Stopping
 When the application stops, the workers stop polling and running jobs get the shutdown timeout (`WithShutdownTimeout`, 10 seconds by default) to finish. Then the cancellation token passed to the jobs is cancelled, and they get

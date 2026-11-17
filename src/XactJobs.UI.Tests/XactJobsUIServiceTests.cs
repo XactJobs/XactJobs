@@ -231,11 +231,29 @@ public class XactJobsUIServiceTests : IDisposable
     [Theory]
     [InlineData(XactJobStatus.Failed)]
     [InlineData(XactJobStatus.Completed)]
-    [InlineData(XactJobStatus.Skipped)]
     public async Task Retry_OfAJobThatIsNotFailedOrCancelled_IsAConflict(XactJobStatus status)
     {
         // a failed attempt was already rescheduled by the runner, retrying it would run the job twice
         await AddHistoryAsync(7, status, stackTrace: "at Somewhere()");
+
+        Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RetryJobAsync(7))).Status);
+        Assert.Equal(0, await CountJobsAsync());
+    }
+
+    [Fact]
+    public async Task Retry_OfAJobAFilterSkipped_EnqueuesItAgain()
+    {
+        await AddHistoryAsync(7, XactJobStatus.Skipped);
+
+        Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RetryJobAsync(7))).Status);
+        Assert.Equal(1, await CountJobsAsync());
+    }
+
+    [Fact]
+    public async Task Retry_OfASkippedPeriodicRun_IsAConflict()
+    {
+        // skipped while its periodic job was paused or changed: the periodic job has its own runs
+        await AddHistoryAsync(7, XactJobStatus.Skipped, periodicJobId: PeriodicId);
 
         Assert.Equal(ActionStatus.Conflict, (await WithServiceAsync(s => s.RetryJobAsync(7))).Status);
         Assert.Equal(0, await CountJobsAsync());

@@ -1,6 +1,6 @@
 ---
 title: Job filters and failure handlers
-description: Code around every job's run, in the job's scope and unit of work, e.g. to set up a tenant; and handlers told when a job has failed for good.
+description: Code around every job's run, in the job's scope and unit of work, e.g. to set up a tenant or skip runs on holidays; and handlers told when a job has failed for good.
 ---
 
 ## Job filters
@@ -41,7 +41,8 @@ registered already. Filters apply to all the queues, the first one added outermo
 
 The context has the job (`Job`: its id, queue, type and method names, scheduled time), the method (`Method`) and the arguments the
 method gets (`Arguments`, in the order of its parameters), the attempt (`Attempt`: 1 for the first), the job's scope (`Services`), its
-DbContext (`DbContext`), its [`XactJobContext`](../jobs/#xactjobcontext) (`JobContext`) and the cancellation token the job gets (`CancellationToken`).
+DbContext (`DbContext`), its [`XactJobContext`](../jobs/#xactjobcontext) (`JobContext`), the cancellation token the job gets
+(`CancellationToken`), and the time zone of a periodic job's schedule (`TimeZone`).
 
 A filter runs inside the job's [unit of work](../unit-of-work/):
 
@@ -52,9 +53,47 @@ A filter runs inside the job's [unit of work](../unit-of-work/):
   the job threw, the attempt fails with the job's exception also when the filter returns, because the job's changes, maybe half done,
   can't be saved as a completed job's. A job that should complete despite an error catches it itself.
 - If it doesn't call `next`, the job completes without running. Calling `next` twice throws: a job runs once per attempt.
+- It can skip the run instead: see below.
 
-Filters run only when the job runs: not for a skipped run, like a paused periodic job or a continuation whose condition isn't met. The
+Filters run only when the worker runs the job: not for a run it skips itself, like a paused periodic job's or a continuation whose
+condition isn't met. The
 arguments are read before them, so a job whose arguments can't be read fails before its filters run.
+
+### Skipping a run
+
+`context.Skip(reason)`, without calling `next`, skips the run: the job method doesn't run, and the history has the run as skipped, with
+the reason. A periodic job's next run is scheduled as usual, and its state is kept. E.g. no periodic runs on holidays, in the schedule's
+time zone:
+
+```csharp
+public class HolidayFilter(IHolidays holidays) : IXactJobFilter
+{
+    public Task InvokeAsync(XactJobExecutingContext context, Func<Task> next)
+    {
+        if (context.JobContext.PeriodicJobId != null)
+        {
+            var local = TimeZoneInfo.ConvertTimeFromUtc(context.JobContext.OriginallyScheduledAt, context.TimeZone);
+
+            if (holidays.IsHoliday(DateOnly.FromDateTime(local)))
+            {
+                context.Skip("public holiday");
+                return Task.CompletedTask;
+            }
+        }
+
+        return next();
+    }
+}
+```
+
+`context.TimeZone` is the time zone of a periodic job's schedule, UTC for other jobs: on a node that doesn't know the zone (no tzdata),
+it throws, and the attempt fails. Changes made through the DbContext before skipping are saved with the record, but a skipped run can't
+set the periodic state.
+
+Misuses fail the attempt without retries, since a retry wouldn't fix them: `next` after `Skip`, `next` twice, `Skip` after the job ran,
+and a periodic state set in a skipped run. They do also if a filter catches the exception, and with the job's own exception if the job
+threw. In a batch, a skipped job counts as not succeeded for the continuations, like a skipped continuation; the dashboard's *Retry* runs
+it again as a new job.
 
 ## Failure handlers
 

@@ -15,19 +15,26 @@ namespace XactJobs.Internal
         public IReadOnlyList<Type> FailureHandlers { get; } = failureHandlers;
 
         /// <summary>
-        /// Runs the job, inside the filters if there are any: each one resolved from the job's scope, the first one outermost. Without
-        /// filters, it's the job alone, with nothing allocated for them.
+        /// The filters' context for the job, or null without filters: then <see cref="RunJobAsync"/> runs the job alone, with nothing
+        /// allocated for them.
         /// </summary>
-        public Task RunJobAsync(XactJobCall call, XactJob job, IServiceProvider services, DbContext dbContext, XactJobContext jobContext, CancellationToken stoppingToken)
+        public XactJobExecutingContext? CreateContext(XactJobCall call, XactJob job, IServiceProvider services, DbContext dbContext,
+                                                      XactJobContext jobContext, string? timeZoneId, CancellationToken stoppingToken)
         {
-            if (Filters.Count == 0)
-            {
-                return call.InvokeAsync(services);
-            }
+            return Filters.Count == 0
+                ? null
+                : new XactJobExecutingContext(job, call.Method, call.Arguments, services, dbContext, jobContext, timeZoneId, stoppingToken);
+        }
 
-            var context = new XactJobExecutingContext(job, call.Method, call.Arguments, services, dbContext, jobContext, stoppingToken);
-
-            return new FilterChain(Filters, call, services, context).RunAsync();
+        /// <summary>
+        /// Runs the job, inside the filters if there are any (<paramref name="context"/> isn't null): each one resolved from the job's
+        /// scope, the first one outermost. A filter may skip the run (<see cref="XactJobExecutingContext.SkipReason"/>).
+        /// </summary>
+        public Task RunJobAsync(XactJobCall call, IServiceProvider services, XactJobExecutingContext? context)
+        {
+            return context == null
+                ? call.InvokeAsync(services)
+                : new FilterChain(Filters, call, services, context).RunAsync();
         }
 
         /// <summary>
@@ -43,7 +50,6 @@ namespace XactJobs.Internal
             private readonly Func<Task> _next;
 
             private int _nextFilter;
-            private bool _isJobInvoked;
             private ExceptionDispatchInfo? _jobFailure;
 
             public FilterChain(IReadOnlyList<Type> filters, XactJobCall call, IServiceProvider services, XactJobExecutingContext context)
@@ -57,15 +63,42 @@ namespace XactJobs.Internal
 
             public async Task RunAsync()
             {
-                await NextAsync().ConfigureAwait(false);
+                try
+                {
+                    await NextAsync().ConfigureAwait(false);
+                }
+                catch (XactJobFilterMisuseException) when (_jobFailure != null)
+                {
+                    // e.g. Skip() after the job threw: the attempt fails with the job's exception, not with the misuse
+                    _jobFailure.Throw();
+                }
+                finally
+                {
+                    _context.IsChainFinished = true;
+                }
 
                 // a filter that swallowed the job's failure: it's still a failure, because the job's changes (saved or not, in its own
                 // transaction too) can't be told apart from a completed job's, and the worker would save and commit them
                 _jobFailure?.Throw();
+
+                // a misuse that a filter caught fails the attempt too
+                if (_context.Misuse != null) ExceptionDispatchInfo.Throw(_context.Misuse);
+
+                // the job didn't run: a new state would be lost without a word
+                if (_context.SkipReason != null && _context.JobContext.IsPeriodicStateSet)
+                {
+                    throw _context.SetMisuse("A skipped run can't set the periodic state: set it only in a run that isn't skipped.");
+                }
             }
 
             private Task NextAsync()
             {
+                // before the inner filters too: they don't run for a skipped job either
+                if (_context.SkipReason != null)
+                {
+                    throw _context.SetMisuse("A job filter called next() after skipping the run: the skipped job doesn't run.");
+                }
+
                 if (_nextFilter < _filters.Count)
                 {
                     var filter = (IXactJobFilter)_services.GetRequiredService(_filters[_nextFilter++]);
@@ -73,12 +106,12 @@ namespace XactJobs.Internal
                     return filter.InvokeAsync(_context, _next);
                 }
 
-                if (_isJobInvoked)
+                if (_context.IsJobInvoked)
                 {
-                    throw new InvalidOperationException("A job filter called next() more than once: a job runs once per attempt.");
+                    throw _context.SetMisuse("A job filter called next() more than once: a job runs once per attempt.");
                 }
 
-                _isJobInvoked = true;
+                _context.IsJobInvoked = true;
 
                 return InvokeJobAsync();
             }

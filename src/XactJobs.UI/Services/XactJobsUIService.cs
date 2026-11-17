@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
 using XactJobs.UI.Services.Models;
@@ -307,11 +307,12 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         if (history == null) return ActionResultDto.NotFound($"Job #{historyId} not found in the history.");
 
-        var isSkippedContinuation = history.Status == XactJobStatus.Skipped && history.AwaitsBatchId != null;
+        // a continuation whose condition wasn't met, or a job a filter skipped; not a periodic run, skipped while its job was paused
+        var isSkippedJob = history.Status == XactJobStatus.Skipped && history.PeriodicJobId == null;
 
-        if (history.Status != XactJobStatus.Cancelled && !isSkippedContinuation)
+        if (history.Status != XactJobStatus.Cancelled && !isSkippedJob)
         {
-            return ActionResultDto.Conflict($"Job #{historyId} can't be retried: only failed and cancelled jobs can, and continuations that were skipped.");
+            return ActionResultDto.Conflict($"Job #{historyId} can't be retried: only failed and cancelled jobs can, and skipped jobs that aren't runs of a periodic job.");
         }
 
         // as a one-off job, a run of a periodic job would run without its state, which only the periodic job's runs get
