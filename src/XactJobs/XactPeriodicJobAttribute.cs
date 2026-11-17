@@ -42,5 +42,11 @@ namespace XactJobs
         /// changes the definition, like an argument of <c>WithPeriodicJob</c>.
         /// </summary>
         public string? Config { get; set; }
+
+        /// <summary>
+        /// The local times the job doesn't run at, e.g. a <c>const string</c> of holidays shared by many jobs: see
+        /// <see cref="XactCronSchedule.Exclusions"/>. Changing it doesn't change the definition: the pending run moves.
+        /// </summary>
+        public string? Exclusions { get; set; }
     }
 }

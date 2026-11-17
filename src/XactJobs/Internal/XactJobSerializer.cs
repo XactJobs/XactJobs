@@ -85,7 +85,8 @@ namespace XactJobs.Internal
                                        queue ?? QueueNames.Default,
                                        isActive: true,
                                        XactJobPeriodic.NewVersion(),
-                                       schedule.TimeZone);
+                                       schedule.TimeZone,
+                                       schedule.Exclusions);
         }
 
         /// <summary>

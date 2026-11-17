@@ -1,4 +1,4 @@
--- XactJobs v0.8.0, MySQL: the whole schema, for a new installation.
+-- XactJobs v0.9.0, MySQL: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -92,5 +92,7 @@ CREATE TABLE `xact_jobs_job_periodic` (
   `state` varchar(2000) CHARACTER SET utf8mb4 NULL,
   -- the time zone of the cron expression: an IANA id (e.g. Europe/Zagreb), or null for UTC
   `time_zone` varchar(100) CHARACTER SET utf8mb4 NULL,
+  -- the local times the job doesn't run at (XactCronSchedule.Exclusions), at most 2000 characters
+  `exclusions` varchar(2000) CHARACTER SET utf8mb4 NULL,
   CONSTRAINT `pk_job_periodic` PRIMARY KEY (`id`)
 ) CHARACTER SET=utf8mb4;

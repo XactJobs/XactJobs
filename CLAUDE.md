@@ -189,6 +189,13 @@ XactJobs is a .NET library for background job processing with full database tran
 - `CronExpressions`: constants for attributes (`Cron`'s methods can't be attribute arguments)
 - Tests: `PeriodicJobAttributeTests`. The assembly scan uses `XactJobs.Tests.PeriodicJobs`, which must hold only valid attributes; the invalid ones are private nested types in the test assembly, checked with the scanner's internal `Find` (`InternalsVisibleTo` XactJobs.Tests), and that assembly is never scanned
 
+### Exclusions of Periodic Jobs
+
+- `XactCronSchedule.Exclusions` / `[XactPeriodicJob(Exclusions = ...)]` (`exclusions`, v0.9.0, at most `CronExclusions.MaxLength` = 2000): one comma-separated string of dates (`MM-dd` every year, `yyyy-MM-dd` once) and daily time ranges (`HH:mm-HH:mm`, end excluded, may cross midnight), local to the schedule's zone, normalized (`CronExclusions.Normalize`), so a `const string` can be shared. No weekday or movable-feast items (the cron's day of week does weekdays; the user decided against Easter-like tokens)
+- `CronSequenceGenerator.FindNext` goes on after an excluded time (`CronExclusions.ResumeAfter`: the next midnight or the range's end), within the same 50-year limit
+- Not part of the definition (`IsCompatibleWith` ignores them, like `State`): a change updates the row (`UpdateExclusions`) and `AddOrUpdatePeriodic` reports it, and the ensure moves the next run as scheduled (not due, a first attempt, not moved by Run now, not leased: `ReplacePendingRuns` over `PendingRuns`, shared with pausing; delete and insert, which EF orders) if its time changes. A run the current list excludes when it's claimed is recorded `Skipped` (`XactJobPeriodic.Excludes`, by its original time; not on a node without the zone). `ReadIsActiveAsync` re-reads the exclusions with `IsActive` before a run schedules its next one (not saved back). `XactCronSchedule.Exclusions`' init checks that a time is left
+- `SqliteExclusionsTests`, `SqlitePeriodicJobTests`, `CronSequenceGeneratorTests`
+
 ### Time Zones of Periodic Jobs
 
 - `XactCronSchedule` (public record struct): a cron expression and a time zone id. A string converts to it implicitly (UTC), so the ensure methods, `WithPeriodicJob` and `XactJobsOptions.PeriodicJobs` take it in place of the cron expression. `[XactPeriodicJob(..., TimeZone = "...")]` for attributes (a struct can't be an attribute argument)

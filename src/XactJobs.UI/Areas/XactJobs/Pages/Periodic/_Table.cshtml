@@ -42,6 +42,10 @@ else
                             <td class="text-nowrap">
                                 <code>@job.CronExpression</code>
                                 <div class="small text-muted">@(job.TimeZone ?? "UTC")</div>
+                                @if (job.Exclusions != null)
+                                {
+                                    <div class="small text-muted text-wrap" title="The local times the job doesn't run at">except @job.Exclusions</div>
+                                }
                             </td>
                             <td>
                                 @if (job.IsActive)

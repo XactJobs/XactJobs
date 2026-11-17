@@ -328,6 +328,137 @@ public class SqlitePeriodicJobTests : IDisposable
     }
 
     [Fact]
+    public async Task JobEnsurePeriodicAsync_WithExclusions_StoresThem_AndSchedulesAroundThem()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var exclusions = $"{today:yyyy-MM-dd},{today.AddDays(1):yyyy-MM-dd}";
+
+        var periodic = await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "excluding",
+            new XactCronSchedule("0 0 9 * * *") { Exclusions = exclusions }, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.Equal($"{today:yyyy-MM-dd}, {today.AddDays(1):yyyy-MM-dd}", periodic.Exclusions);
+        Assert.Equal(today.AddDays(2).ToDateTime(new TimeOnly(9, 0)), (await _context.Jobs.SingleAsync()).ScheduledAt);
+    }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_ChangingTheExclusions_KeepsTheVersion_AndMovesThePendingRun()
+    {
+        var periodic = await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "moving_run", "0 0 9 * * *", CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        var version = periodic.Version;
+        var run = await _context.Jobs.AsNoTracking().SingleAsync();
+        var runDate = DateOnly.FromDateTime(run.ScheduledAt);
+
+        // excluding the run's date: the same version, the run moves to the day after
+        var schedule = new XactCronSchedule("0 0 9 * * *") { Exclusions = $"{runDate:yyyy-MM-dd}" };
+
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "moving_run", schedule, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        var moved = await _context.Jobs.AsNoTracking().SingleAsync();
+
+        Assert.Equal(version, (await _context.PeriodicJobs.AsNoTracking().SingleAsync()).Version);
+        Assert.Equal(version, moved.PeriodicJobVersion);
+        Assert.Equal(runDate.AddDays(1).ToDateTime(new TimeOnly(9, 0)), moved.ScheduledAt);
+
+        // the same list, written differently: nothing changes
+        _context.ChangeTracker.Clear();
+
+        _context.JobEnsurePeriodic<TestService>(x => x.DoWork(), "moving_run", new XactCronSchedule("0 0 9 * * *") { Exclusions = $" {runDate:yyyy-MM-dd} ," });
+        await _context.SaveChangesAsync();
+
+        Assert.Equal(moved.Id, (await _context.Jobs.AsNoTracking().SingleAsync()).Id);
+    }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_ChangingTheExclusions_LeavesARunningRun()
+    {
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "running", "0 0 9 * * *", CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        // claimed by a worker: it schedules the next run itself, with the new exclusions
+        await _context.Jobs.ExecuteUpdateAsync(s => s.SetProperty(j => j.LeasedUntil, DateTime.UtcNow.AddMinutes(5)));
+
+        var run = await _context.Jobs.AsNoTracking().SingleAsync();
+
+        _context.ChangeTracker.Clear();
+
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "running",
+            new XactCronSchedule("0 0 9 * * *") { Exclusions = $"{run.ScheduledAt:yyyy-MM-dd}" }, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.Equal(run.Id, (await _context.Jobs.AsNoTracking().SingleAsync()).Id);
+    }
+
+    [Theory]
+    [InlineData(-60, 0)] // due (overdue, or moved by Run now): it runs now, or is skipped if the new list excludes it
+    [InlineData(60, 1)]  // a retry
+    public async Task JobEnsurePeriodicAsync_ChangingTheExclusions_KeepsADueRunOrARetry(int minutes, int errorCount)
+    {
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "kept", "0 0 9 * * *", CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        await _context.Jobs.ExecuteUpdateAsync(s => s
+            .SetProperty(j => j.ScheduledAt, DateTime.UtcNow.AddMinutes(minutes))
+            .SetProperty(j => j.ErrorCount, errorCount));
+
+        var run = await _context.Jobs.AsNoTracking().SingleAsync();
+
+        _context.ChangeTracker.Clear();
+
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "kept",
+            new XactCronSchedule("0 0 9 * * *") { Exclusions = $"{run.ScheduledAt:yyyy-MM-dd}" }, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.Equal(run.Id, (await _context.Jobs.AsNoTracking().SingleAsync()).Id);
+    }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_ChangingTheExclusions_KeepsARunWhoseTimeTheyDontChange()
+    {
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "unchanged", "0 0 9 * * *", CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        var run = await _context.Jobs.AsNoTracking().SingleAsync();
+
+        _context.ChangeTracker.Clear();
+
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "unchanged",
+            new XactCronSchedule("0 0 9 * * *") { Exclusions = $"{run.ScheduledAt.AddDays(10):yyyy-MM-dd}" }, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.Equal(run.Id, (await _context.Jobs.AsNoTracking().SingleAsync()).Id);
+    }
+
+    [Fact]
+    public void Excludes_OnANodeWithoutTheTimeZone_IsFalse()
+    {
+        var periodic = new XactJobPeriodic("zone", DateTime.UtcNow, DateTime.UtcNow, "0 0 9 * * *", "T", "M()", "[]", QueueNames.Default,
+                                           isActive: true, version: 2, timeZone: "Nowhere/Atlantis", exclusions: "00:00-23:59");
+
+        Assert.False(periodic.Excludes(DateTime.UtcNow));
+    }
+
+    [Fact]
+    public async Task JobEnsurePeriodicAsync_ChangingTheExclusionsOfAPausedJob_SchedulesNothing()
+    {
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "paused", "0 0 9 * * *", CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        await _context.JobSetPeriodicActiveAsync("paused", false, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        await _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "paused",
+            new XactCronSchedule("0 0 9 * * *") { Exclusions = "12-25" }, CancellationToken.None);
+        await _context.SaveChangesAsync();
+
+        Assert.Equal("12-25", (await _context.PeriodicJobs.AsNoTracking().SingleAsync()).Exclusions);
+        Assert.Equal(0, await _context.Jobs.CountAsync());
+    }
+
+    [Fact]
     public async Task JobEnsurePeriodicAsync_RefusesADefaultSchedule()
     {
         await Assert.ThrowsAsync<ArgumentException>(() => _context.JobEnsurePeriodicAsync<TestService>(x => x.DoWork(), "default", default(XactCronSchedule), CancellationToken.None));

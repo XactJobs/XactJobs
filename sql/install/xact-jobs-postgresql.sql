@@ -1,4 +1,4 @@
--- XactJobs v0.8.0, PostgreSQL: the whole schema, for a new installation.
+-- XactJobs v0.9.0, PostgreSQL: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -95,5 +95,7 @@ CREATE TABLE xact_jobs.job_periodic (
   state character varying(2000),
   -- the time zone of the cron expression: an IANA id (e.g. Europe/Zagreb), or null for UTC
   time_zone character varying(100),
+  -- the local times the job doesn't run at (XactCronSchedule.Exclusions), at most 2000 characters
+  exclusions character varying(2000),
   CONSTRAINT pk_job_periodic PRIMARY KEY (id)
 );

@@ -18,6 +18,7 @@ namespace XactJobs.CronUtil
 		public string Expression { get; }
 
         private readonly TimeZoneInfo _timeZoneInfo;
+		private readonly CronExclusions? _exclusions;
         private readonly BitArray _months = new BitArray(13); // zero index is not used, that's why 13 and not 12
 		private readonly BitArray _daysOfMonth = new BitArray(32); // zero index is not used
 		private readonly BitArray _daysOfWeek = new BitArray(8); // seven can be sunday
@@ -44,9 +45,16 @@ namespace XactJobs.CronUtil
 		}
 
         public CronSequenceGenerator(string expression, TimeZoneInfo timeZoneInfo)
+			: this(expression, timeZoneInfo, null)
+        {
+        }
+
+		/// <param name="exclusions">The local times the sequence leaves out: see <see cref="CronExclusions"/>.</param>
+        public CronSequenceGenerator(string expression, TimeZoneInfo timeZoneInfo, string? exclusions)
         {
 			Expression = expression;
 			_timeZoneInfo = timeZoneInfo;
+			_exclusions = CronExclusions.Parse(exclusions);
 
 			Parse();
         }
@@ -107,11 +115,21 @@ namespace XactJobs.CronUtil
 		/// </summary>
 		private DateTime FindNext(DateTime local)
 		{
-			var next = local;
+			var dot = local.Year;
 
-			DoNext(ref next, next.Year);
+			while (true)
+			{
+				var next = local;
 
-			return next;
+				DoNext(ref next, dot);
+
+				// an excluded time: the search goes on after its exclusion
+				if (_exclusions?.ResumeAfter(next) is not { } resume) return next;
+
+				ThrowIfRunaway(resume, dot);
+
+				local = resume;
+			}
 		}
 
 		/// <summary>

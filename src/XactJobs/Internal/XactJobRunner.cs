@@ -877,6 +877,13 @@ namespace XactJobs.Internal
 
                 string? skipReason = null;
 
+                // its time is one the exclusions leave out: they changed after it was scheduled, and it was running then, or claimed
+                if (!isSkipped && periodicJob != null && periodicJob.Excludes(job.GetOriginallyScheduledAt(claimedAt)))
+                {
+                    isSkipped = true;
+                    skipReason = "Excluded by the periodic job's exclusions";
+                }
+
                 if (!isSkipped && job.IsAwaitingBatch)
                 {
                     skipReason = await GetUnmetContinuationConditionAsync(dbContext, job, stoppingToken)
@@ -887,7 +894,7 @@ namespace XactJobs.Internal
 
                 if (isSkipped)
                 {
-                    // periodic job is inactive or deleted, or the continuation's condition isn't met
+                    // periodic job is inactive or deleted, its exclusions leave the run out, or the continuation's condition isn't met
                     RecordSkipped(dbContext, job, periodicJob, claimedAt, skipReason, previousState);
                 }
                 else
@@ -1072,24 +1079,35 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// Whether the periodic job is active now, or null if it's gone.
+        /// Whether the periodic job is active now, or null if it's gone. Also refreshes its exclusions, which may have changed while the
+        /// run was running: its next run follows the current ones.
         /// </summary>
         private static async Task<bool?> ReadIsActiveAsync(TDbContext dbContext, XactJobPeriodic periodicJob, CancellationToken cancellationToken)
         {
-            var state = dbContext.Entry(periodicJob).State;
+            var entry = dbContext.Entry(periodicJob);
 
             // changed by the job itself, and saved together with the run
-            if (state == EntityState.Modified) return periodicJob.IsActive;
-            if (state == EntityState.Deleted) return null;
+            if (entry.State == EntityState.Modified) return periodicJob.IsActive;
+            if (entry.State == EntityState.Deleted) return null;
 
             // a list, because the Oracle provider can't translate IsActive (it has a value converter) in other ways
-            var isActive = await dbContext.Set<XactJobPeriodic>()
+            var current = await dbContext.Set<XactJobPeriodic>()
                 .Where(p => p.Id == periodicJob.Id)
-                .Select(p => p.IsActive)
+                .Select(p => new { p.IsActive, p.Exclusions })
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            return isActive.Count == 1 ? isActive[0] : null;
+            if (current.Count != 1) return null;
+
+            periodicJob.RefreshExclusions(current[0].Exclusions);
+
+            if (entry.State != EntityState.Detached)
+            {
+                // as read: not a change to save
+                entry.Property(p => p.Exclusions).OriginalValue = current[0].Exclusions;
+            }
+
+            return current[0].IsActive;
         }
 
         private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? previousState, string? state)

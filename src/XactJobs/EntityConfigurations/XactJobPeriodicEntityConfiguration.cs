@@ -61,6 +61,9 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.State).HasColumnName(_sqlDialect.ColState)
                 .HasMaxLength(XactJobPeriodic.MaxStateLength);
 
+            builder.Property(x => x.Exclusions).HasColumnName(_sqlDialect.ColExclusions)
+                .HasMaxLength(CronUtil.CronExclusions.MaxLength);
+
             if (_sqlDialect is OracleDialect)
             {
 

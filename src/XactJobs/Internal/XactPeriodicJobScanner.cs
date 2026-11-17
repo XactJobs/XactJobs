@@ -102,7 +102,7 @@ namespace XactJobs.Internal
 
                         ids[attribute.Id] = method;
 
-                        definitions.Add(new Definition(attribute.Id, new XactCronSchedule(attribute.CronExpression, attribute.TimeZone), attribute.Queue, BuildExpression(type, method, attribute.Config)));
+                        definitions.Add(new Definition(attribute.Id, new XactCronSchedule(attribute.CronExpression, attribute.TimeZone) { Exclusions = attribute.Exclusions }, attribute.Queue, BuildExpression(type, method, attribute.Config)));
                     }
                 }
             }
@@ -170,6 +170,16 @@ namespace XactJobs.Internal
             catch (Exception ex)
             {
                 return $"unknown time zone '{attribute.TimeZone}': {ex.Message}";
+            }
+
+            try
+            {
+                // checks them, and that they leave a time
+                _ = new XactCronSchedule(attribute.CronExpression, attribute.TimeZone) { Exclusions = attribute.Exclusions };
+            }
+            catch (ArgumentException ex)
+            {
+                return $"invalid exclusions '{attribute.Exclusions}': {ex.Message}";
             }
 
             return null;

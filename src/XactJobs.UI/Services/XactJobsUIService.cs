@@ -953,6 +953,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             UpdatedAt = p.UpdatedAt,
             CronExpression = p.CronExpression,
             TimeZone = p.TimeZone,
+            Exclusions = p.Exclusions,
             TypeName = p.TypeName,
             MethodName = p.MethodName,
             Queue = p.Queue,

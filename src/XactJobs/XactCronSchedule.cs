@@ -1,4 +1,4 @@
-// Copyright (c) 2025 XactJobs
+﻿// Copyright (c) 2025 XactJobs
 // Licensed under the MIT License. See LICENSE in the repository root.
 
 using XactJobs.CronUtil;
@@ -28,6 +28,41 @@ namespace XactJobs
         /// </summary>
         public string? TimeZone { get; }
 
+        private readonly string? _exclusions;
+
+        /// <summary>
+        /// The local times the job doesn't run at, in the time zone, or null: a comma-separated list of dates, <c>MM-dd</c> every year
+        /// (<c>12-25</c>) or <c>yyyy-MM-dd</c> once (<c>2026-04-06</c>), and daily time ranges, <c>HH:mm-HH:mm</c> (<c>12:00-13:00</c>, the
+        /// end not included; <c>22:00-06:00</c> crosses midnight). E.g. a <c>const string</c> of holidays, shared by many jobs and
+        /// attributes. At most 2000 characters.
+        /// <para>
+        /// They belong to the periodic job, not to its definition: changing them doesn't make a new version, and the pending run is
+        /// moved to the next time they allow (if it isn't running). A run whose time they exclude when it's due is skipped.
+        /// </para>
+        /// </summary>
+        /// <exception cref="ArgumentException">An invalid item, a list longer than 2000 characters, or one that leaves no time.</exception>
+        public string? Exclusions
+        {
+            get => _exclusions;
+            init
+            {
+                _exclusions = CronExclusions.Normalize(value);
+
+                // after the expression and the time zone, which the constructor sets
+                if (_exclusions != null && CronExpression != null)
+                {
+                    try
+                    {
+                        new CronSequenceGenerator(CronExpression, CronTimeZones.Find(TimeZone), _exclusions).NextUtc(DateTime.UtcNow);
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        throw new ArgumentException($"The exclusions '{_exclusions}' leave no time of '{CronExpression}' in 50 years, or the expression has none.", ex);
+                    }
+                }
+            }
+        }
+
         /// <param name="cronExpression">Six fields, starting with the seconds, e.g. one of <see cref="Cron"/>'s.</param>
         /// <param name="timeZone">
         /// The time zone's id, or null for UTC. An IANA id (e.g. Europe/Zagreb), or a Windows one, which is stored as its IANA id when
@@ -55,6 +90,11 @@ namespace XactJobs
         /// </summary>
         public static implicit operator XactCronSchedule(string cronExpression) => new(cronExpression);
 
-        public override string ToString() => TimeZone == null ? CronExpression : $"{CronExpression} ({TimeZone})";
+        public override string ToString()
+        {
+            var schedule = TimeZone == null ? CronExpression : $"{CronExpression} ({TimeZone})";
+
+            return Exclusions == null ? schedule : $"{schedule}, except {Exclusions}";
+        }
     }
 }

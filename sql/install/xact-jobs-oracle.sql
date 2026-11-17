@@ -1,4 +1,4 @@
--- XactJobs v0.8.0, Oracle: the whole schema, for a new installation.
+-- XactJobs v0.9.0, Oracle: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 
@@ -92,5 +92,7 @@ CREATE TABLE "XACT_JOBS_JOB_PERIODIC" (
   "STATE" NVARCHAR2(2000),
   -- the time zone of the cron expression: an IANA id (e.g. Europe/Zagreb), or null for UTC
   "TIME_ZONE" NVARCHAR2(100),
+  -- the local times the job doesn't run at (XactCronSchedule.Exclusions), at most 2000 characters
+  "EXCLUSIONS" NVARCHAR2(2000),
   CONSTRAINT "PK_JOB_PERIODIC" PRIMARY KEY ("ID")
 );
