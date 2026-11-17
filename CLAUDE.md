@@ -57,7 +57,7 @@ dotnet test --no-build -f net9.0 src/XactJobs.Tests/XactJobs.Tests.csproj --filt
 
 Then the same with `-f net10.0`.
 
-On GitHub, `.github/workflows/tests.yml` runs on pull requests and pushes to main: a Release build of the solution, and one job per suite and framework with the same filters (Core with the dashboard tests, then each database), each on its own runner. A job fails if its suite ran no tests or skipped any, since the database tests skip themselves without Docker. A new database or suite needs its entry in the matrix. `website-check.yml` builds the website on pull requests that change it.
+On GitHub, `.github/workflows/tests.yml` runs on pull requests and pushes to main, unless they only change `website/`, `docs/` or Markdown files: a Release build of the solution, and one job per suite and framework with the same filters (Core with the dashboard tests, then each database), each on its own runner. A job fails if its suite ran no tests or skipped any, since the database tests skip themselves without Docker. A new database or suite needs its entry in the matrix. `website-check.yml` builds the website on pull requests that change it.
 
 ## Benchmark Commands
 
