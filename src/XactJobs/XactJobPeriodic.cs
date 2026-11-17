@@ -35,6 +35,12 @@ namespace XactJobs
         public string? TimeZone { get; private set; }
 
         /// <summary>
+        /// The local times the job doesn't run at, or null: see <see cref="XactCronSchedule.Exclusions"/>. Not part of the definition:
+        /// a change doesn't make a new version.
+        /// </summary>
+        public string? Exclusions { get; private set; }
+
+        /// <summary>
         /// Assembly qualified name of the declaring type
         /// </summary>
         public string TypeName { get; private set; }
@@ -87,7 +93,8 @@ namespace XactJobs
                                string queue,
                                bool isActive,
                                int version,
-                               string? timeZone = null)
+                               string? timeZone = null,
+                               string? exclusions = null)
         {
             Id = id;
             CreatedAt = createdAt;
@@ -100,6 +107,7 @@ namespace XactJobs
             IsActive = isActive;
             Version = version;
             TimeZone = timeZone;
+            Exclusions = exclusions;
         }
 
         internal void UpdateDefinition(XactJobPeriodic job)
@@ -110,6 +118,7 @@ namespace XactJobs
             MethodArgs = job.MethodArgs;
             CronExpression = job.CronExpression;
             TimeZone = job.TimeZone;
+            Exclusions = job.Exclusions;
             Queue = job.Queue;
 
             var previousVersion = Version;
@@ -147,6 +156,43 @@ namespace XactJobs
                 && CronExpression == job.CronExpression 
                 && Queue == job.Queue
                 && Version == (job.PeriodicJobVersion ?? 1);
+        }
+
+        /// <summary>Changes the exclusions alone: the definition, and so the version, stays.</summary>
+        internal void UpdateExclusions(string? exclusions)
+        {
+            UpdatedAt = DateTime.UtcNow;
+            Exclusions = exclusions;
+        }
+
+        /// <summary>
+        /// The run's time, in UTC, is one the exclusions leave out, in the schedule's time zone. Not on a node that doesn't know the zone:
+        /// the run runs there, as it did without exclusions, and its next run is left to a node that knows it.
+        /// </summary>
+        internal bool Excludes(DateTime runAtUtc)
+        {
+            if (Exclusions == null) return false;
+
+            TimeZoneInfo timeZone;
+
+            try
+            {
+                timeZone = CronUtil.CronTimeZones.Find(TimeZone);
+            }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                return false;
+            }
+
+            var local = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(runAtUtc, DateTimeKind.Utc), timeZone);
+
+            return CronUtil.CronExclusions.Parse(Exclusions)!.ResumeAfter(local) != null;
+        }
+
+        /// <summary>The exclusions as they're now in the table, read before scheduling the next run: not a change to save.</summary>
+        internal void RefreshExclusions(string? exclusions)
+        {
+            Exclusions = exclusions;
         }
 
         internal void Activate(bool isActive = true)

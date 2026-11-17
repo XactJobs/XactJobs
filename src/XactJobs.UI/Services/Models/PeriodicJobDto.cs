@@ -8,6 +8,9 @@ public record PeriodicJobDto
     public string CronExpression { get; init; } = "";
     /// <summary>The time zone of the cron expression (an IANA id), or null for UTC.</summary>
     public string? TimeZone { get; init; }
+
+    /// <summary>The local times the job doesn't run at (dates and daily time ranges), or null.</summary>
+    public string? Exclusions { get; init; }
     public string TypeName { get; init; } = "";
     public string MethodName { get; init; } = "";
     public string Queue { get; init; } = "";

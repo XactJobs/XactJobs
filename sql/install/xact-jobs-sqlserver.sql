@@ -1,4 +1,4 @@
--- XactJobs v0.8.0, SQL Server: the whole schema, for a new installation.
+-- XactJobs v0.9.0, SQL Server: the whole schema, for a new installation.
 -- It's the same as running the versioned scripts (sql/v*/) in order. To upgrade an existing installation, run only the versioned
 -- scripts newer than its version.
 -- The filtered index needs QUOTED_IDENTIFIER and ANSI_NULLS on, to create it and to write to the table: SqlClient's defaults
@@ -95,5 +95,7 @@ CREATE TABLE [XactJobs].[JobPeriodic] (
   [State] nvarchar(2000) NULL,
   -- the time zone of the cron expression: an IANA id (e.g. Europe/Zagreb), or null for UTC
   [TimeZone] nvarchar(100) NULL,
+  -- the local times the job doesn't run at (XactCronSchedule.Exclusions), at most 2000 characters
+  [Exclusions] nvarchar(2000) NULL,
   CONSTRAINT [PK_JobPeriodic] PRIMARY KEY ([Id])
 );

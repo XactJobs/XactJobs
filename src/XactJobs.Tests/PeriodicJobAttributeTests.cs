@@ -108,6 +108,8 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
     [InlineData(typeof(ConfigWithoutString), "it has a config, but no string parameter for it")]
     [InlineData(typeof(InvalidCron), "invalid cron expression 'every day'")]
     [InlineData(typeof(UnknownTimeZone), "unknown time zone 'Nowhere/Atlantis'")]
+    [InlineData(typeof(InvalidExclusions), "invalid exclusions 'christmas'")]
+    [InlineData(typeof(ExclusionsLeavingNoTime), "invalid exclusions '00:00-01:00'")]
     [InlineData(typeof(EmptyId), "the id is empty")]
     [InlineData(typeof(DuplicateId), "the id is also on")]
     public void Find_RefusesWhatCantBeAPeriodicJob(Type type, string error)
@@ -132,6 +134,21 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
         var stored = XactJobSerializer.FromExpressionPeriodic(definition.JobExpression, definition.Id, definition.Schedule, null);
 
         Assert.Equal("Europe/Zagreb", stored.TimeZone);
+    }
+
+    [Fact]
+    public void Find_GivesTheScheduleItsExclusions_SharedAsAConstant()
+    {
+        var errors = new List<string>();
+
+        var definition = Assert.Single(XactPeriodicJobScanner.Find([typeof(WithExclusions)], errors));
+
+        Assert.Empty(errors);
+        Assert.Equal("12-25, 12-26, 12:00-13:00", definition.Schedule.Exclusions);
+
+        var stored = XactJobSerializer.FromExpressionPeriodic(definition.JobExpression, definition.Id, definition.Schedule, null);
+
+        Assert.Equal("12-25, 12-26, 12:00-13:00", stored.Exclusions);
     }
 
     [Fact]
@@ -288,6 +305,26 @@ public class PeriodicJobAttributeTests : IAsyncLifetime
     private sealed class UnknownTimeZone
     {
         [XactPeriodicJob("unknown_time_zone", CronExpressions.Daily, TimeZone = "Nowhere/Atlantis")]
+        public void Run() { }
+    }
+
+    private sealed class InvalidExclusions
+    {
+        [XactPeriodicJob("invalid_exclusions", CronExpressions.Daily, Exclusions = "christmas")]
+        public void Run() { }
+    }
+
+    private sealed class ExclusionsLeavingNoTime
+    {
+        [XactPeriodicJob("no_time_left", CronExpressions.Daily, Exclusions = "00:00-01:00")]
+        public void Run() { }
+    }
+
+    private const string Holidays = "12-25,12-26";
+
+    private sealed class WithExclusions
+    {
+        [XactPeriodicJob("with_exclusions", CronExpressions.Daily, Exclusions = Holidays + ", 12:00-13:00")]
         public void Run() { }
     }
 

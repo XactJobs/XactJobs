@@ -209,7 +209,16 @@ namespace XactJobs
                 .FirstOrDefaultAsync(j => j.Id == id, cancellationToken)
                 .ConfigureAwait(false);
 
-            return AddOrUpdatePeriodic(db, periodicJob, lambdaExp, id, schedule, queue);
+            (periodicJob, var isExclusionsChange) = AddOrUpdatePeriodic(db, periodicJob, lambdaExp, id, schedule, queue);
+
+            if (isExclusionsChange)
+            {
+                var pendingRuns = await PendingRuns(db, id).ToListAsync(cancellationToken).ConfigureAwait(false);
+
+                ReplacePendingRuns(db, periodicJob, pendingRuns);
+            }
+
+            return periodicJob;
         }
         
         internal static XactJobPeriodic JobAddOrUpdatePeriodic(this DbContext db,
@@ -221,7 +230,14 @@ namespace XactJobs
             var periodicJob = db.Set<XactJobPeriodic>()
                 .FirstOrDefault(j => j.Id == id);
 
-            return AddOrUpdatePeriodic(db, periodicJob, lambdaExp, id, schedule, queue);
+            (periodicJob, var isExclusionsChange) = AddOrUpdatePeriodic(db, periodicJob, lambdaExp, id, schedule, queue);
+
+            if (isExclusionsChange)
+            {
+                ReplacePendingRuns(db, periodicJob, PendingRuns(db, id).ToList());
+            }
+
+            return periodicJob;
         }
 
         /// <summary>
@@ -229,12 +245,12 @@ namespace XactJobs
         /// <see cref="JobSetPeriodicActiveAsync"/> stays paused when the application starts again.
         /// A paused job has no pending run: the next one is scheduled when it's resumed.
         /// </summary>
-        private static XactJobPeriodic AddOrUpdatePeriodic(DbContext db,
-                                                           XactJobPeriodic? periodicJob,
-                                                           LambdaExpression lambdaExp,
-                                                           string id,
-                                                           XactCronSchedule schedule,
-                                                           string? queue)
+        /// <returns>
+        /// The periodic job, and whether only the exclusions of an active one changed: its version stays, and the caller replaces its
+        /// pending runs (<see cref="ReplacePendingRuns"/>), whose times the old exclusions gave.
+        /// </returns>
+        private static (XactJobPeriodic PeriodicJob, bool IsExclusionsChange) AddOrUpdatePeriodic(
+            DbContext db, XactJobPeriodic? periodicJob, LambdaExpression lambdaExp, string id, XactCronSchedule schedule, string? queue)
         {
             if (schedule.CronExpression == null) throw new ArgumentException("The schedule has no cron expression.", nameof(schedule));
 
@@ -259,9 +275,49 @@ namespace XactJobs
                         ScheduleNextRun(db, periodicJob);
                     }
                 }
+                else if (periodicJob.Exclusions != templateJob.Exclusions)
+                {
+                    periodicJob.UpdateExclusions(templateJob.Exclusions);
+
+                    return (periodicJob, periodicJob.IsActive);
+                }
             }
 
-            return periodicJob;
+            return (periodicJob, false);
+        }
+
+        /// <summary>
+        /// The periodic job's runs that aren't running (not leased, or their lease expired): a run claimed after they're read is deleted
+        /// anyway, and the worker then fails to save it, and rolls the run back.
+        /// </summary>
+        private static IQueryable<XactJob> PendingRuns(DbContext db, string periodicJobId)
+        {
+            var now = DateTime.UtcNow;
+
+            return db.Set<XactJob>().Where(j => j.PeriodicJobId == periodicJobId && (j.LeasedUntil == null || j.LeasedUntil < now));
+        }
+
+        /// <summary>
+        /// Moves the next run, as its schedule gave it (not due yet, a first attempt, not moved by Run now), to the next time the changed
+        /// exclusions allow, if that's another one: deletes its row and adds the new one (EF saves the delete first, which the unique
+        /// index of the periodic job's runs needs). A run that's due, a retry, a moved run, or a running one keeps its row: the worker
+        /// skips it if the new exclusions leave its time out, and a running run schedules its next one with them.
+        /// </summary>
+        private static void ReplacePendingRuns(DbContext db, XactJobPeriodic periodicJob, List<XactJob> pendingRuns)
+        {
+            var now = DateTime.UtcNow;
+
+            var nextRuns = pendingRuns
+                .Where(j => (j.PeriodicJobVersion ?? 1) == periodicJob.Version && j.ScheduledAt > now && j.ErrorCount == 0 && j.OriginallyScheduledAt == null)
+                .ToList();
+
+            if (nextRuns.Count == 0) return;
+
+            if (nextRuns.Count == 1 && nextRuns[0].ScheduledAt == NextRunUtc(periodicJob)) return;
+
+            db.Set<XactJob>().RemoveRange(nextRuns);
+
+            ScheduleNextRun(db, periodicJob);
         }
 
         /// <summary>
@@ -303,11 +359,7 @@ namespace XactJobs
             }
             else
             {
-                var now = DateTime.UtcNow;
-
-                // a row claimed after this read gets deleted anyway: the runner then fails to save it, and rolls the run back
-                var pendingRuns = await dbContext.Set<XactJob>()
-                    .Where(j => j.PeriodicJobId == id && (j.LeasedUntil == null || j.LeasedUntil < now))
+                var pendingRuns = await PendingRuns(dbContext, id)
                     .ToListAsync(cancellationToken)
                     .ConfigureAwait(false);
 
@@ -339,14 +391,17 @@ namespace XactJobs
             return updated > 0;
         }
 
+        /// <summary>The periodic job's next time from now, in its time zone, around its exclusions.</summary>
+        private static DateTime NextRunUtc(XactJobPeriodic periodicJob)
+        {
+            return new CronUtil.CronSequenceGenerator(periodicJob.CronExpression, CronUtil.CronTimeZones.Find(periodicJob.TimeZone), periodicJob.Exclusions)
+                .NextUtc(DateTime.UtcNow);
+        }
+
         internal static XactJob ScheduleNextRun(this DbContext dbContext, XactJobPeriodic periodicJob)
         {
-            var cronGenerator = new CronUtil.CronSequenceGenerator(periodicJob.CronExpression, CronUtil.CronTimeZones.Find(periodicJob.TimeZone));
-
-            var nextRunUtc = cronGenerator.NextUtc(DateTime.UtcNow);
-
             var job = new XactJob(0,
-                                  nextRunUtc,
+                                  NextRunUtc(periodicJob),
                                   periodicJob.TypeName,
                                   periodicJob.MethodName,
                                   periodicJob.MethodArgs,

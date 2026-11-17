@@ -317,6 +317,85 @@ public sealed class CronSequenceGeneratorTests
         }
     }
 
+    [Theory]
+    // a date every year, and once
+    [InlineData("0 0 9 * * *", "12-25", "2025-12-24T10:00:00Z", "2025-12-26T09:00:00Z")]
+    [InlineData("0 0 9 * * *", "12-25, 12-26", "2025-12-24T10:00:00Z", "2025-12-27T09:00:00Z")]
+    [InlineData("0 0 9 * * *", "2026-04-06", "2026-04-05T10:00:00Z", "2026-04-07T09:00:00Z")]
+    [InlineData("0 0 9 * * *", "2026-04-06", "2027-04-05T10:00:00Z", "2027-04-06T09:00:00Z")]
+    [InlineData("0 0 9 * * *", "02-29", "2028-02-28T10:00:00Z", "2028-03-01T09:00:00Z")]
+    // a time range: the end isn't excluded
+    [InlineData("0 */30 * * * *", "12:00-13:00", "2025-01-01T11:45:00Z", "2025-01-01T13:00:00Z")]
+    [InlineData("0 */30 * * * *", "12:00-13:00", "2025-01-01T11:15:00Z", "2025-01-01T11:30:00Z")]
+    // across midnight
+    [InlineData("0 0 * * * *", "22:00-06:00", "2025-01-01T21:30:00Z", "2025-01-02T06:00:00Z")]
+    [InlineData("0 0 * * * *", "22:00-06:00", "2025-01-02T03:30:00Z", "2025-01-02T06:00:00Z")]
+    // both kinds: 06:00 on the 25th is in the date
+    [InlineData("0 0 * * * *", "22:00-06:00, 12-25", "2025-12-24T21:30:00Z", "2025-12-26T06:00:00Z")]
+    public void Exclusions_AreLeftOut(string expression, string exclusions, string from, string expected)
+    {
+        var generator = new CronSequenceGenerator(expression, TimeZoneInfo.Utc, exclusions);
+
+        Assert.Equal(Utc(expected), generator.NextUtc(Utc(from)));
+    }
+
+    [Fact]
+    public void Exclusions_AreLocal()
+    {
+        // 9:00 in Zagreb (+1) on 26 December
+        var generator = new CronSequenceGenerator("0 0 9 * * *", Zone(Zagreb), "12-25");
+
+        Assert.Equal(Utc("2025-12-26T08:00:00Z"), generator.NextUtc(Utc("2025-12-24T09:00:00Z")));
+    }
+
+    [Fact]
+    public void Exclusions_ThatLeaveNoTime_AreRefused()
+    {
+        var generator = new CronSequenceGenerator("0 0 12 * * *", TimeZoneInfo.Utc, "11:00-13:00");
+
+        Assert.Throws<ArgumentException>(() => generator.NextUtc(Utc("2025-01-01T00:00:00Z")));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData(" , ", null)]
+    [InlineData(" 12-25 ,2026-04-06,, 12:00-13:00 ", "12-25, 2026-04-06, 12:00-13:00")]
+    public void Exclusions_AreStoredNormalized(string? exclusions, string? expected)
+    {
+        Assert.Equal(expected, new XactCronSchedule("0 0 9 * * *") { Exclusions = exclusions }.Exclusions);
+    }
+
+    [Theory]
+    [InlineData("13-01")]
+    [InlineData("02-30")]
+    [InlineData("2025-02-29")]
+    [InlineData("1-1")]
+    [InlineData("12:00")]
+    [InlineData("12:00-12:00")]
+    [InlineData("25:00-26:00")]
+    [InlineData("12:00-13")]
+    [InlineData("christmas")]
+    public void Exclusions_Invalid_AreRefused(string exclusions)
+    {
+        Assert.Throws<ArgumentException>(() => new XactCronSchedule("0 0 9 * * *") { Exclusions = exclusions });
+    }
+
+    [Fact]
+    public void Exclusions_ThatLeaveNoTime_AreRefusedWhenTheScheduleIsCreated()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => new XactCronSchedule("0 0 0 25 12 *") { Exclusions = "12-25" });
+
+        Assert.Contains("leave no time", ex.Message);
+    }
+
+    [Fact]
+    public void Exclusions_LongerThan2000Characters_AreRefused()
+    {
+        var dates = string.Join(", ", Enumerable.Range(0, 200).Select(i => new DateOnly(2030, 1, 1).AddDays(i).ToString("yyyy-MM-dd")));
+
+        Assert.Throws<ArgumentException>(() => new XactCronSchedule("0 0 9 * * *") { Exclusions = dates });
+    }
+
     private static DateTime Next(string expression, TimeZoneInfo zone, string from)
     {
         return new CronSequenceGenerator(expression, zone).NextUtc(Utc(from));
