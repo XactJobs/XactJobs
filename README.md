@@ -807,6 +807,36 @@ A job that has nothing to do should just return: it's recorded as completed.
 
 A custom retry strategy gets the job that failed. For the first attempt of a continuation, its `ScheduledAt` is the reserved time 9999-12-31, so base the retry time on the current time.
 
+## Job Filters and Failure Handlers
+
+A job filter runs code around every job, in the job's scope and unit of work: e.g. it sets up a tenant from the job's arguments, which the job's DbContext then sees. A failure handler is told when a job has failed for good (out of retries, or `XactJobCancelException`), after the failure is saved, e.g. to send an alert:
+
+```csharp
+public class TenantFilter(ITenantContext tenant) : IXactJobFilter
+{
+    public async Task InvokeAsync(XactJobExecutingContext context, Func<Task> next)
+    {
+        var index = Array.FindIndex(context.Method.GetParameters(), p => p.Name == "tenantId");
+
+        if (index >= 0)
+        {
+            tenant.Set((int)context.Arguments[index]!);
+        }
+
+        await next();
+    }
+}
+
+builder.Services.AddXactJobs<AppDbContext>(options =>
+{
+    options
+        .WithJobFilter<TenantFilter>()
+        .WithJobFailureHandler<AlertOnFailure>();
+});
+```
+
+A filter's exception is the job's failure. It can catch the job's exception and throw another, e.g. `XactJobCancelException`, but not swallow it: the attempt fails anyway, because the job's changes can't be saved as a completed job's. Not calling `next` completes the job without running it. A failure handler runs after the job's place on the worker is freed; its exceptions are logged, and can't change the job's outcome. The details are on the website: [Job filters and failure handlers](https://xactjobs.com/docs/filters/).
+
 ## Stopping
 When the application stops, the workers stop polling and running jobs get the shutdown timeout (`WithShutdownTimeout`, 10 seconds by default) to finish. Then the cancellation token passed to the jobs is cancelled, and they get
 5 more seconds to react. Finally, the leases of the unfinished jobs are cleared so they can run again right away, which takes up to 10 seconds (`options.Options.ClearLeaseTimeoutInSeconds`).

@@ -50,6 +50,8 @@ these defaults, not from the default queue's settings.
 | `WithPeriodicJobReconciliationInterval(seconds)` | 300 | Seconds between each node's checks for active periodic jobs without a pending run |
 | `WithPeriodicJobsFromAssembly(assembly)`, `WithPeriodicJobsFromAssemblyOf<T>()` | none | The periodic jobs of the `[XactPeriodicJob]` methods in the assembly, ensured at startup: see [Periodic jobs](../periodic-jobs/#attributes) |
 | `WithSaveOutsideTransaction(check)` | `XactJobSaveCheck.Warn` | When a job saves without a transaction: `Warn`, `Throw` or `Ignore`. See [the save check](../unit-of-work/#the-save-check) |
+| `WithJobFilter<T>()` | none | Runs an `IXactJobFilter` around every job, the first one added outermost: see [Job filters](../filters/) |
+| `WithJobFailureHandler<T>()` | none | Tells an `IXactJobFailureHandler` when a job has failed for good: see [Failure handlers](../filters/#failure-handlers) |
 | `WithJobTagsInMetrics(enabled?)` | off | Also tags the jobs' metrics with the job's type and method. See [Metrics, traces and logs](../observability/) |
 | `WithPriorityQueue(configure?)` | not started | Workers for `QueueNames.Priority`: 2, polling every 4 seconds |
 | `WithLongRunningQueue(configure?)` | not started | Workers for `QueueNames.LongRunning`: 2, polling every 10 seconds |
