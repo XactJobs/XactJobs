@@ -98,6 +98,25 @@ or in the schedule's [time zone](#time-zones).
 | `Cron.Weekly(DayOfWeek.Monday)` | `0 0 0 * * 1` |
 | `Cron.Weekly(DayOfWeek.Monday, new TimeSpan(8, 0, 0), DayOfWeek.Thursday)` | `0 0 8 * * 1,4` |
 
+A field takes a value, a list (`1,15`), a range (`MON-FRI`), a step (`*/15`, `0-30/10`), or `*`; `?` is `*` in the day fields, as the
+whole field only. Months
+can be names (`JAN`), and days of the week too (`SUN` to `SAT`, or 0 to 7, where 0 and 7 are Sunday). When both day fields are set, a day
+must match both. The day fields also take days that depend on the month, as in Quartz:
+
+| In the field | Means | Example |
+|---|---|---|
+| day-of-month `L` | the last day of the month | `0 0 18 L * *`: at 18:00 on the last day of every month |
+| day-of-month `L-n` | n days before the last day | `0 0 9 L-2 * *`: two days before the end of the month |
+| day-of-month `LW` | the last weekday (Monday to Friday) of the month | `0 0 17 LW * *` |
+| day-of-month `nW` | the weekday nearest the n-th, in the same month | `0 0 9 15W * *`: the 15th, or the Friday before or the Monday after it |
+| day-of-week `dayL` | the month's last such day | `0 0 9 * * FRIL` or `5L`: the last Friday |
+| day-of-week `day#n` | the month's n-th such day, 1 to 5 | `0 0 9 * * MON#1`: the first Monday; `FRI#3`: the third Friday |
+
+They can be in a list with other values (`1,L`, `MON#1,FRIL`). `nW` doesn't cross into another month: a Saturday 1st gives Monday the
+3rd, a Sunday last day the Friday before it, and a month without the n-th (`31W` in April) has no run. The days of the week are numbered
+as in the rest of the expression (5 is Friday), not as in Quartz (where 6 is Friday): with names, there's no difference. Quartz's `L`
+alone in the day of the week (Saturday) isn't accepted: write `SAT`.
+
 ## Time zones
 
 Wherever a cron expression goes, an `XactCronSchedule` can go instead, with the expression and a time zone. A cron expression on its own

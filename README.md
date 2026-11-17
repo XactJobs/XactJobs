@@ -142,6 +142,11 @@ missed runs are not caught up.
 After a periodic job is deleted, or its definition changes, the pending run of the old definition stays in the table until its
 scheduled time. A worker then skips it, adding a `Skipped` row to the history.
 
+Cron expressions have 6 fields, starting with the seconds. Their day fields also take the days that depend on the month, as in Quartz:
+`L` (the last day of the month), `L-2`, `LW` (the last weekday), `15W` (the weekday nearest the 15th), `FRIL` (the last Friday) and
+`FRI#3` (the third Friday), e.g. `0 0 18 L * *` at 18:00 on the last day of every month. The days of the week are 0 to 7 (0 and 7 are
+Sunday), not Quartz's 1 to 7.
+
 #### Time Zones
 Cron expressions are in UTC, unless the schedule has a time zone. Wherever a cron expression goes, an `XactCronSchedule` can go
 instead, with the expression and a time zone:
@@ -414,7 +419,7 @@ the script, because it drops an index that older versions need.
 For v0.2.0, run the script first: it adds the columns for batches and continuations, which v0.2.0 needs. Start using batches and continuations only
 once all the workers run v0.2.0: a worker of an older version that retries a job of a batch removes the job from its batch, so the batch's continuations could start too early.
 
-v0.9.0 has no script. `IRetryStrategy.GetRetryTimeUtc` gets the attempt's exception as a third parameter: add it to your own strategies.
+v0.9.0 has no script. Use `L`, `W` and `#` in cron expressions only once all the workers run v0.9.0: an older one that claims a run of such a periodic job runs it, fails to schedule the next run, and runs it again and again. `IRetryStrategy.GetRetryTimeUtc` gets the attempt's exception as a third parameter: add it to your own strategies.
 `DefaultRetryStrategy` counts retries instead of attempts: `maxAttempts: 5` is now `maxRetries: 4`, and a positional `new DefaultRetryStrategy(1)`,
 which was one attempt, is now one retry. The default is 10 retries (11 attempts, one more than before).
 
