@@ -1,4 +1,4 @@
-// Copyright (c) 2025 XactJobs
+﻿// Copyright (c) 2025 XactJobs
 // Licensed under the MIT License. See LICENSE in the repository root.
 
 using System.Buffers;
@@ -104,6 +104,41 @@ namespace XactJobs.Internal
             var type = _types.GetOrAdd(job.TypeName, static typeName => Type.GetType(typeName, throwOnError: true)!);
 
             return (type, FindMethod(type, job.MethodName, paramCount));
+        }
+
+        /// <summary>
+        /// The problem with the <see cref="XactRetryAttribute"/> of a job expression's method, or null. See
+        /// <see cref="CheckRetryAttribute(Type, MethodInfo)"/>.
+        /// </summary>
+        internal static string? CheckRetryAttribute(LambdaExpression jobExpression)
+        {
+            var call = GetMethodCall(jobExpression);
+
+            var jobType = call.Object?.Type
+                ?? call.Method.DeclaringType
+                ?? throw new NotSupportedException($"The job method {call.Method.Name} has no declaring type.");
+
+            return CheckRetryAttribute(jobType, call.Method);
+        }
+
+        /// <summary>
+        /// The problem with the <see cref="XactRetryAttribute"/> the runner reads for a call of the method on the job type, or null. It's
+        /// read from the method the runner finds there: an override's, where the expression has the method it overrides.
+        /// </summary>
+        internal static string? CheckRetryAttribute(Type jobType, MethodInfo method)
+        {
+            var runMethod = FindMethod(jobType, GetMethodSignature(method), method.GetParameters().Length);
+
+            try
+            {
+                runMethod.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
+
+                return null;
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                return ex.Message;
+            }
         }
 
         /// <summary>The stored <c>MethodName</c> of a method: <c>Name(System.String, System.Nullable`1[System.Int32])</c>.</summary>
@@ -657,13 +692,9 @@ namespace XactJobs.Internal
                 }
 
                 // read when an attempt fails: an invalid one is refused here, where the developer sees it
-                try
+                if (CheckRetryAttribute(jobType, method) is { } retryError)
                 {
-                    method.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
-                }
-                catch (ArgumentOutOfRangeException ex)
-                {
-                    throw new NotSupportedException($"The job method {description} has an invalid [XactRetry]: {ex.Message}", ex);
+                    throw new NotSupportedException($"The job method {description} has an invalid [XactRetry]: {retryError}");
                 }
 
                 return new JobMethod(GetTypeName(jobType), GetMethodSignature(method), storedAsNull);

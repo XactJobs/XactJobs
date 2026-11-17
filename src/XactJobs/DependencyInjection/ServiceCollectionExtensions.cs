@@ -21,6 +21,9 @@ public static class ServiceCollectionExtensions
         // once the queues and the other periodic jobs are known
         XactPeriodicJobScanner.AddTo(optionsBuilder.Options);
 
+        // the scheduler saves them at start, and an invalid one there would stop the ones after it
+        CheckRetryAttributesOfPeriodicJobs(optionsBuilder.Options);
+
         services.AddSingleton(optionsBuilder.Options);
         services.AddSingleton(CreateQuickPollChannels(optionsBuilder.Options));
 
@@ -31,6 +34,22 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<XactJobsCronOptionsScheduler<TDbContext>>();
 
         return services;
+    }
+
+    /// <exception cref="InvalidOperationException">With every periodic job whose method has an invalid [XactRetry].</exception>
+    private static void CheckRetryAttributesOfPeriodicJobs<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
+    {
+        var errors = options.PeriodicJobs
+            .Concat(options.IsolatedQueues.Values.SelectMany(q => q.PeriodicJobs))
+            .Select(p => (p.Key, Error: XactJobSerializer.CheckRetryAttribute(p.Value.JobExpression)))
+            .Where(p => p.Error != null)
+            .Select(p => $"periodic job '{p.Key}': {p.Error}")
+            .ToList();
+
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException($"Invalid [XactRetry] attributes:\n- {string.Join("\n- ", errors)}");
+        }
     }
 
     private static QuickPollChannels CreateQuickPollChannels<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext

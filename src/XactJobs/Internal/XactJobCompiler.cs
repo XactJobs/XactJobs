@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 
 namespace XactJobs.Internal
@@ -18,17 +19,13 @@ namespace XactJobs.Internal
 
         /// <summary>
         /// The strategy of the job method's <see cref="XactRetryAttribute"/>, or null without one. Only when an attempt fails. Throws if
-        /// the method can't be found (not cached, as for running it), or <see cref="ArgumentOutOfRangeException"/> if the attribute is
-        /// invalid (it changed since the job was enqueued, which refuses an invalid one).
+        /// the method can't be found (not cached, as for running it). An invalid attribute (changed since the job was enqueued, which
+        /// refuses an invalid one) is cached as none, and throws <see cref="ArgumentOutOfRangeException"/> only the first time, for the
+        /// log.
         /// </summary>
         public static IRetryStrategy? FindRetryStrategy(XactJob job)
         {
-            int argCount;
-
-            using (var jsonArgs = JsonDocument.Parse(job.MethodArgs))
-            {
-                argCount = jsonArgs.RootElement.GetArrayLength();
-            }
+            var argCount = CountArguments(job.MethodArgs);
 
             var key = new XactJobDispatchKey(job.TypeName, job.MethodName, argCount);
 
@@ -39,11 +36,40 @@ namespace XactJobs.Internal
 
             var (_, method) = job.ToMethodInfo(argCount);
 
-            strategy = method.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
+            try
+            {
+                strategy = method.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                if (_retryStrategies.TryAdd(key, null)) throw;
+
+                return null;
+            }
 
             return _retryStrategies.GetOrAdd(key, strategy);
         }
-        
+
+        /// <summary>The number of elements of the arguments' JSON array, without parsing them into a document.</summary>
+        private static int CountArguments(string methodArgs)
+        {
+            var reader = new Utf8JsonReader(Encoding.UTF8.GetBytes(methodArgs));
+
+            reader.Read();
+
+            var count = 0;
+
+            while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+            {
+                count++;
+
+                // an object or an array argument: to its end
+                reader.Skip();
+            }
+
+            return count;
+        }
+
         public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
             var (compiledFunc, args) = PrepareCall(job, context, stoppingToken);
