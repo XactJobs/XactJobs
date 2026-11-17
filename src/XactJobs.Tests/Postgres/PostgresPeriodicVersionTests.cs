@@ -62,7 +62,7 @@ public abstract class PostgresPeriodicVersionTests(PostgresFixture fixture) : IA
     [PostgresFact]
     public async Task FailedRuns_AreRescheduledWithTheSameVersion()
     {
-        var host = CreateHost(retryStrategy: new DefaultRetryStrategy(maxAttempts: 100, retrySeconds: [0]));
+        var host = CreateHost(retryStrategy: new DefaultRetryStrategy(maxRetries: 99, retrySeconds: [0]));
 
         var version = await WithDbAsync(host, async db =>
         {
@@ -88,7 +88,7 @@ public abstract class PostgresPeriodicVersionTests(PostgresFixture fixture) : IA
     [PostgresFact]
     public async Task RunsWithRetriesExhausted_ScheduleTheNextRun()
     {
-        var host = CreateHost(retryStrategy: new DefaultRetryStrategy(maxAttempts: 1));
+        var host = CreateHost(retryStrategy: new DefaultRetryStrategy(maxRetries: 0));
 
         await WithDbAsync(host, db =>
         {

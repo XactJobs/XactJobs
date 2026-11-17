@@ -425,11 +425,11 @@ public sealed class PeriodicStateScenarios(Action<DbContextOptionsBuilder> confi
 
     private sealed class QuickRetry : IRetryStrategy
     {
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => newErrorCount < 10 ? DateTime.UtcNow.AddMilliseconds(100) : null;
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => newErrorCount < 10 ? DateTime.UtcNow.AddMilliseconds(100) : null;
     }
 
     private sealed class NoRetry : IRetryStrategy
     {
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => null;
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => null;
     }
 }

@@ -410,7 +410,7 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
                 .WithWorkerCount(1)
                 .WithPollingInterval(1)
                 .WithShutdownTimeout(0)
-                .WithRetryStrategy(new DefaultRetryStrategy(maxAttempts: 1));
+                .WithRetryStrategy(new DefaultRetryStrategy(maxRetries: 0));
 
             configure?.Invoke(options);
         });
@@ -539,7 +539,7 @@ public abstract class ContinuationIntegrationTests(DatabaseFixture fixture) : IA
 
     private sealed class QuickRetry : IRetryStrategy
     {
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => newErrorCount < 10 ? DateTime.UtcNow.AddMilliseconds(100) : null;
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => newErrorCount < 10 ? DateTime.UtcNow.AddMilliseconds(100) : null;
     }
 
     private sealed class LogCapture : ILoggerProvider, ILogger

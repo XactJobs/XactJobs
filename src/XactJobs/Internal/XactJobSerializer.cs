@@ -656,6 +656,16 @@ namespace XactJobs.Internal
                     storedAsNull[i] = parameterType == typeof(CancellationToken) || parameterType == typeof(XactJobContext);
                 }
 
+                // read when an attempt fails: an invalid one is refused here, where the developer sees it
+                try
+                {
+                    method.GetCustomAttribute<XactRetryAttribute>(inherit: true)?.ToRetryStrategy();
+                }
+                catch (ArgumentOutOfRangeException ex)
+                {
+                    throw new NotSupportedException($"The job method {description} has an invalid [XactRetry]: {ex.Message}", ex);
+                }
+
                 return new JobMethod(GetTypeName(jobType), GetMethodSignature(method), storedAsNull);
             }
         }

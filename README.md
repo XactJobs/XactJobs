@@ -775,7 +775,15 @@ With real jobs, their own work sets the pace. The benchmark is in [src/XactJobs.
 
 ## Failures and Retries
 
-When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. A retry is the same job: it keeps its id, so its attempts have the same id in the history, the logs and the traces. By default, it runs up to 10 times, waiting longer after each attempt (2 seconds at first, up to 30 minutes), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy (an `IRetryStrategy`).
+When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled to run again by the retry strategy. A retry is the same job: it keeps its id, so its attempts have the same id in the history, the logs and the traces. By default, it's retried up to 10 times, waiting longer before each retry (2 seconds at first, up to an hour), and a job that runs out of retries is recorded as cancelled. `WithRetryStrategy` sets another strategy for a queue (an `IRetryStrategy`, which gets the job and the exception), and `[XactRetry]` on a job method sets its own retries and waits:
+
+```csharp
+[XactRetry(3, [10, 60, 300])] // up to 3 retries: after 10 seconds, a minute, then 5 minutes
+public async Task ExportAsync(int invoiceId)
+{
+    // ...
+}
+```
 
 A job that finds it can never succeed, e.g. because the data it works on is gone, throws `XactJobCancelException` to stop without retries:
 

@@ -1015,6 +1015,29 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
+        /// The job method's <see cref="XactRetryAttribute"/>, or the queue's strategy. Also the queue's if the method can't be found
+        /// (which is then why the job failed), or if its attribute is invalid (logged).
+        /// </summary>
+        private IRetryStrategy GetRetryStrategy(XactJob job)
+        {
+            try
+            {
+                return XactJobCompiler.FindRetryStrategy(job) ?? _options.RetryStrategy;
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                _logger.LogError(ex, "{Queue}: Invalid [XactRetry] on {TypeName}.{MethodName}, the queue's retry strategy is used",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName);
+            }
+            catch (Exception)
+            {
+                // the method can't be found: the job's failure says why
+            }
+
+            return _options.RetryStrategy;
+        }
+
+        /// <summary>
         /// Adds the history row, and the next periodic run. The caller removes the job's row, or moves it to <paramref name="retryAt"/>.
         /// The states are a periodic run's, before and after it (the same, unless it completed and set one).
         /// </summary>
@@ -1047,7 +1070,8 @@ namespace XactJobs.Internal
                 errorCount++;
 
                 // the job said it can never succeed: no retries
-                var nextRunTimeUtc = cancel == null ? _options.RetryStrategy.GetRetryTimeUtc(job, errorCount) : null;
+                // a failed attempt always has its exception
+                var nextRunTimeUtc = cancel == null ? GetRetryStrategy(job).GetRetryTimeUtc(job, errorCount, ex!) : null;
 
                 if (nextRunTimeUtc.HasValue)
                 {

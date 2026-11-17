@@ -549,6 +549,6 @@ public abstract class PostgresRunnerTests(PostgresFixture fixture) : IAsyncLifet
 
     private sealed class FixedRetryStrategy(DateTime retryAt) : IRetryStrategy
     {
-        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount) => retryAt;
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => retryAt;
     }
 }

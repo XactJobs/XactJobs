@@ -138,6 +138,7 @@ XactJobs is a .NET library for background job processing with full database tran
 
 - A retry is the same row: `RescheduleAsync` moves it to its retry time with an `UPDATE` by its whole old key (`ExecuteUpdate`, EF can't change a tracked entity's key), setting the error count and the original time and clearing the lease, in the transaction of `RecordFailureAsync` that adds the history row (a cleared context: the failed job's changes are discarded). No row updated means another worker processed it after its lease expired: `DbUpdateConcurrencyException`, logged as a warning
 - So a job keeps its id across its attempts: the history has a row per attempt (primary key: id and processed time, on SQLite too since v0.6.0), and lookups of a history row by id take the last one
+- The retry time: the job method's `[XactRetry(maxRetries, [waits])]` (a `DefaultRetryStrategy`, which counts retries, so they match the waits), or else the queue's `IRetryStrategy`, which gets the attempt's exception. `XactJobCompiler.FindRetryStrategy` reads the attribute when an attempt fails (cached per method), so a change applies to enqueued jobs; the serializer refuses an invalid one at enqueue. `XactJobCancelException` skips both. `SqliteRetryTests`
 - The success path (`RunJobAsync`) never starts a transaction of its own: the job may have opened one, or have unsaved changes, and a retrying execution strategy can't re-run the job
 
 ### Original Scheduled Time
