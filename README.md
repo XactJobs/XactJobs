@@ -414,6 +414,10 @@ the script, because it drops an index that older versions need.
 For v0.2.0, run the script first: it adds the columns for batches and continuations, which v0.2.0 needs. Start using batches and continuations only
 once all the workers run v0.2.0: a worker of an older version that retries a job of a batch removes the job from its batch, so the batch's continuations could start too early.
 
+v0.9.0 has no script. `IRetryStrategy.GetRetryTimeUtc` gets the attempt's exception as a third parameter: add it to your own strategies.
+`DefaultRetryStrategy` counts retries instead of attempts: `maxAttempts: 5` is now `maxRetries: 4`, and a positional `new DefaultRetryStrategy(1)`,
+which was one attempt, is now one retry. The default is 10 retries (11 attempts, one more than before).
+
 For v0.8.0, run the script first: it adds the column for the time zone of a periodic job's schedule (see [Time Zones](#time-zones)).
 Give a schedule a time zone only once all the workers run v0.8.0: a worker of an older version schedules the next run in UTC.
 The methods that take a cron expression take an `XactCronSchedule` instead, and a cron expression converts to it, so the calls compile

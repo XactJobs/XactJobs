@@ -17,6 +17,9 @@ namespace XactJobs.Internal
         // How long jobs get to react to the cancellation, after the shutdown timeout has passed
         private static readonly TimeSpan JobCancellationTimeout = TimeSpan.FromSeconds(5);
 
+        /// <summary>When a retry strategy throws.</summary>
+        private static readonly DefaultRetryStrategy FallbackRetryStrategy = new();
+
         // During a backlog, how long a worker with a batch waits for the batch to finish before it claims again, while fewer jobs
         // wait than it can run
         private static readonly TimeSpan EarlyClaimDelay = TimeSpan.FromSeconds(1);
@@ -670,6 +673,9 @@ namespace XactJobs.Internal
         {
             try
             {
+                // once, before the transaction: the strategy is the app's code, and a retrying execution strategy runs the lambda again
+                var retryAt = GetRetryTimeUtc(job, jobException);
+
                 using var scope = _scopeFactory.CreateScope();
 
                 var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
@@ -691,7 +697,7 @@ namespace XactJobs.Internal
                         .ConfigureAwait(false);
 
                     // the state it started with, which a failed attempt leaves as it is
-                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException, periodicJob?.State, out var retryAt);
+                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException, periodicJob?.State, retryAt);
 
                     if (retryAt != null)
                     {
@@ -1001,22 +1007,48 @@ namespace XactJobs.Internal
 
         private void RecordSuccess(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? previousState, string? state)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Completed, null, null, previousState, state, out _);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Completed, null, null, previousState, state, null);
         }
 
         private void RecordSkipped(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, string? reason, string? state)
         {
-            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Skipped, null, reason, state, state, out _);
+            RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Skipped, null, reason, state, state, null);
         }
 
-        private XactJobStatus RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception ex, string? state, out DateTime? retryAt)
+        /// <param name="retryAt">The time of the retry, or null if it's finished (recorded as cancelled).</param>
+        private XactJobStatus RecordFailedAttempt(TDbContext dbContext, XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception ex, string? state, DateTime? retryAt)
         {
-            return RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Failed, ex, null, state, state, out retryAt);
+            return RecordProcessingAttempt(dbContext, job, periodicJob, claimedAt, ProcessingResult.Failed, ex, null, state, state, retryAt);
         }
 
         /// <summary>
-        /// The job method's <see cref="XactRetryAttribute"/>, or the queue's strategy. Also the queue's if the method can't be found
-        /// (which is then why the job failed), or if its attribute is invalid (logged).
+        /// When the failed job runs again, or null if it doesn't. A strategy that throws is logged, and the default strategy decides, so
+        /// that the failure is still recorded and the retries stay bounded.
+        /// </summary>
+        private DateTime? GetRetryTimeUtc(XactJob job, Exception jobException)
+        {
+            // the job said it can never succeed: no retries
+            if (XactJobCancelException.Find(jobException) != null) return null;
+
+            var newErrorCount = job.ErrorCount + 1;
+            var strategy = GetRetryStrategy(job);
+
+            try
+            {
+                return strategy.GetRetryTimeUtc(job, newErrorCount, jobException);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Queue}: The retry strategy {Strategy} threw, the default strategy is used: {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), strategy.GetType().Name, job.TypeName, job.MethodName, job.Id);
+
+                return FallbackRetryStrategy.GetRetryTimeUtc(job, newErrorCount, jobException);
+            }
+        }
+
+        /// <summary>
+        /// The job method's <see cref="XactRetryAttribute"/>, or the queue's strategy. Also the queue's if the attribute can't be read, or
+        /// is invalid (both logged).
         /// </summary>
         private IRetryStrategy GetRetryStrategy(XactJob job)
         {
@@ -1026,19 +1058,22 @@ namespace XactJobs.Internal
             }
             catch (ArgumentOutOfRangeException ex)
             {
-                _logger.LogError(ex, "{Queue}: Invalid [XactRetry] on {TypeName}.{MethodName}, the queue's retry strategy is used",
-                    GetQueueDisplayName(), job.TypeName, job.MethodName);
+                // once per method: then the queue's strategy is cached for it
+                _logger.LogError("{Queue}: Invalid [XactRetry] on {TypeName}.{MethodName}, the queue's retry strategy is used: {Error}",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, ex.Message);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // the method can't be found: the job's failure says why
+                // e.g. the method can't be found, which is then also why the job failed
+                _logger.LogWarning("{Queue}: The [XactRetry] of {TypeName}.{MethodName} couldn't be read, the queue's retry strategy is used: {Error}",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, ex.Message);
             }
 
             return _options.RetryStrategy;
         }
 
         /// <summary>
-        /// Adds the history row, and the next periodic run. The caller removes the job's row, or moves it to <paramref name="retryAt"/>.
+        /// Adds the history row, and the next periodic run. The caller removes the job's row, or moves a failed one to <paramref name="retryAt"/>.
         /// The states are a periodic run's, before and after it (the same, unless it completed and set one).
         /// </summary>
         private XactJobStatus RecordProcessingAttempt(TDbContext dbContext,
@@ -1050,10 +1085,8 @@ namespace XactJobs.Internal
                                                       string? message,
                                                       string? previousState,
                                                       string? state,
-                                                      out DateTime? retryAt)
+                                                      DateTime? retryAt)
         {
-            retryAt = null;
-
             var status = processingResult switch
             {
                 ProcessingResult.Completed => XactJobStatus.Completed,
@@ -1069,15 +1102,8 @@ namespace XactJobs.Internal
             {
                 errorCount++;
 
-                // the job said it can never succeed: no retries
-                // a failed attempt always has its exception
-                var nextRunTimeUtc = cancel == null ? GetRetryStrategy(job).GetRetryTimeUtc(job, errorCount, ex!) : null;
-
-                if (nextRunTimeUtc.HasValue)
-                {
-                    retryAt = nextRunTimeUtc.Value;
-                }
-                else
+                // out of retries, or the job cancelled itself (GetRetryTimeUtc)
+                if (retryAt == null)
                 {
                     status = XactJobStatus.Cancelled;
                 }

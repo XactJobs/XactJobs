@@ -28,7 +28,8 @@ No script. `IRetryStrategy.GetRetryTimeUtc` gets the attempt's exception, as a t
 (`GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception)`).
 
 `DefaultRetryStrategy` counts retries instead of attempts, so that the number matches its list of waits: `maxAttempts: 5` is now
-`maxRetries: 4`, and its property `MaxAttempts` is `MaxRetries`. The default is now 10 retries (11 attempts, one more than before), the last one an hour after the 10th attempt. It refuses negative retries and
+`maxRetries: 4`, and its property `MaxAttempts` is `MaxRetries`. A positional argument still compiles, with the new meaning: check
+`new DefaultRetryStrategy(1)`, which was one attempt (no retries), and is now one retry. The default is now 10 retries (11 attempts, one more than before), the last one an hour after the 10th attempt. It refuses negative retries and
 waits, and uses its default waits when given none (before, it failed recording the first retry, and the job ran again only when its lease
 expired).
 

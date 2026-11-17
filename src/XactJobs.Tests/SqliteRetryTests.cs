@@ -140,6 +140,61 @@ public class SqliteRetryTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task QueueStrategyThatThrows_TheDefaultStrategyRetriesTheJob()
+    {
+        _queueStrategy.Throw = true;
+
+        var job = await EnqueueAndRunAsync(db => db.JobEnqueue<RetryJobs>(x => x.ThrowTimeout()));
+
+        var failedAt = DateTime.UtcNow;
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        // recorded, not lost: the default strategy's first retry
+        Assert.Equal(XactJobStatus.Failed, history.Status);
+        Assert.Single(_queueStrategy.Calls);
+
+        var retry = Assert.Single(await PendingAsync(job.Id));
+        Assert.Equal(1, retry.ErrorCount);
+        Assert.Equal(failedAt.AddSeconds(DefaultRetryStrategy.DefaultRetrySeconds[0]), retry.ScheduledAt, TimeSpan.FromSeconds(30));
+    }
+
+    [Fact]
+    public void InvalidXactRetryOnAnOverride_IsRefusedAtEnqueue()
+    {
+        using var scope = _host!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+
+        // the expression has the base method, which has no attribute: the runner reads the override's
+        var ex = Assert.Throws<NotSupportedException>(() => db.JobEnqueue<InvalidOverrideJobs>(x => x.Run()));
+        Assert.Contains("[XactRetry]", ex.Message);
+    }
+
+    [Fact]
+    public void InvalidXactRetryOfAPeriodicJob_IsRefusedByAddXactJobs()
+    {
+        var services = new ServiceCollection();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => services.AddXactJobs<TestDbContext>(options => options
+            .WithPeriodicJob<InvalidRetryJobs>(x => x.NegativeRetries(), "invalid-retry", CronExpressions.Hourly)));
+
+        Assert.Contains("periodic job 'invalid-retry'", ex.Message);
+    }
+
+    [Fact]
+    public void InvalidXactRetryOfAnEnqueuedJob_ThrowsOnce_ThenIsCachedAsNone()
+    {
+        // as if the attribute became invalid after the job was enqueued, which refuses an invalid one; with arguments, which are counted
+        var type = typeof(InvalidRetryJobs);
+        var method = type.GetMethod(nameof(InvalidRetryJobs.NegativeWaitWithArguments))!;
+        var job = new XactJob(1, DateTime.UtcNow, $"{type.FullName}, {type.Assembly.GetName().Name}",
+                              Internal.XactJobSerializer.GetMethodSignature(method), "[1,{\"a\":[1,2]},\"x\"]", QueueNames.Default);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => Internal.XactJobCompiler.FindRetryStrategy(job));
+        Assert.Null(Internal.XactJobCompiler.FindRetryStrategy(job));
+    }
+
+    [Fact]
     public void DefaultRetryStrategy_WithoutWaits_UsesTheDefaultWaits()
     {
         var strategy = new DefaultRetryStrategy(maxRetries: 3, retrySeconds: []);
@@ -224,9 +279,13 @@ public class SqliteRetryTests : IAsyncLifetime
         /// <summary>Null: no retries.</summary>
         public DateTime? RetryAt { get; set; }
 
+        public bool Throw { get; set; }
+
         public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception)
         {
             Calls.Enqueue((job.Id, newErrorCount, exception));
+
+            if (Throw) throw new InvalidOperationException("The strategy failed");
 
             return RetryAt;
         }
@@ -261,5 +320,21 @@ public class SqliteRetryTests : IAsyncLifetime
 
         [XactRetry(3, [10, -1])]
         public void NegativeWait() { }
+
+        [XactRetry(3, [10, -1])]
+        public void NegativeWaitWithArguments(int id, Payload payload, string name) { }
+    }
+
+    public sealed record Payload(int[] A);
+
+    public class BaseJobs
+    {
+        public virtual void Run() { }
+    }
+
+    public class InvalidOverrideJobs : BaseJobs
+    {
+        [XactRetry(-1)]
+        public override void Run() { }
     }
 }
