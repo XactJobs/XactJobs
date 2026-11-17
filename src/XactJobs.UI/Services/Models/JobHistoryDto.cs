@@ -1,4 +1,4 @@
-namespace XactJobs.UI.Services.Models;
+﻿namespace XactJobs.UI.Services.Models;
 
 public record JobHistoryDto
 {
@@ -32,15 +32,17 @@ public record JobHistoryDto
     public bool HasState => PreviousState != null || State != null;
 
     /// <summary>
-    /// Failed and cancelled jobs can be run again, and so can continuations that were skipped. Not a run of a periodic job
-    /// with a state: it would run as a one-off job, without its state.
+    /// Failed and cancelled jobs can be run again, and so can skipped jobs that aren't runs of a periodic job (continuations whose
+    /// condition wasn't met, jobs a filter skipped). Not a run of a periodic job with a state: it would run as a one-off job, without
+    /// its state.
     /// </summary>
     public bool CanRetry => IsRetryableStatus && !HasState;
 
-    /// <summary>Failed, cancelled, or a skipped continuation: what Retry is for, state or not.</summary>
-    public bool IsRetryableStatus => Status == XactJobStatus.Cancelled || IsSkippedContinuation;
+    /// <summary>Failed, cancelled, or a skipped job that isn't a periodic run: what Retry is for, state or not.</summary>
+    public bool IsRetryableStatus => Status == XactJobStatus.Cancelled || IsSkippedJob;
 
-    public bool IsSkippedContinuation => Status == XactJobStatus.Skipped && AwaitsBatchId != null;
+    /// <summary>Skipped, and not a periodic run (those are skipped while their periodic job is paused or changed).</summary>
+    public bool IsSkippedJob => Status == XactJobStatus.Skipped && PeriodicJobId == null;
     public string? DisplayCondition => DisplayNames.Condition(ContinuationCondition);
     public string DisplayTypeName => DisplayNames.Type(TypeName);
 

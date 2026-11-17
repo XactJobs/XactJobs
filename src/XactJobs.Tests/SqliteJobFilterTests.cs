@@ -152,6 +152,142 @@ public class SqliteJobFilterTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task FilterThatSkips_RecordsTheRunAsSkipped_WithTheReason()
+    {
+        _behavior.Mode = FilterMode.Skip;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>());
+
+        var job = await EnqueueAndStartAsync(db => db.JobEnqueue<FilterJobs>(x => x.Run(42)));
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        Assert.Equal(XactJobStatus.Skipped, history.Status);
+        Assert.Equal(TenantFilter.SkipReason, history.ErrorMessage);
+        Assert.DoesNotContain(_log.Entries, e => e.StartsWith("job"));
+    }
+
+    [Theory]
+    [InlineData(FilterMode.SkipThenNext, "after skipping")]
+    [InlineData(FilterMode.NextThenSkip, "already ran")]
+    public async Task FilterThatSkipsAndRunsTheJob_FailsTheAttempt(FilterMode mode, string error)
+    {
+        _behavior.Mode = mode;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>());
+
+        var job = await EnqueueAndStartAsync(db => db.JobEnqueue<FilterJobs>(x => x.Run(42)));
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Contains(error, history.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task FilterThatSkipsThenCallsNext_FailsTheAttempt_BeforeTheInnerFilters_AlsoIfItCatchesTheException()
+    {
+        _behavior.Mode = FilterMode.SkipThenNextCaught;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>().WithJobFilter<QuietFilter>());
+
+        var job = await EnqueueAndStartAsync(db => db.JobEnqueue<FilterJobs>(x => x.Run(42)));
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Contains("after skipping", history.ErrorMessage);
+        Assert.Contains(_log.Entries, e => e.StartsWith("caught: ") && e.Contains("after skipping"));
+        Assert.DoesNotContain("quiet filter", _log.Entries);
+    }
+
+    [Fact]
+    public async Task FilterThatSkipsAfterTheJobThrew_FailsTheAttemptWithTheJobsException()
+    {
+        _behavior.Mode = FilterMode.FailThenSkip;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>());
+
+        var job = await EnqueueAndStartAsync(db => db.JobEnqueue<FilterJobs>(x => x.Fail()));
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Equal(FilterJobs.FailureMessage, history.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task Misuse_IsntRetried()
+    {
+        _behavior.Mode = FilterMode.SkipThenNext;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>(), retries: 10);
+
+        var job = await EnqueueAndStartAsync(db => db.JobEnqueue<FilterJobs>(x => x.Run(42)));
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Equal(1, history.ErrorCount);
+    }
+
+    [Fact]
+    public async Task SecondMisuseAfterTheJobThrew_FailsTheAttemptWithTheJobsException()
+    {
+        _behavior.Mode = FilterMode.FailThenSkipTwice;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>());
+
+        var job = await EnqueueAndStartAsync(db => db.JobEnqueue<FilterJobs>(x => x.Fail()));
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Equal(FilterJobs.FailureMessage, history.ErrorMessage);
+        Assert.Contains(_log.Entries, e => e.StartsWith("caught: ") && e.Contains("already ran"));
+    }
+
+    [Fact]
+    public async Task SkippedPeriodicRun_ThatSetsTheState_Fails()
+    {
+        _behavior.Mode = FilterMode.SkipWithState;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>());
+
+        var jobId = await EnsureDuePeriodicJobAsync("skipped_with_state");
+
+        await _host!.StartAsync();
+
+        var history = await WaitForHistoryAsync(jobId);
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Contains("periodic state", history.ErrorMessage);
+
+        var periodic = await WithDbAsync(db => db.PeriodicJobs.AsNoTracking().SingleAsync(p => p.Id == "skipped_with_state"));
+        Assert.Null(periodic.State);
+    }
+
+    [Fact]
+    public async Task FilterThatSkipsAPeriodicRun_GetsItsTimeZone_AndTheNextRunIsScheduled()
+    {
+        _behavior.Mode = FilterMode.Skip;
+
+        await CreateHostAsync(o => o.WithJobFilter<TenantFilter>());
+
+        var jobId = await EnsureDuePeriodicJobAsync("skipped_daily");
+
+        await _host!.StartAsync();
+
+        var history = await WaitForHistoryAsync(jobId);
+
+        Assert.Equal(XactJobStatus.Skipped, history.Status);
+        Assert.Contains("time zone Europe/Zagreb", _log.Entries);
+
+        var next = await WithDbAsync(db => db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == "skipped_daily"));
+        Assert.True(next.ScheduledAt > DateTime.UtcNow);
+    }
+
+    [Fact]
     public async Task FailureHandlers_AreToldOnce_WhenTheJobIsOutOfRetries_AndOneThatThrowsDoesntStopTheNext()
     {
         await CreateHostAsync(o => o.WithJobFailureHandler<ThrowingHandler>().WithJobFailureHandler<RecordingHandler>());
@@ -244,6 +380,30 @@ public class SqliteJobFilterTests : IAsyncLifetime
         return job;
     }
 
+    /// <summary>A daily periodic job in Zagreb, whose pending run is due now.</summary>
+    private Task<long> EnsureDuePeriodicJobAsync(string id)
+    {
+        return WithDbAsync(async db =>
+        {
+            db.JobEnsurePeriodic<FilterJobs>(x => x.Run(7), id, new XactCronSchedule(CronExpressions.Daily, "Europe/Zagreb"));
+
+            await db.SaveChangesAsync();
+
+            // make it due: the scheduled time isn't part of the key on Sqlite
+            await db.Jobs.Where(j => j.PeriodicJobId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(j => j.ScheduledAt, DateTime.UtcNow.AddMinutes(-1)));
+
+            return (await db.Jobs.AsNoTracking().SingleAsync(j => j.PeriodicJobId == id)).Id;
+        });
+    }
+
+    private async Task<T> WithDbAsync<T>(Func<TestDbContext, Task<T>> action)
+    {
+        using var scope = _host!.Services.CreateScope();
+
+        return await action(scope.ServiceProvider.GetRequiredService<TestDbContext>());
+    }
+
     private async Task<XactJobHistory> WaitForHistoryAsync(long jobId)
     {
         XactJobHistory? history = null;
@@ -282,7 +442,7 @@ public class SqliteJobFilterTests : IAsyncLifetime
         public void Add(string entry) => _entries.Enqueue(entry);
     }
 
-    public enum FilterMode { Normal, Throw, Swallow, Cancel, SkipNext, NextTwice }
+    public enum FilterMode { Normal, Throw, Swallow, Cancel, SkipNext, NextTwice, Skip, SkipThenNext, NextThenSkip, SkipThenNextCaught, FailThenSkip, FailThenSkipTwice, SkipWithState }
 
     public sealed class Behavior
     {
@@ -311,6 +471,7 @@ public class SqliteJobFilterTests : IAsyncLifetime
     {
         public const string FailureMessage = "The filter failed";
         public const string CancelMessage = "The filter cancelled the job";
+        public const string SkipReason = "A public holiday";
 
         public async Task InvokeAsync(XactJobExecutingContext context, Func<Task> next)
         {
@@ -322,12 +483,80 @@ public class SqliteJobFilterTests : IAsyncLifetime
 
             log.Add($"tenant before (attempt {context.Attempt})");
 
+            // only where it's tested: it throws on a node without tzdata
+            if (behavior.Mode == FilterMode.Skip && context.JobContext.PeriodicJobId != null)
+            {
+                log.Add($"time zone {context.TimeZone.Id}");
+            }
+
             switch (behavior.Mode)
             {
                 case FilterMode.Throw:
                     throw new InvalidOperationException(FailureMessage);
 
                 case FilterMode.SkipNext:
+                    return;
+
+                case FilterMode.Skip:
+                    context.Skip(SkipReason);
+                    return;
+
+                case FilterMode.SkipThenNext:
+                    context.Skip(SkipReason);
+                    await next();
+                    return;
+
+                case FilterMode.NextThenSkip:
+                    await next();
+                    context.Skip(SkipReason);
+                    return;
+
+                case FilterMode.SkipThenNextCaught:
+                    context.Skip(SkipReason);
+                    try
+                    {
+                        await next();
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Add("caught: " + ex.Message);
+                    }
+                    return;
+
+                case FilterMode.FailThenSkip:
+                    try
+                    {
+                        await next();
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        context.Skip(SkipReason);
+                    }
+                    return;
+
+                case FilterMode.FailThenSkipTwice:
+                    try
+                    {
+                        await next();
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        try
+                        {
+                            context.Skip(SkipReason);
+                        }
+                        catch (Exception ex)
+                        {
+                            log.Add("caught: " + ex.Message);
+                        }
+
+                        context.Skip(SkipReason);
+                    }
+                    return;
+
+                case FilterMode.SkipWithState:
+                    context.JobContext.SetPeriodicState("new state");
+                    context.Skip(SkipReason);
                     return;
 
                 case FilterMode.NextTwice:
@@ -361,6 +590,17 @@ public class SqliteJobFilterTests : IAsyncLifetime
             await next();
 
             log.Add("tenant after");
+        }
+    }
+
+    /// <summary>An inner filter that doesn't call next.</summary>
+    public sealed class QuietFilter(Log log) : IXactJobFilter
+    {
+        public Task InvokeAsync(XactJobExecutingContext context, Func<Task> next)
+        {
+            log.Add("quiet filter");
+
+            return Task.CompletedTask;
         }
     }
 

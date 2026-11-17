@@ -900,6 +900,9 @@ namespace XactJobs.Internal
 
                     var context = new XactJobContext(job.GetOriginallyScheduledAt(claimedAt), periodicJob);
 
+                    // a filter skipped the run: the job didn't run
+                    string? filterSkipReason = null;
+
                     // only while the job runs: the worker's own save, below, isn't checked
                     var saveCheck = _saveChecker.Subscribe(dbContext, job, _logger, GetQueueDisplayName());
 
@@ -907,8 +910,12 @@ namespace XactJobs.Internal
                     {
                         var call = XactJobCompiler.PrepareCall(job, context, stoppingToken);
 
-                        await _hooks.RunJobAsync(call, job, scope.ServiceProvider, dbContext, context, stoppingToken)
+                        var filterContext = _hooks.CreateContext(call, job, scope.ServiceProvider, dbContext, context, periodicJob?.TimeZone, stoppingToken);
+
+                        await _hooks.RunJobAsync(call, scope.ServiceProvider, filterContext)
                             .ConfigureAwait(false);
+
+                        filterSkipReason = filterContext?.SkipReason;
                     }
                     finally
                     {
@@ -925,14 +932,24 @@ namespace XactJobs.Internal
                         ? null
                         : await ReadIsActiveAsync(dbContext, periodicJob, stoppingToken).ConfigureAwait(false);
 
-                    // the state belongs to the periodic job's id, so a paused one or a changed definition keeps it too. If the periodic
-                    // job is deleted after this read, the update finds no row, and the run fails: its retry is then skipped
-                    if (isActive != null && context.IsPeriodicStateSet && context.PeriodicState != previousState)
+                    if (filterSkipReason != null)
                     {
-                        periodicJob!.State = context.PeriodicState;
-                    }
+                        // the state is kept, and an active periodic job's next run is scheduled
+                        isSkipped = true;
 
-                    RecordSuccess(dbContext, job, isActive == true ? periodicJob : null, claimedAt, previousState, context.PeriodicState);
+                        RecordSkipped(dbContext, job, isActive == true ? periodicJob : null, claimedAt, filterSkipReason, previousState);
+                    }
+                    else
+                    {
+                        // the state belongs to the periodic job's id, so a paused one or a changed definition keeps it too. If the
+                        // periodic job is deleted after this read, the update finds no row, and the run fails: its retry is then skipped
+                        if (isActive != null && context.IsPeriodicStateSet && context.PeriodicState != previousState)
+                        {
+                            periodicJob!.State = context.PeriodicState;
+                        }
+
+                        RecordSuccess(dbContext, job, isActive == true ? periodicJob : null, claimedAt, previousState, context.PeriodicState);
+                    }
                 }
 
                 dbContext.Set<XactJob>().Remove(job);
@@ -1000,8 +1017,9 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// A job of the batch failed if it ran out of retries or was cancelled (both are Cancelled in the history),
-        /// or was a continuation that was skipped. The attempts that were retried are Failed, and don't count.
+        /// A job of the batch failed if it ran out of retries or was cancelled (both are Cancelled in the history), or was skipped: a
+        /// continuation whose condition wasn't met, or a job a filter skipped (<see cref="XactJobExecutingContext.Skip"/>). The attempts
+        /// that were retried are Failed, and don't count.
         /// </summary>
         /// <returns>Why the continuation is skipped, or null if it runs.</returns>
         private static async Task<string?> GetUnmetContinuationConditionAsync(TDbContext dbContext, XactJob job, CancellationToken cancellationToken)
