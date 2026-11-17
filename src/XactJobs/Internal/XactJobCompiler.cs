@@ -9,28 +9,32 @@ using System.Text.Json;
 
 namespace XactJobs.Internal
 {
+    /// <summary>A job's method with its arguments, ready to run.</summary>
+    internal readonly struct XactJobCall(Func<IServiceProvider, object?[], Task?> compiledFunc, MethodInfo method, object?[] arguments)
+    {
+        public MethodInfo Method { get; } = method;
+
+        public object?[] Arguments { get; } = arguments;
+
+        /// <summary>Runs the job method, with its instance from the services if it isn't static.</summary>
+        public Task InvokeAsync(IServiceProvider services) => compiledFunc(services, Arguments) ?? Task.CompletedTask;
+    }
+
     internal class XactJobCompiler
     {
-        /// <summary>Per job method: its delegate, its parameters, and its <see cref="XactRetryAttribute"/> (null without one).</summary>
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, ParameterInfo[], XactJobRetry?)> _compiledJobs = new();
+        /// <summary>Per job method: its delegate, the method and its parameters, and its <see cref="XactRetryAttribute"/> (null without one).</summary>
+        private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, MethodInfo, ParameterInfo[], XactJobRetry?)> _compiledJobs = new();
 
-        public static async Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
+        public static Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
-            var (compiledFunc, args) = PrepareCall(job, context, stoppingToken);
-
-            var resultTask = compiledFunc(scope.ServiceProvider, args);
-
-            if (resultTask != null)
-            {
-                await resultTask.ConfigureAwait(false);
-            }
+            return PrepareCall(job, context, stoppingToken).InvokeAsync(scope.ServiceProvider);
         }
 
         /// <summary>
         /// The job's compiled method, and its arguments. Before the job runs, so that the parsed JSON's buffers go back to the pool
         /// right away, not when the job finishes (the arguments are deserialized into objects of their own).
         /// </summary>
-        private static (Func<IServiceProvider, object?[], Task?>, object?[]) PrepareCall(XactJob job, XactJobContext context, CancellationToken stoppingToken)
+        public static XactJobCall PrepareCall(XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
             using var jsonArgs = JsonDocument.Parse(job.MethodArgs);
 
@@ -39,10 +43,10 @@ namespace XactJobs.Internal
             var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
 
             // static, with the job as the factory's argument: a lambda capturing it would be allocated also when the job is cached
-            var (compiledFunc, parameters, retry) = _compiledJobs.GetOrAdd(key, static (key, job) =>
+            var (compiledFunc, method, parameters, retry) = _compiledJobs.GetOrAdd(key, static (key, job) =>
             {
                 var (type, method) = job.ToMethodInfo(key.ArgCount);
-                return (BuildJobDelegate(type, method), method.GetParameters(), XactRetryAttribute.ReadFrom(method));
+                return (BuildJobDelegate(type, method), method, method.GetParameters(), XactRetryAttribute.ReadFrom(method));
             }, job);
 
             // before the arguments, which can fail too: a failed attempt is retried as its method says
@@ -69,7 +73,7 @@ namespace XactJobs.Internal
                 }
             }
 
-            return (compiledFunc, args);
+            return new XactJobCall(compiledFunc, method, args);
         }
 
         public static Func<IServiceProvider, object?[], Task?> BuildJobDelegate(Type type, MethodInfo method)

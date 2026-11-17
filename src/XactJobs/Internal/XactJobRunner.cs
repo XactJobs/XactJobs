@@ -18,6 +18,9 @@ namespace XactJobs.Internal
         // How long jobs get to react to the cancellation, after the shutdown timeout has passed
         private static readonly TimeSpan JobCancellationTimeout = TimeSpan.FromSeconds(5);
 
+        /// <summary>The time the failure handlers of a job get, all of them: then their token is cancelled.</summary>
+        internal static readonly TimeSpan FailureHandlersTimeout = TimeSpan.FromSeconds(30);
+
         /// <summary>When a retry strategy throws.</summary>
         private static readonly DefaultRetryStrategy FallbackRetryStrategy = new();
 
@@ -56,6 +59,7 @@ namespace XactJobs.Internal
         private readonly Guid _leaser = Guid.NewGuid();
         private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly XactJobSaveChecker _saveChecker;
+        private readonly XactJobHooks _hooks;
         private readonly XactJobsMetrics _metrics;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
@@ -68,6 +72,7 @@ namespace XactJobs.Internal
                              QuickPollChannels quickPollChannels,
                              XactJobsOptionsBase<TDbContext> options,
                              XactJobSaveChecker saveChecker,
+                             XactJobHooks hooks,
                              XactJobsMetrics metrics,
                              IServiceScopeFactory scopeFactory,
                              ILogger logger)
@@ -77,6 +82,7 @@ namespace XactJobs.Internal
             _quickPollChannels = quickPollChannels;
             _options = options;
             _saveChecker = saveChecker;
+            _hooks = hooks;
             _metrics = metrics;
             _scopeFactory = scopeFactory;
             _logger = logger;
@@ -572,6 +578,9 @@ namespace XactJobs.Internal
             // the job method's [XactRetry], once it's found: for a failure
             var retry = new StrongBox<XactJobRetry?>();
 
+            // the job failed for good, and its failure is saved: for the failure handlers
+            var isFailedForGood = false;
+
             try
             {
                 outcome = await RunJobAsync(job, periodicJob, claimedAt, retry, jobsToken)
@@ -607,6 +616,8 @@ namespace XactJobs.Internal
                 {
                     await StartContinuationsIfBatchFinishedAsync(job)
                         .ConfigureAwait(false);
+
+                    isFailedForGood = true;
                 }
             }
             finally
@@ -626,6 +637,55 @@ namespace XactJobs.Internal
                 _runSlots?.Release();
 
                 _jobFinished.Writer.TryWrite(true);
+            }
+
+            // once the slot is free and the attempt is measured: an alert that takes long doesn't hold a job's place
+            if (isFailedForGood && _hooks.FailureHandlers.Count > 0)
+            {
+                activity?.Stop();
+
+                await NotifyFailureHandlersAsync(job, failure!)
+                    .ConfigureAwait(false);
+            }
+        }
+
+        /// <summary>
+        /// Tells the failure handlers that the job failed for good, once its failure is saved: each one in turn, in a scope of their
+        /// own. Never throws: a handler's exception is logged, and the next one is still called. Their token isn't the stopping token,
+        /// which would cancel them at once for a job that failed during the shutdown (they're never called again for it), but the
+        /// handlers' time limit.
+        /// </summary>
+        private async Task NotifyFailureHandlersAsync(XactJob job, Exception jobException)
+        {
+            try
+            {
+                using var cts = new CancellationTokenSource(FailureHandlersTimeout);
+
+                await using var scope = _scopeFactory.CreateAsyncScope();
+
+                var context = new XactJobFailedContext(job, jobException, scope.ServiceProvider);
+
+                foreach (var handlerType in _hooks.FailureHandlers)
+                {
+                    try
+                    {
+                        var handler = (IXactJobFailureHandler)scope.ServiceProvider.GetRequiredService(handlerType);
+
+                        await handler.OnFailedAsync(context, cts.Token)
+                            .ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "{Queue}: Job failure handler {Handler} failed: {TypeName}.{MethodName} ({Id})",
+                            GetQueueDisplayName(), handlerType.Name, job.TypeName, job.MethodName, job.Id);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // the scope itself, e.g. disposing a service
+                _logger.LogError(ex, "{Queue}: Job failure handlers failed: {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
             }
         }
 
@@ -845,7 +905,9 @@ namespace XactJobs.Internal
 
                     try
                     {
-                        await XactJobCompiler.CompileAndRunJobAsync(scope, job, context, stoppingToken)
+                        var call = XactJobCompiler.PrepareCall(job, context, stoppingToken);
+
+                        await _hooks.RunJobAsync(call, job, scope.ServiceProvider, dbContext, context, stoppingToken)
                             .ConfigureAwait(false);
                     }
                     finally

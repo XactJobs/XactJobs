@@ -23,6 +23,7 @@ namespace XactJobs.DependencyInjection
         // shared by the runners of all the queues, so a job method is warned about once
         private readonly XactJobSaveChecker _saveChecker;
         private readonly XactJobsMetrics _metrics;
+        private readonly XactJobHooks _hooks;
 
         public XactJobsRunnerDispatcher(XactJobsOptions<TDbContext> options, QuickPollChannels quickPollChannels, IServiceScopeFactory scopeFactory, ILoggerFactory loggerFactory)
         {
@@ -33,6 +34,7 @@ namespace XactJobs.DependencyInjection
             _logger = loggerFactory.CreateLogger<XactJobsRunnerDispatcher<TDbContext>>();
             _saveChecker = new XactJobSaveChecker(options.SaveOutsideTransaction);
             _metrics = new XactJobsMetrics(options.JobTagsInMetrics);
+            _hooks = new XactJobHooks([.. options.JobFilters], [.. options.JobFailureHandlers]);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -80,7 +82,7 @@ namespace XactJobs.DependencyInjection
 
                 var runnerLogger = _loggerFactory.CreateLogger<XactJobRunner<TDbContext>>();
 
-                var runner = new XactJobRunner<TDbContext>(queueName, quickPollChannel, _quickPollChannels, options, _saveChecker, _metrics, _scopeFactory, runnerLogger);
+                var runner = new XactJobRunner<TDbContext>(queueName, quickPollChannel, _quickPollChannels, options, _saveChecker, _hooks, _metrics, _scopeFactory, runnerLogger);
 
                 var initialDelayMs = GetDelayStepMs(options) * runnerIndex;
 

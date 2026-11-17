@@ -101,6 +101,18 @@ namespace XactJobs
         public bool JobTagsInMetrics { get; set; }
 
         /// <summary>
+        /// The <see cref="IXactJobFilter"/> types run around every job, the first one outermost. Registered as scoped services when the
+        /// XactJobs services are added. Applies to all the queues.
+        /// </summary>
+        public List<Type> JobFilters { get; set; } = [];
+
+        /// <summary>
+        /// The <see cref="IXactJobFailureHandler"/> types told when a job has failed for good, in this order. Registered as scoped
+        /// services when the XactJobs services are added. Applies to all the queues.
+        /// </summary>
+        public List<Type> JobFailureHandlers { get; set; } = [];
+
+        /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>
         public Dictionary<string, XactJobsOptionsBase<TDbContext>> IsolatedQueues { get; set; } = [];

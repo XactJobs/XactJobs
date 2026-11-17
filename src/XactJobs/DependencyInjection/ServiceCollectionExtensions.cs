@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE in the repository root.
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 using XactJobs;
 using XactJobs.DependencyInjection;
@@ -26,6 +27,14 @@ public static class ServiceCollectionExtensions
         CheckRetryAttributesOfPeriodicJobs(optionsBuilder.Options);
 
         services.AddSingleton(optionsBuilder.Options);
+
+        CheckHookTypes(optionsBuilder.Options);
+
+        // resolved from each job's scope (filters) or a scope of their own (handlers); the app may have registered them already
+        foreach (var type in optionsBuilder.Options.JobFilters.Concat(optionsBuilder.Options.JobFailureHandlers))
+        {
+            services.TryAddScoped(type);
+        }
         services.AddSingleton(CreateQuickPollChannels(optionsBuilder.Options));
 
         services.AddScoped<QuickPoll<TDbContext>>();
@@ -35,6 +44,25 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<XactJobsCronOptionsScheduler<TDbContext>>();
 
         return services;
+    }
+
+    /// <exception cref="InvalidOperationException">With every filter or failure handler type that isn't one (the lists are public).</exception>
+    private static void CheckHookTypes<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
+    {
+        static string? Check(Type type, Type hook) =>
+            !hook.IsAssignableFrom(type) ? $"{type.FullName} doesn't implement {hook.Name}"
+            : !type.IsClass || type.IsAbstract || type.ContainsGenericParameters ? $"{type.FullName} isn't a concrete class"
+            : null;
+
+        var errors = options.JobFilters.Select(t => Check(t, typeof(IXactJobFilter)))
+            .Concat(options.JobFailureHandlers.Select(t => Check(t, typeof(IXactJobFailureHandler))))
+            .OfType<string>()
+            .ToList();
+
+        if (errors.Count > 0)
+        {
+            throw new InvalidOperationException($"Invalid job filters or failure handlers:\n- {string.Join("\n- ", errors)}");
+        }
     }
 
     /// <exception cref="InvalidOperationException">With every periodic job whose method has an invalid [XactRetry].</exception>

@@ -16,6 +16,7 @@ export const sidebar = [
       { label: 'Batches and continuations', slug: 'docs/batches-and-continuations' },
       { label: 'Queues and polling', slug: 'docs/queues-and-polling' },
       { label: 'Failures, retries and stopping', slug: 'docs/failures-and-retries' },
+      { label: 'Job filters and failure handlers', slug: 'docs/filters' },
       { label: 'Idempotent external calls', slug: 'docs/idempotent-external-calls' },
       { label: 'Dashboard and API', slug: 'docs/dashboard' },
       { label: 'Metrics, traces and logs', slug: 'docs/observability' },

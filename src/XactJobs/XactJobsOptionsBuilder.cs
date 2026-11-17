@@ -165,6 +165,34 @@ namespace XactJobs
             return this;
         }
 
+        /// <summary>
+        /// Runs <typeparamref name="TFilter"/> around every job, inside the filters added before it: see <see cref="IXactJobFilter"/>.
+        /// It's registered as a scoped service, resolved from each job's scope. Applies to all the queues.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithJobFilter<TFilter>() where TFilter : class, IXactJobFilter
+        {
+            if (!Options.JobFilters.Contains(typeof(TFilter)))
+            {
+                Options.JobFilters.Add(typeof(TFilter));
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        /// Tells <typeparamref name="THandler"/> when a job has failed for good: see <see cref="IXactJobFailureHandler"/>. It's
+        /// registered as a scoped service. Applies to all the queues.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithJobFailureHandler<THandler>() where THandler : class, IXactJobFailureHandler
+        {
+            if (!Options.JobFailureHandlers.Contains(typeof(THandler)))
+            {
+                Options.JobFailureHandlers.Add(typeof(THandler));
+            }
+
+            return this;
+        }
+
         public XactJobsOptionsBuilder<TDbContext> WithPriorityQueue(Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
         {
             WithIsolatedQueue(QueueNames.Priority, options =>
