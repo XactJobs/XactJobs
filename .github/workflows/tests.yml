@@ -3,10 +3,20 @@
 # framework, so each runner pulls only the image it needs and starts one container at a time.
 name: Tests
 
+# not when only the website, its images or Markdown files change (website-check.yml builds the website). A change
+# with any other file runs everything
 on:
   pull_request:
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '**.md'
   push:
     branches: [main]
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '**.md'
   workflow_dispatch:
 
 permissions:
