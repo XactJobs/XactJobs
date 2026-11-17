@@ -182,16 +182,40 @@ public class SqliteRetryTests : IAsyncLifetime
     }
 
     [Fact]
-    public void InvalidXactRetryOfAnEnqueuedJob_ThrowsOnce_ThenIsCachedAsNone()
+    public async Task InvalidXactRetryOfAnEnqueuedJob_UsesTheQueueStrategy()
     {
-        // as if the attribute became invalid after the job was enqueued, which refuses an invalid one; with arguments, which are counted
+        // as if the attribute became invalid after the job was enqueued, which refuses an invalid one; with arguments of every kind
         var type = typeof(InvalidRetryJobs);
-        var method = type.GetMethod(nameof(InvalidRetryJobs.NegativeWaitWithArguments))!;
-        var job = new XactJob(1, DateTime.UtcNow, $"{type.FullName}, {type.Assembly.GetName().Name}",
-                              Internal.XactJobSerializer.GetMethodSignature(method), "[1,{\"a\":[1,2]},\"x\"]", QueueNames.Default);
+        var method = type.GetMethod(nameof(InvalidRetryJobs.FailWithInvalidRetry))!;
+        var job = new XactJob(0, DateTime.UtcNow, $"{type.FullName}, {type.Assembly.GetName().Name}",
+                              Internal.XactJobSerializer.GetMethodSignature(method), "[1,{\"A\":[1,2]},\"x\"]", QueueNames.Default);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => Internal.XactJobCompiler.FindRetryStrategy(job));
-        Assert.Null(Internal.XactJobCompiler.FindRetryStrategy(job));
+        await EnqueueAndRunAsync(db => db.Jobs.Add(job).Entity);
+
+        var history = await WaitForHistoryAsync(job.Id);
+
+        Assert.Equal(XactJobStatus.Cancelled, history.Status);
+        Assert.Equal(InvalidRetryJobs.FailureMessage, history.ErrorMessage);
+
+        // the queue's strategy decided, after the job's own failure (its arguments were read)
+        Assert.Single(_queueStrategy.Calls);
+    }
+
+    [Fact]
+    public void JobOfAnInterfaceMethodDeclaredOnABaseInterface_IsEnqueued()
+    {
+        using var scope = _host!.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<TestDbContext>();
+
+        // the runner's lookup doesn't find Run on IDerivedJobs: the check of [XactRetry] mustn't refuse the job for that
+        db.JobEnqueue<IDerivedJobs>(x => x.Run());
+    }
+
+    [Fact]
+    public void DefaultRetrySeconds_CantBeChanged()
+    {
+        Assert.IsNotType<int[]>(DefaultRetryStrategy.DefaultRetrySeconds);
+        Assert.IsNotType<int[]>(new DefaultRetryStrategy(3, [10, 60]).RetrySeconds);
     }
 
     [Fact]
@@ -201,8 +225,10 @@ public class SqliteRetryTests : IAsyncLifetime
 
         Assert.Equal(DefaultRetryStrategy.DefaultRetrySeconds, strategy.RetrySeconds);
 
-        var attribute = new XactRetryAttribute(3);
-        Assert.Equal(DefaultRetryStrategy.DefaultRetrySeconds, attribute.ToRetryStrategy().RetrySeconds);
+        var retry = XactRetryAttribute.ReadFrom(typeof(RetryJobs).GetMethod(nameof(RetryJobs.FailWithDefaultWaits))!);
+        var attributeStrategy = Assert.IsType<DefaultRetryStrategy>(retry!.Strategy);
+        Assert.Equal(3, attributeStrategy.MaxRetries);
+        Assert.Equal(DefaultRetryStrategy.DefaultRetrySeconds, attributeStrategy.RetrySeconds);
     }
 
     [Fact]
@@ -304,6 +330,9 @@ public class SqliteRetryTests : IAsyncLifetime
         [XactRetry(2, [FirstWaitSeconds, 2 * FirstWaitSeconds])]
         public void FailWithWaits() => throw new InvalidOperationException("Failed on purpose");
 
+        [XactRetry(3)]
+        public void FailWithDefaultWaits() => throw new InvalidOperationException("Failed on purpose");
+
         [XactRetry(0)]
         public virtual void FailVirtual() => throw new InvalidOperationException("Failed on purpose");
     }
@@ -321,11 +350,20 @@ public class SqliteRetryTests : IAsyncLifetime
         [XactRetry(3, [10, -1])]
         public void NegativeWait() { }
 
+        public const string FailureMessage = "Failed with an invalid [XactRetry]";
+
         [XactRetry(3, [10, -1])]
-        public void NegativeWaitWithArguments(int id, Payload payload, string name) { }
+        public void FailWithInvalidRetry(int id, Payload payload, string name) => throw new InvalidOperationException(FailureMessage);
     }
 
     public sealed record Payload(int[] A);
+
+    public interface IBaseJobs
+    {
+        void Run();
+    }
+
+    public interface IDerivedJobs : IBaseJobs;
 
     public class BaseJobs
     {

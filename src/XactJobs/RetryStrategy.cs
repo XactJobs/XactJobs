@@ -35,15 +35,23 @@ namespace XactJobs
         /// <param name="retrySeconds">The wait before each retry, in seconds. Null or empty: <see cref="DefaultRetrySeconds"/>.</param>
         public DefaultRetryStrategy(int maxRetries = 10, int[]? retrySeconds = null)
         {
-            ArgumentOutOfRangeException.ThrowIfNegative(maxRetries);
-
-            if (retrySeconds != null && Array.Exists(retrySeconds, s => s < 0))
+            if (Validate(maxRetries, retrySeconds) is { } error)
             {
-                throw new ArgumentOutOfRangeException(nameof(retrySeconds), "A wait can't be negative.");
+                throw new ArgumentOutOfRangeException(maxRetries < 0 ? nameof(maxRetries) : nameof(retrySeconds), error);
             }
 
             MaxRetries = maxRetries;
             RetrySeconds = retrySeconds is { Length: > 0 } ? [.. retrySeconds] : DefaultRetrySeconds;
+        }
+
+        /// <summary>Why the values are invalid, or null: negative retries or waits.</summary>
+        internal static string? Validate(int maxRetries, IReadOnlyList<int>? retrySeconds)
+        {
+            if (maxRetries < 0) return $"the retries can't be negative ({maxRetries})";
+
+            if (retrySeconds != null && retrySeconds.Any(s => s < 0)) return "a wait can't be negative";
+
+            return null;
         }
 
         public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception)

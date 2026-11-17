@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Runtime.ExceptionServices;
 using System.Threading.Channels;
 
@@ -568,9 +569,12 @@ namespace XactJobs.Internal
             string? outcome = null;
             Exception? failure = null;
 
+            // the job method's [XactRetry], once it's found: for a failure
+            var retry = new StrongBox<XactJobRetry?>();
+
             try
             {
-                outcome = await RunJobAsync(job, periodicJob, claimedAt, jobsToken)
+                outcome = await RunJobAsync(job, periodicJob, claimedAt, retry, jobsToken)
                     .ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -586,7 +590,7 @@ namespace XactJobs.Internal
                     _logger.LogError(ex, "{Queue}: Job failed: {TypeName}.{MethodName} ({Id})", GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
                 }
 
-                var recordedStatus = await RecordFailureAsync(job, periodicJob, claimedAt, ex)
+                var recordedStatus = await RecordFailureAsync(job, periodicJob, claimedAt, ex, retry.Value)
                     .ConfigureAwait(false);
 
                 outcome = recordedStatus switch
@@ -669,12 +673,12 @@ namespace XactJobs.Internal
         /// </summary>
         /// <returns>The status recorded in the history: Failed if the job is retried, Cancelled if it's finished. Null if it
         /// couldn't be recorded.</returns>
-        private async Task<XactJobStatus?> RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception jobException)
+        private async Task<XactJobStatus?> RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception jobException, XactJobRetry? retry)
         {
             try
             {
                 // once, before the transaction: the strategy is the app's code, and a retrying execution strategy runs the lambda again
-                var retryAt = GetRetryTimeUtc(job, jobException);
+                var retryAt = GetRetryTimeUtc(job, jobException, retry);
 
                 using var scope = _scopeFactory.CreateScope();
 
@@ -790,7 +794,8 @@ namespace XactJobs.Internal
         }
 
         /// <returns>The outcome (see <see cref="XactJobsMetrics"/>): completed, skipped, or interrupted by the shutdown. A failure throws.</returns>
-        public async Task<string> RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, CancellationToken stoppingToken)
+        /// <param name="retry">Gets the job method's <see cref="XactRetryAttribute"/>, for the caller's record of a failure.</param>
+        public async Task<string> RunJobAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, StrongBox<XactJobRetry?> retry, CancellationToken stoppingToken)
         {
             var isFinished = false;
             var outcome = XactJobsMetrics.Interrupted;
@@ -845,6 +850,8 @@ namespace XactJobs.Internal
                     }
                     finally
                     {
+                        retry.Value = context.Retry;
+
                         XactJobSaveChecker.Unsubscribe(dbContext, saveCheck);
                     }
 
@@ -1025,13 +1032,13 @@ namespace XactJobs.Internal
         /// When the failed job runs again, or null if it doesn't. A strategy that throws is logged, and the default strategy decides, so
         /// that the failure is still recorded and the retries stay bounded.
         /// </summary>
-        private DateTime? GetRetryTimeUtc(XactJob job, Exception jobException)
+        private DateTime? GetRetryTimeUtc(XactJob job, Exception jobException, XactJobRetry? retry)
         {
             // the job said it can never succeed: no retries
             if (XactJobCancelException.Find(jobException) != null) return null;
 
             var newErrorCount = job.ErrorCount + 1;
-            var strategy = GetRetryStrategy(job);
+            var strategy = GetRetryStrategy(job, retry);
 
             try
             {
@@ -1047,29 +1054,18 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// The job method's <see cref="XactRetryAttribute"/>, or the queue's strategy. Also the queue's if the attribute can't be read, or
-        /// is invalid (both logged).
+        /// The job method's <see cref="XactRetryAttribute"/>, or the queue's strategy: also without the attempt's retry (the method wasn't
+        /// found, which is then why the job failed), or if its attribute is invalid (logged once per method).
         /// </summary>
-        private IRetryStrategy GetRetryStrategy(XactJob job)
+        private IRetryStrategy GetRetryStrategy(XactJob job, XactJobRetry? retry)
         {
-            try
+            if (retry?.InvalidReason != null && retry.TryMarkInvalidReasonLogged())
             {
-                return XactJobCompiler.FindRetryStrategy(job) ?? _options.RetryStrategy;
-            }
-            catch (ArgumentOutOfRangeException ex)
-            {
-                // once per method: then the queue's strategy is cached for it
                 _logger.LogError("{Queue}: Invalid [XactRetry] on {TypeName}.{MethodName}, the queue's retry strategy is used: {Error}",
-                    GetQueueDisplayName(), job.TypeName, job.MethodName, ex.Message);
-            }
-            catch (Exception ex)
-            {
-                // e.g. the method can't be found, which is then also why the job failed
-                _logger.LogWarning("{Queue}: The [XactRetry] of {TypeName}.{MethodName} couldn't be read, the queue's retry strategy is used: {Error}",
-                    GetQueueDisplayName(), job.TypeName, job.MethodName, ex.Message);
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, retry.InvalidReason);
             }
 
-            return _options.RetryStrategy;
+            return retry?.Strategy ?? _options.RetryStrategy;
         }
 
         /// <summary>

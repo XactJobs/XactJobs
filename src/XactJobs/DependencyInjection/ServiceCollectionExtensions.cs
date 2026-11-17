@@ -21,7 +21,8 @@ public static class ServiceCollectionExtensions
         // once the queues and the other periodic jobs are known
         XactPeriodicJobScanner.AddTo(optionsBuilder.Options);
 
-        // the scheduler saves them at start, and an invalid one there would stop the ones after it
+        // the scheduler saves them at start, and an invalid one there would stop the ones after it. Other problems of a periodic job
+        // are reported by the scheduler, as before
         CheckRetryAttributesOfPeriodicJobs(optionsBuilder.Options);
 
         services.AddSingleton(optionsBuilder.Options);
