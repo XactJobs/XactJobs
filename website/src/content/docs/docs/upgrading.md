@@ -31,7 +31,8 @@ From 1.0, XactJobs follows [semantic versioning](https://semver.org/):
 
 The public API is the public types and members of `XactJobs` and `XactJobs.UI`. Each package lists it in its `PublicAPI.Shipped.txt`
 (released) and `PublicAPI.Unshipped.txt` (changed since the last release), and a build fails if the code doesn't match them, so every
-change to the API shows in its pull request. Log messages and metric names don't change in a minor version either.
+change to the API shows in its pull request. Each package is also compared with the previous release when it's built: a removed or
+changed API fails the build, unless it's an intended break listed with the project. Log messages and metric names don't change in a minor version either.
 
 Until 1.0, the API can still change between minor versions (0.x). Breaking changes are listed in the
 [release notes](https://github.com/XactJobs/XactJobs/releases), with how to migrate.

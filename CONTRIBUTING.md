@@ -57,7 +57,8 @@ its test in `Databases/`, so it runs on every database.
 - **The public API is listed** in `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt` next to each package's project, and the build
   fails until a change to it is added to `PublicAPI.Unshipped.txt` (Visual Studio and Rider offer the fix, or run
   `dotnet format analyzers src/XactJobs/XactJobs.csproj --diagnostics RS0016 --severity info`). Keep new types internal unless users
-  need them. See [Versions](https://xactjobs.com/docs/upgrading/#versions).
+  need them. A package is also compared with the last release when it's built (package validation): a removed or changed API fails
+  the build. See [Versions](https://xactjobs.com/docs/upgrading/#versions).
 - New source files start with the MIT header:
 
   ```csharp
