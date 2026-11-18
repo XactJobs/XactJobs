@@ -1,0 +1,36 @@
+<Project>
+
+	<!-- the NuGet packages' common settings, imported by XactJobs and XactJobs.UI: the version is changed here, for both -->
+	<PropertyGroup>
+		<Version>0.9.0</Version>
+		<RepositoryUrl>https://github.com/XactJobs/XactJobs</RepositoryUrl>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<Authors>XactJobs</Authors>
+		<Copyright>Copyright (c) 2025 XactJobs</Copyright>
+		<PackageIcon>icon.png</PackageIcon>
+		<PackageProjectUrl>https://xactjobs.com/</PackageProjectUrl>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+
+		<!-- symbols on nuget.org (.snupkg), with Source Link (in the SDK): a debugger steps into the source of the commit built -->
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+
+		<!-- deterministic, with the paths normalized: the same commit builds the same assemblies on any machine -->
+		<ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="$(MSBuildThisFileDirectory)XactJobs\icon.png" Link="icon.png">
+			<Pack>True</Pack>
+			<PackagePath></PackagePath>
+		</None>
+		<None Include="$(MSBuildThisFileDirectory)..\README.md" Link="README.md">
+			<Pack>True</Pack>
+			<PackagePath></PackagePath>
+		</None>
+	</ItemGroup>
+
+</Project>

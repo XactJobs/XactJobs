@@ -1,0 +1,45 @@
+name: Bug report
+description: Something doesn't work as documented.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce it
+      description: The job, the configuration (`AddXactJobs`), and the steps. A small project or a failing test is best.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: XactJobs version
+      placeholder: 0.9.0
+    validations:
+      required: true
+  - type: input
+    id: dotnet
+    attributes:
+      label: .NET and EF Core versions
+      placeholder: .NET 10, EF Core 10.0.14
+    validations:
+      required: true
+  - type: input
+    id: database
+    attributes:
+      label: Database, its version, and the EF provider
+      placeholder: PostgreSQL 17.6, Npgsql.EntityFrameworkCore.PostgreSQL 10.0.0
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and exceptions
+      description: XactJobs' log entries around it, with stack traces, and the job's rows in the history if it's about a job.
+      render: text
