@@ -21,9 +21,11 @@ namespace XactJobs.Internal
         /// <summary>The time the failure handlers of a job get, all of them: then their token is cancelled.</summary>
         internal static readonly TimeSpan FailureHandlersTimeout = TimeSpan.FromSeconds(30);
 
-        /// <summary>The attempts to record a job's failure, and the wait between them.</summary>
-        private const int MaxFailureRecordAttempts = 5;
-        private static readonly TimeSpan FailureRecordRetryDelay = TimeSpan.FromSeconds(1);
+        /// <summary>
+        /// The attempts to record a job's failure: the waits between them double from a second, about half a minute in all, which a
+        /// restart or a failover of the database usually takes.
+        /// </summary>
+        private const int MaxFailureRecordAttempts = 6;
 
         /// <summary>When a retry strategy throws.</summary>
         private static readonly DefaultRetryStrategy FallbackRetryStrategy = new();
@@ -728,8 +730,8 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// Records a failed attempt in its own scope, after the job's scope has been rolled back and disposed. Tries again a few times,
-        /// each in a new scope (a connection the database closed fails the first one). Never throws: if the record can't be saved, the
+        /// Records a failed attempt in its own scope, after the job's scope has been rolled back and disposed. Tries again for about half
+        /// a minute, each time in a new scope (a connection the database closed fails the first one). Never throws: if the record can't be saved, the
         /// lease expires and the job runs again.
         /// The stopping token isn't used, so that a job failing during shutdown still gets its failure recorded.
         /// <para>
@@ -764,7 +766,7 @@ namespace XactJobs.Internal
                     _logger.LogWarning(ex, "{Queue}: Failed recording job failure, trying again ({Attempt} of {Attempts}): {TypeName}.{MethodName} ({Id})",
                         GetQueueDisplayName(), attempt, MaxFailureRecordAttempts, job.TypeName, job.MethodName, job.Id);
 
-                    await Task.Delay(FailureRecordRetryDelay).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(1 << (attempt - 1))).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {

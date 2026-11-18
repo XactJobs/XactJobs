@@ -1230,18 +1230,20 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
     /// The database ends the workers' sessions again and again while they drain a backlog, as restarts or failovers do: in the
     /// middle of a claim, of a job, of a save, of a commit. The workers recover, every job completes, and its writes commit once.
     /// A commit whose connection fails may have committed or not: the worker then retries the job, or finds its row gone. A failure is
-    /// recorded on another connection, tried again if that one was closed too: no job waits for its lease.
+    /// recorded on another connection, tried again if that one was closed too. A claim whose response is lost leaves its jobs leased
+    /// until the lease expires.
     /// </summary>
     [DockerFact]
     public async Task SessionsEndedByTheDatabaseDuringABacklog_EveryJobCompletes_AndItsWritesCommitOnce()
     {
         const int jobCount = 60;
 
-        // a long lease: a job left to wait for it (its failure couldn't be recorded) fails the test
+        // a short lease: a claim whose response was lost (it committed, the connection failed before the rows came back) leaves its
+        // jobs leased, as a crashed worker does, until the lease expires
         var host = CreateHost(options => options
             .WithWorkerCount(2)
             .WithMaxDegreeOfParallelism(4)
-            .WithLeaseDuration(300)
+            .WithLeaseDuration(15)
             .WithRetryStrategy(new QuickRetryStrategy()));
 
         await WithDbAsync(host, db =>
@@ -1250,7 +1252,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
             {
                 var number = i;
 
-                db.JobEnqueue<IntegrationJob>(x => x.MarkAsync(number, 250));
+                db.JobEnqueue<IntegrationJob>(x => x.MarkHoldingTheConnectionAsync(number, 250));
             }
 
             return db.SaveChangesAsync();
@@ -1275,17 +1277,26 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         });
 
         // the test's own connections are ended too: a failed check is tried again
-        await WaitForAsync(async () =>
+        try
         {
-            try
+            await WaitForAsync(async () =>
             {
-                return !await WithDbAsync(host, db => db.Jobs.AnyAsync(j => j.Queue != IntegrationJob.MarkerQueue));
-            }
-            catch (Exception) when (!stopKilling.IsCancellationRequested)
-            {
-                return false;
-            }
-        }, "all jobs to complete", TimeSpan.FromSeconds(90));
+                try
+                {
+                    return !await WithDbAsync(host, db => db.Jobs.AnyAsync(j => j.Queue != IntegrationJob.MarkerQueue));
+                }
+                catch (Exception) when (!stopKilling.IsCancellationRequested)
+                {
+                    return false;
+                }
+            }, "all jobs to complete", TimeSpan.FromSeconds(90));
+        }
+        catch (Xunit.Sdk.XunitException)
+        {
+            var left = await WithDbAsync(host, db => db.Jobs.AsNoTracking().Where(j => j.Queue != IntegrationJob.MarkerQueue).ToListAsync());
+
+            Assert.Fail($"{left.Count} jobs left: {string.Join(", ", left.Select(j => $"#{j.Id} errors {j.ErrorCount} leased until {j.LeasedUntil:O}"))}\n{_logs.Errors()}");
+        }
 
         await stopKilling.CancelAsync();
         await killing;
@@ -1478,6 +1489,17 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
 
         public void Count(int number) => state.Runs.AddOrUpdate(number, 1, (_, runs) => runs + 1);
 
+        /// <summary>
+        /// <see cref="MarkAsync"/>, with the job's connection open while it works, as in a job that works in a transaction: the
+        /// database's ending its session fails the job.
+        /// </summary>
+        public async Task MarkHoldingTheConnectionAsync(int number, int delayMs)
+        {
+            await db.Database.OpenConnectionAsync();
+
+            await MarkAsync(number, delayMs);
+        }
+
         /// <summary>Writes a marker with the number, saved with the job's row: once per completed run, never for a failed one.</summary>
         public async Task MarkAsync(int number, int delayMs)
         {
@@ -1576,6 +1598,12 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         public bool HasErrors => _entries.Any(e => e.Level >= LogLevel.Error);
 
         public bool Contains(string text) => _entries.Any(e => e.Message.Contains(text));
+
+        /// <summary>The warnings and errors, each one once with its count, for a failure's message.</summary>
+        public string Errors() => string.Join(Environment.NewLine, _entries
+            .Where(e => e.Level >= LogLevel.Warning)
+            .GroupBy(e => $"{e.Level}: {e.Message[..Math.Min(e.Message.Length, 200)]}")
+            .Select(g => $"{g.Count()} x {g.Key}"));
 
         public override string ToString() => string.Join(Environment.NewLine, _entries.Select(e => $"{e.Level}: {e.Message}"));
 
