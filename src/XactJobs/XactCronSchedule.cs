@@ -32,9 +32,14 @@ namespace XactJobs
 
         /// <summary>
         /// The local times the job doesn't run at, in the time zone, or null: a comma-separated list of dates, <c>MM-dd</c> every year
-        /// (<c>12-25</c>) or <c>yyyy-MM-dd</c> once (<c>2026-04-06</c>), and daily time ranges, <c>HH:mm-HH:mm</c> (<c>12:00-13:00</c>, the
-        /// end not included; <c>22:00-06:00</c> crosses midnight). E.g. a <c>const string</c> of holidays, shared by many jobs and
-        /// attributes. At most 2000 characters.
+        /// (<c>12-25</c>) or <c>yyyy-MM-dd</c> once (<c>2026-04-06</c>), days of the week (<c>SAT</c>, <c>MON-FRI</c>), and daily time
+        /// ranges, <c>HH:mm-HH:mm</c> (<c>12:00-13:00</c>, the end not included; <c>22:00-06:00</c> crosses midnight). E.g. a
+        /// <c>const string</c> of holidays, shared by many jobs and attributes. At most 2000 characters.
+        /// <para>
+        /// An item can join one of each kind with <c>+</c>, and excludes the times that all of them match: <c>MON-FRI+00:00-05:00</c>,
+        /// <c>01-15+MON-FRI</c>. Each can be a list in parentheses: <c>(MON,WED,FRI)+(00:00-01:00,06:00-07:00)</c>. A time range that
+        /// crosses midnight belongs to the day it starts: <c>MON+22:00-01:00</c> is from Monday 22:00 to Tuesday 01:00.
+        /// </para>
         /// <para>
         /// They belong to the periodic job, not to its definition: changing them doesn't make a new version, and the pending run is
         /// moved to the next time they allow (if it isn't running). A run whose time they exclude when it's due is skipped.

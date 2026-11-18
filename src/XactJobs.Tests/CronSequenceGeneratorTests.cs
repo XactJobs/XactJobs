@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using XactJobs.CronUtil;
 
 namespace XactJobs.Tests;
@@ -332,6 +332,28 @@ public sealed class CronSequenceGeneratorTests
     [InlineData("0 0 * * * *", "22:00-06:00", "2025-01-02T03:30:00Z", "2025-01-02T06:00:00Z")]
     // both kinds: 06:00 on the 25th is in the date
     [InlineData("0 0 * * * *", "22:00-06:00, 12-25", "2025-12-24T21:30:00Z", "2025-12-26T06:00:00Z")]
+    // days of the week (6 January 2025 is a Monday), also over the end of the week
+    [InlineData("0 0 9 * * *", "SAT,SUN", "2025-01-03T10:00:00Z", "2025-01-06T09:00:00Z")]
+    [InlineData("0 0 9 * * *", "FRI-MON", "2025-01-02T10:00:00Z", "2025-01-07T09:00:00Z")]
+    // parts joined with +: the times that all of them match
+    [InlineData("0 0 * * * *", "MON-FRI+00:00-05:00", "2025-01-06T00:30:00Z", "2025-01-06T05:00:00Z")]
+    [InlineData("0 0 * * * *", "MON-FRI+00:00-05:00", "2025-01-04T00:30:00Z", "2025-01-04T01:00:00Z")]
+    [InlineData("0 0 9 * * *", "01-15+MON-FRI", "2025-01-14T10:00:00Z", "2025-01-16T09:00:00Z")]
+    [InlineData("0 0 9 * * *", "01-15+MON-FRI", "2028-01-14T10:00:00Z", "2028-01-15T09:00:00Z")]
+    // a range across midnight belongs to the day it starts: Monday 22:00 to Tuesday 01:00, not Sunday night
+    [InlineData("0 0 * * * *", "MON+22:00-01:00", "2025-01-06T21:30:00Z", "2025-01-07T01:00:00Z")]
+    [InlineData("0 0 * * * *", "MON+22:00-01:00", "2025-01-05T23:30:00Z", "2025-01-06T00:00:00Z")]
+    // all three: Wednesday 31 December 2025 from 22:00, into the new year
+    [InlineData("0 0 * * * *", "12-31+WED+22:00-02:00", "2025-12-31T21:30:00Z", "2026-01-01T02:00:00Z")]
+    [InlineData("0 0 * * * *", "12-31+WED+22:00-02:00", "2026-12-31T21:30:00Z", "2026-12-31T22:00:00Z")]
+    // lists in parentheses; until midnight (24 December 2027 is a Friday, 2026's a Thursday)
+    [InlineData("0 0 * * * *", "(12-24,12-31)+FRI+12:00-00:00", "2027-12-24T11:30:00Z", "2027-12-25T00:00:00Z")]
+    [InlineData("0 0 * * * *", "(12-24,12-31)+FRI+12:00-00:00", "2026-12-24T11:30:00Z", "2026-12-24T12:00:00Z")]
+    [InlineData("0 0 * * * *", "(MON,WED,FRI)+(00:00-01:00,06:00-07:00)", "2025-01-06T05:30:00Z", "2025-01-06T07:00:00Z")]
+    [InlineData("0 0 * * * *", "(MON,WED,FRI)+(00:00-01:00,06:00-07:00)", "2025-01-07T05:30:00Z", "2025-01-07T06:00:00Z")]
+    // with other items
+    [InlineData("0 0 * * * *", "12-25, MON+12:00-13:00", "2025-12-24T23:30:00Z", "2025-12-26T00:00:00Z")]
+    [InlineData("0 0 * * * *", "12-25, MON+12:00-13:00", "2025-12-29T11:30:00Z", "2025-12-29T13:00:00Z")]
     public void Exclusions_AreLeftOut(string expression, string exclusions, string from, string expected)
     {
         var generator = new CronSequenceGenerator(expression, TimeZoneInfo.Utc, exclusions);
@@ -360,6 +382,9 @@ public sealed class CronSequenceGeneratorTests
     [InlineData(null, null)]
     [InlineData(" , ", null)]
     [InlineData(" 12-25 ,2026-04-06,, 12:00-13:00 ", "12-25, 2026-04-06, 12:00-13:00")]
+    [InlineData("sat, mon-fri", "SAT, MON-FRI")]
+    [InlineData(" 00:00-01:00 + fri + 12-24 ", "12-24+FRI+00:00-01:00")]
+    [InlineData("( mon , wed )+( 00:00-01:00 , 06:00-07:00 ), (Sat)", "(MON,WED)+(00:00-01:00,06:00-07:00), SAT")]
     public void Exclusions_AreStoredNormalized(string? exclusions, string? expected)
     {
         Assert.Equal(expected, new XactCronSchedule("0 0 9 * * *") { Exclusions = exclusions }.Exclusions);
@@ -375,6 +400,17 @@ public sealed class CronSequenceGeneratorTests
     [InlineData("25:00-26:00")]
     [InlineData("12:00-13")]
     [InlineData("christmas")]
+    [InlineData("MON-XYZ")]
+    [InlineData("MON+TUE")]
+    [InlineData("12-24+12-25")]
+    [InlineData("MON+")]
+    [InlineData("+MON")]
+    [InlineData("(MON,12-25)")]
+    [InlineData("()")]
+    [InlineData("(MON")]
+    [InlineData("MON)")]
+    [InlineData("((MON))")]
+    [InlineData("(MON)TUE")]
     public void Exclusions_Invalid_AreRefused(string exclusions)
     {
         Assert.Throws<ArgumentException>(() => new XactCronSchedule("0 0 9 * * *") { Exclusions = exclusions });
@@ -384,6 +420,10 @@ public sealed class CronSequenceGeneratorTests
     public void Exclusions_ThatLeaveNoTime_AreRefusedWhenTheScheduleIsCreated()
     {
         var ex = Assert.Throws<ArgumentException>(() => new XactCronSchedule("0 0 0 25 12 *") { Exclusions = "12-25" });
+
+        Assert.Contains("leave no time", ex.Message);
+
+        ex = Assert.Throws<ArgumentException>(() => new XactCronSchedule("0 0 9 * * SAT,SUN") { Exclusions = "FRI-SUN" });
 
         Assert.Contains("leave no time", ex.Message);
     }
