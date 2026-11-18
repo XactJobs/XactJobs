@@ -53,6 +53,17 @@ public abstract class PostgresFixture(string image) : DatabaseFixture
 
     protected override Task CreateSchemaAsync() => Task.CompletedTask; // done per test
 
+    public override async Task KillOtherSessionsAsync()
+    {
+        var database = new NpgsqlConnectionStringBuilder(_connectionString).Database;
+
+        await using var connection = new NpgsqlConnection(_container.GetConnectionString());
+
+        await connection.OpenAsync();
+
+        await ExecuteAsync(connection, $"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{database}' AND pid <> pg_backend_pid()");
+    }
+
     public async Task<string> CreateDatabaseAsync()
     {
         var databaseName = $"test_{Guid.NewGuid():N}";

@@ -6,7 +6,9 @@ description: What happens when a job throws, the retry strategies, retries per j
 ## Failures and retries
 
 When a job throws, its pending database changes are discarded, the attempt is recorded in the history as failed, and the job is scheduled
-to run again by the retry strategy. A job that runs out of retries is recorded as cancelled. A retry is the same job: it keeps its id, so its attempts have the same id in the history, the logs and the traces.
+to run again by the retry strategy. A job that runs out of retries is recorded as cancelled. The failure is recorded on a connection of its
+own, tried again a few times if the database closed it (a restart, a failover); if it still can't be saved, the job runs again when its
+lease expires. A retry is the same job: it keeps its id, so its attempts have the same id in the history, the logs and the traces.
 
 By default (`DefaultRetryStrategy`) a failed job is retried up to 10 times, waiting longer before each retry:
 
