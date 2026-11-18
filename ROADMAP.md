@@ -8,8 +8,10 @@ transaction as your data, in your own database. What's left before 1.0 is making
 - **1.0.0-rc1**: the API of 0.9.0, without the types that were public by mistake. The public API is tracked in
   the repository, so any change to it shows in a pull request, and the packages are validated against the previous
   release. A release candidate is for trying in your apps: the API only changes for what you report.
-- **1.0.0-rc2**, now: the same API, with combined exclusions for periodic jobs (`MON-FRI+00:00-05:00`) and a fix
+- **1.0.0-rc2**: the same API, with combined exclusions for periodic jobs (`MON-FRI+00:00-05:00`) and a fix
   for workers that could leave run slots idle during a backlog.
+- **1.0.0-rc3**, now: a worker gate (`WithWorkerGate<T>()`), so that the app decides at run time whether a node's
+  workers may claim jobs, e.g. a machine marked inactive in its database.
 - **1.0.0**: once the release candidate has had real use.
 
 ## After 1.0

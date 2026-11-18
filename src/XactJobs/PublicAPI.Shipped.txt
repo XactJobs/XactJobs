@@ -16,6 +16,8 @@ XactJobs.IXactJobFailureHandler
 XactJobs.IXactJobFailureHandler.OnFailedAsync(XactJobs.XactJobFailedContext! context, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
 XactJobs.IXactJobFilter
 XactJobs.IXactJobFilter.InvokeAsync(XactJobs.XactJobExecutingContext! context, System.Func<System.Threading.Tasks.Task!>! next) -> System.Threading.Tasks.Task!
+XactJobs.IXactJobsWorkerGate
+XactJobs.IXactJobsWorkerGate.CanClaimAsync(string! queueName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 XactJobs.QueueNames
 XactJobs.QueueNames.QueueNames() -> void
 XactJobs.QuickPoll<TDbContext>
@@ -196,6 +198,8 @@ XactJobs.XactJobsOptions<TDbContext>.PeriodicJobReconciliationIntervalInSeconds.
 XactJobs.XactJobsOptions<TDbContext>.PeriodicJobReconciliationIntervalInSeconds.set -> void
 XactJobs.XactJobsOptions<TDbContext>.SaveOutsideTransaction.get -> XactJobs.XactJobSaveCheck
 XactJobs.XactJobsOptions<TDbContext>.SaveOutsideTransaction.set -> void
+XactJobs.XactJobsOptions<TDbContext>.WorkerGate.get -> System.Type?
+XactJobs.XactJobsOptions<TDbContext>.WorkerGate.set -> void
 XactJobs.XactJobsOptions<TDbContext>.XactJobsOptions() -> void
 XactJobs.XactJobsOptionsBase<TDbContext>
 XactJobs.XactJobsOptionsBase<TDbContext>.BatchSize.get -> int
@@ -229,6 +233,7 @@ XactJobs.XactJobsOptionsBuilder<TDbContext>.WithPeriodicJobsFromAssembly(System.
 XactJobs.XactJobsOptionsBuilder<TDbContext>.WithPeriodicJobsFromAssemblyOf<T>() -> XactJobs.XactJobsOptionsBuilder<TDbContext!>!
 XactJobs.XactJobsOptionsBuilder<TDbContext>.WithPriorityQueue(System.Action<XactJobs.XactJobsQueueOptionsBuilder<TDbContext!>!>? configureAction = null) -> XactJobs.XactJobsOptionsBuilder<TDbContext!>!
 XactJobs.XactJobsOptionsBuilder<TDbContext>.WithSaveOutsideTransaction(XactJobs.XactJobSaveCheck check) -> XactJobs.XactJobsOptionsBuilder<TDbContext!>!
+XactJobs.XactJobsOptionsBuilder<TDbContext>.WithWorkerGate<TGate>() -> XactJobs.XactJobsOptionsBuilder<TDbContext!>!
 XactJobs.XactJobsOptionsBuilder<TDbContext>.XactJobsOptionsBuilder() -> void
 XactJobs.XactJobsOptionsBuilderBase<TDbContext, TOptions, TBuilder>
 XactJobs.XactJobsOptionsBuilderBase<TDbContext, TOptions, TBuilder>.Options.get -> TOptions!
