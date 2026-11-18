@@ -1188,6 +1188,132 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         Assert.False(await WithDbAsync(host, db => db.JobHistory.AnyAsync(h => h.Id == jobId)));
     }
 
+    /// <summary>
+    /// A worker that died holding a job (killed, or its machine lost) leaves the row leased, with no history, and its uncommitted writes
+    /// gone with its connection. Here the job is claimed with the claim statement of the database and never heard of again. Another
+    /// worker runs it once the lease expires, and its writes commit once.
+    /// </summary>
+    [DockerFact]
+    public async Task JobOfAWorkerThatDied_RunsOnceOnAnotherWorker_AfterItsLeaseExpires()
+    {
+        const int leaseSeconds = 3;
+
+        var host = CreateHost();
+
+        var jobId = await EnqueueAsync(host, x => x.MarkAsync(1, 0));
+
+        var claimedAt = DateTime.UtcNow;
+
+        var claimed = await WithDbAsync(host, db => (Task<List<XactJob>>)fixture.Dialect.ClaimJobsAsync(db, QueueNames.Default, 10, Guid.NewGuid(), leaseSeconds, CancellationToken.None));
+
+        Assert.Single(claimed);
+
+        await host.StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(host, db => db.JobHistory.AnyAsync(h => h.Id == jobId)), "the history row");
+
+        var history = await WithDbAsync(host, db => db.JobHistory.AsNoTracking().SingleAsync(h => h.Id == jobId));
+
+        Assert.Equal(XactJobStatus.Completed, history.Status);
+
+        // the dead worker's attempt isn't a failed one: it left nothing
+        Assert.Equal(0, history.ErrorCount);
+
+        // not before the lease expired (a second of tolerance for the clocks)
+        Assert.True(history.ProcessedAt >= claimedAt.AddSeconds(leaseSeconds - 1), $"Run at {history.ProcessedAt:O}, claimed at {claimedAt:O}");
+
+        Assert.Equal([1], await MarkedNumbersAsync(host));
+        Assert.False(await WithDbAsync(host, db => db.Jobs.AnyAsync(j => j.Queue != IntegrationJob.MarkerQueue)));
+    }
+
+    /// <summary>
+    /// The database ends the workers' sessions again and again while they drain a backlog, as restarts or failovers do: in the
+    /// middle of a claim, of a job, of a save, of a commit. The workers recover, every job completes, and its writes commit once.
+    /// A commit whose connection fails may have committed or not: the worker then retries the job, or finds its row gone. A failure is
+    /// recorded on another connection, tried again if that one was closed too: no job waits for its lease.
+    /// </summary>
+    [DockerFact]
+    public async Task SessionsEndedByTheDatabaseDuringABacklog_EveryJobCompletes_AndItsWritesCommitOnce()
+    {
+        const int jobCount = 60;
+
+        // a long lease: a job left to wait for it (its failure couldn't be recorded) fails the test
+        var host = CreateHost(options => options
+            .WithWorkerCount(2)
+            .WithMaxDegreeOfParallelism(4)
+            .WithLeaseDuration(300)
+            .WithRetryStrategy(new QuickRetryStrategy()));
+
+        await WithDbAsync(host, db =>
+        {
+            for (var i = 0; i < jobCount; i++)
+            {
+                var number = i;
+
+                db.JobEnqueue<IntegrationJob>(x => x.MarkAsync(number, 250));
+            }
+
+            return db.SaveChangesAsync();
+        });
+
+        await host.StartAsync();
+
+        using var stopKilling = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+
+        var kills = 0;
+
+        var killing = Task.Run(async () =>
+        {
+            while (!stopKilling.IsCancellationRequested)
+            {
+                await fixture.KillOtherSessionsAsync();
+
+                kills++;
+
+                await Task.Delay(300);
+            }
+        });
+
+        // the test's own connections are ended too: a failed check is tried again
+        await WaitForAsync(async () =>
+        {
+            try
+            {
+                return !await WithDbAsync(host, db => db.Jobs.AnyAsync(j => j.Queue != IntegrationJob.MarkerQueue));
+            }
+            catch (Exception) when (!stopKilling.IsCancellationRequested)
+            {
+                return false;
+            }
+        }, "all jobs to complete", TimeSpan.FromSeconds(90));
+
+        await stopKilling.CancelAsync();
+        await killing;
+
+        // the ended sessions did hit the workers: failed attempts, or errors logged (claims, saves)
+        var failedAttempts = await WithDbAsync(host, db => db.JobHistory.CountAsync(h => h.Status == XactJobStatus.Failed));
+
+        Assert.True(failedAttempts > 0 || _logs.HasErrors, $"The sessions were ended {kills} times, and nothing failed");
+
+        Assert.Equal(Enumerable.Range(0, jobCount), await MarkedNumbersAsync(host));
+
+        var completed = await WithDbAsync(host, db => db.JobHistory
+            .Where(h => h.Status == XactJobStatus.Completed)
+            .Select(h => h.Id)
+            .ToListAsync());
+
+        Assert.Equal(jobCount, completed.Count);
+        Assert.Equal(jobCount, completed.Distinct().Count());
+    }
+
+    /// <summary>The numbers of the jobs whose marker is saved, once for each time it was saved, in order.</summary>
+    private static async Task<List<int>> MarkedNumbersAsync(IHost host)
+    {
+        var args = await WithDbAsync(host, db => db.Jobs.Where(j => j.Queue == IntegrationJob.MarkerQueue).Select(j => j.MethodArgs).ToListAsync());
+
+        return args.Select(a => System.Text.Json.JsonSerializer.Deserialize<int[]>(a)![0]).Order().ToList();
+    }
+
     private protected IHost CreateHost(Action<XactJobsOptionsBuilder<TestDbContext>>? configure = null, bool retryOnFailure = false)
     {
         var builder = Host.CreateApplicationBuilder();
@@ -1291,9 +1417,9 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         return await action(scope.ServiceProvider.GetRequiredService<TestDbContext>());
     }
 
-    private protected static async Task WaitForAsync(Func<Task<bool>> condition, string description)
+    private protected static async Task WaitForAsync(Func<Task<bool>> condition, string description, TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow + WaitTimeout;
+        var deadline = DateTime.UtcNow + (timeout ?? WaitTimeout);
 
         while (!await condition())
         {
@@ -1351,6 +1477,14 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         }
 
         public void Count(int number) => state.Runs.AddOrUpdate(number, 1, (_, runs) => runs + 1);
+
+        /// <summary>Writes a marker with the number, saved with the job's row: once per completed run, never for a failed one.</summary>
+        public async Task MarkAsync(int number, int delayMs)
+        {
+            db.JobEnqueue<IntegrationJob>(x => x.Count(number), MarkerQueue);
+
+            await Task.Delay(delayMs);
+        }
 
         public Task CountAsync(int number)
         {
@@ -1423,6 +1557,11 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         {
             db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(1), "Type", "Method", "[]", MarkerQueue));
         }
+    }
+
+    private sealed class QuickRetryStrategy : IRetryStrategy
+    {
+        public DateTime? GetRetryTimeUtc(XactJob job, int newErrorCount, Exception exception) => newErrorCount <= 100 ? DateTime.UtcNow.AddMilliseconds(100) : null;
     }
 
     private sealed class FixedRetryStrategy(DateTime retryAt) : IRetryStrategy

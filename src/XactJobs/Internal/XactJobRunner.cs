@@ -21,6 +21,10 @@ namespace XactJobs.Internal
         /// <summary>The time the failure handlers of a job get, all of them: then their token is cancelled.</summary>
         internal static readonly TimeSpan FailureHandlersTimeout = TimeSpan.FromSeconds(30);
 
+        /// <summary>The attempts to record a job's failure, and the wait between them.</summary>
+        private const int MaxFailureRecordAttempts = 5;
+        private static readonly TimeSpan FailureRecordRetryDelay = TimeSpan.FromSeconds(1);
+
         /// <summary>When a retry strategy throws.</summary>
         private static readonly DefaultRetryStrategy FallbackRetryStrategy = new();
 
@@ -724,8 +728,9 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// Records a failed attempt in its own scope, after the job's scope has been rolled back and disposed.
-        /// Never throws: if the record can't be saved, the lease expires and the job runs again.
+        /// Records a failed attempt in its own scope, after the job's scope has been rolled back and disposed. Tries again a few times,
+        /// each in a new scope (a connection the database closed fails the first one). Never throws: if the record can't be saved, the
+        /// lease expires and the job runs again.
         /// The stopping token isn't used, so that a job failing during shutdown still gets its failure recorded.
         /// <para>
         /// A retry is the same row, moved to its new scheduled time with an UPDATE, in the transaction that adds the history row.
@@ -735,73 +740,94 @@ namespace XactJobs.Internal
         /// couldn't be recorded.</returns>
         private async Task<XactJobStatus?> RecordFailureAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception jobException, XactJobRetry? retry)
         {
-            try
+            // once, before the transaction: the strategy is the app's code, and a retrying execution strategy runs the lambda again
+            var retryAt = GetRetryTimeUtc(job, jobException, retry);
+
+            for (var attempt = 1; ; attempt++)
             {
-                // once, before the transaction: the strategy is the app's code, and a retrying execution strategy runs the lambda again
-                var retryAt = GetRetryTimeUtc(job, jobException, retry);
-
-                using var scope = _scopeFactory.CreateScope();
-
-                var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
-
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
-
-                // a retrying execution strategy, if the app enabled one, only allows explicit transactions inside of it
-                var status = await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
+                try
                 {
-                    dbContext.ChangeTracker.Clear();
-
-                    // an explicit level: a pooled connection keeps the one an app's transaction left on it (SqlClient doesn't reset it)
-                    await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token)
+                    return await SaveFailureAsync(job, periodicJob, claimedAt, jobException, retryAt)
                         .ConfigureAwait(false);
+                }
+                catch (DbUpdateConcurrencyException ex)
+                {
+                    _logger.LogWarning(ex, "{Queue}: Job row is already gone, failure not recorded (lease expired and another worker may have processed it): {TypeName}.{MethodName} ({Id})",
+                        GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
 
-                    dbContext.Attach(job);
+                    return null;
+                }
+                catch (Exception ex) when (attempt < MaxFailureRecordAttempts)
+                {
+                    // e.g. a pooled connection the database closed (a restart, a failover): the pool drops it, and the next attempt gets
+                    // another one. Otherwise the job would wait for its lease to expire
+                    _logger.LogWarning(ex, "{Queue}: Failed recording job failure, trying again ({Attempt} of {Attempts}): {TypeName}.{MethodName} ({Id})",
+                        GetQueueDisplayName(), attempt, MaxFailureRecordAttempts, job.TypeName, job.MethodName, job.Id);
 
-                    var activePeriodicJob = await GetIfStillActiveAsync(dbContext, periodicJob, token)
-                        .ConfigureAwait(false);
+                    await Task.Delay(FailureRecordRetryDelay).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "{Queue}: Failed recording job failure, the job will run again when its lease expires: {TypeName}.{MethodName} ({Id})",
+                        GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
 
-                    // the state it started with, which a failed attempt leaves as it is
-                    var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException, periodicJob?.State, retryAt);
-
-                    if (retryAt != null)
-                    {
-                        // the same row moves to its retry (the history row is saved below, in the same transaction)
-                        var isRescheduled = await dbContext.RescheduleAsync(job, retryAt.Value, job.ErrorCount + 1, job.GetOriginallyScheduledAt(claimedAt), token)
-                            .ConfigureAwait(false);
-
-                        if (!isRescheduled)
-                        {
-                            throw new DbUpdateConcurrencyException("The job's row is gone.");
-                        }
-                    }
-                    else
-                    {
-                        dbContext.Set<XactJob>().Remove(job);
-                    }
-
-                    await dbContext.SaveChangesAsync(token)
-                        .ConfigureAwait(false);
-
-                    await transaction.CommitAsync(token)
-                        .ConfigureAwait(false);
-
-                    return recordedStatus;
-                }, cts.Token).ConfigureAwait(false);
-
-                return status;
+                    return null;
+                }
             }
-            catch (DbUpdateConcurrencyException ex)
+        }
+
+        /// <summary>One attempt of <see cref="RecordFailureAsync"/>, in a scope (and so a connection) of its own.</summary>
+        private async Task<XactJobStatus> SaveFailureAsync(XactJob job, XactJobPeriodic? periodicJob, DateTime claimedAt, Exception jobException, DateTime? retryAt)
+        {
+            using var scope = _scopeFactory.CreateScope();
+
+            var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+            // a retrying execution strategy, if the app enabled one, only allows explicit transactions inside of it
+            var status = await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async token =>
             {
-                _logger.LogWarning(ex, "{Queue}: Job row is already gone, failure not recorded (lease expired and another worker may have processed it): {TypeName}.{MethodName} ({Id})",
-                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "{Queue}: Failed recording job failure, the job will run again when its lease expires: {TypeName}.{MethodName} ({Id})",
-                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
-            }
+                dbContext.ChangeTracker.Clear();
 
-            return null;
+                // an explicit level: a pooled connection keeps the one an app's transaction left on it (SqlClient doesn't reset it)
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, token)
+                    .ConfigureAwait(false);
+
+                dbContext.Attach(job);
+
+                var activePeriodicJob = await GetIfStillActiveAsync(dbContext, periodicJob, token)
+                    .ConfigureAwait(false);
+
+                // the state it started with, which a failed attempt leaves as it is
+                var recordedStatus = RecordFailedAttempt(dbContext, job, activePeriodicJob, claimedAt, jobException, periodicJob?.State, retryAt);
+
+                if (retryAt != null)
+                {
+                    // the same row moves to its retry (the history row is saved below, in the same transaction)
+                    var isRescheduled = await dbContext.RescheduleAsync(job, retryAt.Value, job.ErrorCount + 1, job.GetOriginallyScheduledAt(claimedAt), token)
+                        .ConfigureAwait(false);
+
+                    if (!isRescheduled)
+                    {
+                        throw new DbUpdateConcurrencyException("The job's row is gone.");
+                    }
+                }
+                else
+                {
+                    dbContext.Set<XactJob>().Remove(job);
+                }
+
+                await dbContext.SaveChangesAsync(token)
+                    .ConfigureAwait(false);
+
+                await transaction.CommitAsync(token)
+                    .ConfigureAwait(false);
+
+                return recordedStatus;
+            }, cts.Token).ConfigureAwait(false);
+
+            return status;
         }
 
         /// <summary>

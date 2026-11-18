@@ -41,6 +41,12 @@ public abstract class DatabaseFixture : IAsyncLifetime
 
     protected abstract Task CreateSchemaAsync();
 
+    /// <summary>
+    /// Ends every other session on the test database from the server's side, as a restart or a failover of the database does: the
+    /// clients' connections fail in the middle of what they're doing, also of a commit.
+    /// </summary>
+    public abstract Task KillOtherSessionsAsync();
+
     public async Task InitializeAsync()
     {
         if (IsDockerAvailable)
@@ -166,6 +172,37 @@ public abstract class MySqlFixtureBase : DatabaseFixture
 
     protected override Task StopContainerAsync() => _container.DisposeAsync().AsTask();
 
+    public override async Task KillOtherSessionsAsync()
+    {
+        await using var connection = new MySqlConnection(ConnectionString);
+
+        await connection.OpenAsync();
+
+        var ids = new List<long>();
+
+        await using (var command = connection.CreateCommand())
+        {
+            // the workers' sessions are of the same user, who can end them
+            command.CommandText = "SELECT id FROM information_schema.processlist WHERE db = DATABASE() AND id <> CONNECTION_ID()";
+
+            await using var reader = await command.ExecuteReaderAsync();
+
+            while (await reader.ReadAsync()) ids.Add(Convert.ToInt64(reader.GetValue(0)));
+        }
+
+        foreach (var id in ids)
+        {
+            try
+            {
+                await ExecuteAsync(connection, $"KILL {id}");
+            }
+            catch (MySqlException)
+            {
+                // it ended meanwhile
+            }
+        }
+    }
+
     protected override async Task CreateSchemaAsync()
     {
         await using var connection = new MySqlConnection(ConnectionString);
@@ -248,6 +285,20 @@ WHERE ic.object_id = OBJECT_ID('XactJobs.Job') AND c.name = 'Leaser'";
 
     protected override Task StopContainerAsync() => _container.DisposeAsync().AsTask();
 
+    public override async Task KillOtherSessionsAsync()
+    {
+        await using var master = new SqlConnection(_container.GetConnectionString());
+
+        await master.OpenAsync();
+
+        await ExecuteAsync(master, $@"
+DECLARE @sql nvarchar(max) = N'';
+SELECT @sql += N'KILL ' + CAST(session_id AS nvarchar(10)) + N';'
+FROM sys.dm_exec_sessions
+WHERE database_id = DB_ID('{DatabaseName}') AND session_id <> @@SPID AND is_user_process = 1;
+EXEC sp_executesql @sql;");
+    }
+
     protected override async Task CreateSchemaAsync()
     {
         await using (var master = new SqlConnection(_container.GetConnectionString()))
@@ -288,6 +339,28 @@ public sealed class OracleFixture : DatabaseFixture
     protected override Task StartContainerAsync() => _container.StartAsync();
 
     protected override Task StopContainerAsync() => _container.DisposeAsync().AsTask();
+
+    public override async Task KillOtherSessionsAsync()
+    {
+        var app = new OracleConnectionStringBuilder(_container.GetConnectionString());
+
+        // the image gives SYSTEM the app user's password
+        var admin = new OracleConnectionStringBuilder(app.ConnectionString) { UserID = "system" };
+
+        await using var connection = new OracleConnection(admin.ConnectionString);
+
+        await connection.OpenAsync();
+
+        await ExecuteAsync(connection, $@"
+BEGIN
+  FOR s IN (SELECT sid, serial# AS serial FROM v$session WHERE username = '{app.UserID.ToUpperInvariant()}') LOOP
+    BEGIN
+      EXECUTE IMMEDIATE 'ALTER SYSTEM KILL SESSION ''' || s.sid || ',' || s.serial || ''' IMMEDIATE';
+    EXCEPTION WHEN OTHERS THEN NULL; -- it ended meanwhile
+    END;
+  END LOOP;
+END;");
+    }
 
     protected override async Task CreateSchemaAsync()
     {
