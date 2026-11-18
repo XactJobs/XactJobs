@@ -1,0 +1,269 @@
+#nullable enable
+*REMOVED*Microsoft.Web.Mvc.CachedExpressionCompiler
+*REMOVED*XactJobs.Annotations.InstantHandleAttribute
+*REMOVED*XactJobs.Annotations.InstantHandleAttribute.InstantHandleAttribute() -> void
+*REMOVED*XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>
+*REMOVED*XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>.Logger.get -> Microsoft.Extensions.Logging.ILogger<XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext!>!>!
+*REMOVED*XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>.ScopeFactory.get -> Microsoft.Extensions.DependencyInjection.IServiceScopeFactory!
+*REMOVED*XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>.XactJobsCronScheduler(Microsoft.Extensions.DependencyInjection.IServiceScopeFactory! scopeFactory, Microsoft.Extensions.Logging.ILogger<XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext!>!>! logger) -> void
+*REMOVED*XactJobs.EntityConfigurations.XactJobEntityConfiguration
+*REMOVED*XactJobs.EntityConfigurations.XactJobEntityConfiguration.Configure(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<XactJobs.XactJob!>! builder) -> void
+*REMOVED*XactJobs.EntityConfigurations.XactJobEntityConfiguration.XactJobEntityConfiguration(string? providerName, bool includeInMigrations = false, string? schema = null) -> void
+*REMOVED*XactJobs.EntityConfigurations.XactJobHistoryEntityConfiguration
+*REMOVED*XactJobs.EntityConfigurations.XactJobHistoryEntityConfiguration.Configure(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<XactJobs.XactJobHistory!>! builder) -> void
+*REMOVED*XactJobs.EntityConfigurations.XactJobHistoryEntityConfiguration.XactJobHistoryEntityConfiguration(string? providerName, bool includeInMigrations = false, string? schema = null) -> void
+*REMOVED*XactJobs.EntityConfigurations.XactJobPeriodicEntityConfiguration
+*REMOVED*XactJobs.EntityConfigurations.XactJobPeriodicEntityConfiguration.Configure(Microsoft.EntityFrameworkCore.Metadata.Builders.EntityTypeBuilder<XactJobs.XactJobPeriodic!>! builder) -> void
+*REMOVED*XactJobs.EntityConfigurations.XactJobPeriodicEntityConfiguration.XactJobPeriodicEntityConfiguration(string? providerName, bool includeInMigrations = false, string? schema = null) -> void
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.AcquireTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ClaimContinuationsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ClaimIsolationLevel.get -> System.Data.IsolationLevel?
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ClaimJobsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColAwaitsBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColContinuationCondition.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColCreatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColCronExpression.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColErrorCount.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColErrorMessage.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColErrorStackTrace.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColErrorTime.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColExclusions.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColIsActive.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColLeasedUntil.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColLeaser.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColMethodArgs.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColMethodName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColOriginallyScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColPeriodicJobId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColPeriodicJobVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColPreviousState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColProcessedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColQueue.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColStatus.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColTimeZone.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColTraceParent.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColTypeName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColUpdatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ColVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.DateTimeColumnType.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.GetClearLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.GetExtendLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.GetLeaseJobsSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs, int leaseDurationInSeconds, System.DateTime? claimedAt = null) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.GetLockContinuationsSql(string? queueName, int maxJobs) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.GetLockJobsSql(string? queueName, int maxJobs) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.GetTableLockNameSql(string! tableSchema, string! tableName) -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.HasSchemaSupport.get -> bool
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.IndexPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.MySqlDialect() -> void
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.PrimaryKeyPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.ReleaseTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.XactJobHistoryTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.XactJobPeriodicTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.XactJobSchema.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.MySqlDialect.XactJobTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.AcquireTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ClaimContinuationsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ClaimIsolationLevel.get -> System.Data.IsolationLevel?
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ClaimJobsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColAwaitsBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColContinuationCondition.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColCreatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColCronExpression.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColErrorCount.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColErrorMessage.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColErrorStackTrace.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColErrorTime.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColExclusions.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColIsActive.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColLeasedUntil.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColLeaser.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColMethodArgs.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColMethodName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColOriginallyScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColPeriodicJobId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColPeriodicJobVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColPreviousState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColProcessedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColQueue.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColStatus.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColTimeZone.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColTraceParent.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColTypeName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColUpdatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ColVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.DateTimeColumnType.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.GetClearLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.GetExtendLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.GetFetchContinuationsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.GetFetchJobsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.HasSchemaSupport.get -> bool
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.IndexPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.OracleDialect() -> void
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.PrimaryKeyPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.ReleaseTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.XactJobHistoryTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.XactJobPeriodicTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.XactJobSchema.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.OracleDialect.XactJobTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.AcquireTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ClaimContinuationsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ClaimIsolationLevel.get -> System.Data.IsolationLevel?
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ClaimJobsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColAwaitsBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColContinuationCondition.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColCreatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColCronExpression.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColErrorCount.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColErrorMessage.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColErrorStackTrace.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColErrorTime.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColExclusions.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColIsActive.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColLeasedUntil.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColLeaser.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColMethodArgs.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColMethodName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColOriginallyScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColPeriodicJobId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColPeriodicJobVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColPreviousState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColProcessedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColQueue.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColStatus.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColTimeZone.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColTraceParent.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColTypeName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColUpdatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ColVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.DateTimeColumnType.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.GetClearLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.GetExtendLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.GetFetchContinuationsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.GetFetchJobsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.HasSchemaSupport.get -> bool
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.IndexPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.PostgreSqlDialect(string? schema = null) -> void
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.PrimaryKeyPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.ReleaseTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.XactJobHistoryTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.XactJobPeriodicTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.XactJobSchema.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.PostgreSqlDialect.XactJobTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.AcquireTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ClaimContinuationsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ClaimIsolationLevel.get -> System.Data.IsolationLevel?
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ClaimJobsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColAwaitsBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColContinuationCondition.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColCreatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColCronExpression.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColErrorCount.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColErrorMessage.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColErrorStackTrace.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColErrorTime.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColExclusions.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColIsActive.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColLeasedUntil.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColLeaser.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColMethodArgs.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColMethodName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColOriginallyScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColPeriodicJobId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColPeriodicJobVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColPreviousState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColProcessedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColQueue.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColStatus.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColTimeZone.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColTraceParent.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColTypeName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColUpdatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ColVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.DateTimeColumnType.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.GetClearLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.GetExtendLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.GetFetchContinuationsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.GetFetchJobsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.HasSchemaSupport.get -> bool
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.IndexPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.PrimaryKeyPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.ReleaseTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.SqlServerDialect(string? schema = null) -> void
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.XactJobHistoryTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.XactJobPeriodicTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.XactJobSchema.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqlServerDialect.XactJobTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.AcquireTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ClaimContinuationsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ClaimIsolationLevel.get -> System.Data.IsolationLevel?
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ClaimJobsAsync(Microsoft.EntityFrameworkCore.DbContext! db, string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<System.Collections.Generic.List<XactJobs.XactJob!>!>!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColAwaitsBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColBatchId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColContinuationCondition.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColCreatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColCronExpression.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColErrorCount.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColErrorMessage.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColErrorStackTrace.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColErrorTime.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColExclusions.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColIsActive.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColLeasedUntil.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColLeaser.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColMethodArgs.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColMethodName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColOriginallyScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColPeriodicJobId.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColPeriodicJobVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColPreviousState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColProcessedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColQueue.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColScheduledAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColState.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColStatus.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColTimeZone.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColTraceParent.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColTypeName.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColUpdatedAt.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ColVersion.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.DateTimeColumnType.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.GetClearLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.GetExtendLeaseSql(System.Guid leaser, System.Collections.Generic.IReadOnlyCollection<XactJobs.XactJob!>! jobs, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.GetFetchContinuationsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds, System.DateTime claimedAt) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.GetFetchJobsSql(string? queueName, int maxJobs, System.Guid leaser, int leaseDurationInSeconds) -> (string! Sql, object![]! Parameters)
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.HasSchemaSupport.get -> bool
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.IndexPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.PrimaryKeyPrefix.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.ReleaseTableLockAsync(Microsoft.EntityFrameworkCore.DbContext! db, string! tableSchema, string! tableName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.SqliteDialect() -> void
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.XactJobHistoryTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.XactJobPeriodicTable.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.XactJobSchema.get -> string!
+*REMOVED*XactJobs.Internal.SqlDialects.SqliteDialect.XactJobTable.get -> string!
+*REMOVED*abstract XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>.EnsurePeriodicJobsAsync(TDbContext! db, System.Threading.CancellationToken stoppingToken) -> System.Threading.Tasks.Task!
+*REMOVED*override XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>.ExecuteAsync(System.Threading.CancellationToken stoppingToken) -> System.Threading.Tasks.Task!
+*REMOVED*virtual XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>.ReconciliationInterval.get -> System.TimeSpan
+*REMOVED*~static Microsoft.Web.Mvc.CachedExpressionCompiler.Compile<TModel, TValue>(this System.Linq.Expressions.Expression<System.Func<TModel, TValue>> lambdaExpression) -> System.Func<TModel, TValue>
+*REMOVED*~static Microsoft.Web.Mvc.CachedExpressionCompiler.Evaluate(System.Linq.Expressions.Expression arg) -> object

@@ -20,7 +20,19 @@
 
 		<!-- deterministic, with the paths normalized: the same commit builds the same assemblies on any machine -->
 		<ContinuousIntegrationBuild Condition="'$(Configuration)' == 'Release'">true</ContinuousIntegrationBuild>
+
+		<!-- RS0026, RS0027: overloads with optional parameters. The existing ones are released, and changing them would break callers -->
+		<NoWarn>$(NoWarn);RS0026;RS0027</NoWarn>
 	</PropertyGroup>
+
+	<!-- the public API, listed in PublicAPI.Shipped.txt (released) and PublicAPI.Unshipped.txt (since the last release) next to the
+	     project: a change to it fails the build until the lists are updated, so it shows in the pull request -->
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0">
+			<PrivateAssets>all</PrivateAssets>
+			<IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+	</ItemGroup>
 
 	<ItemGroup>
 		<None Include="$(MSBuildThisFileDirectory)XactJobs\icon.png" Link="icon.png">

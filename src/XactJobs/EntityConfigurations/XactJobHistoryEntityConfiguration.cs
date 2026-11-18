@@ -8,7 +8,7 @@ using XactJobs.Internal.SqlDialects;
 
 namespace XactJobs.EntityConfigurations
 {
-    public class XactJobHistoryEntityConfiguration : IEntityTypeConfiguration<XactJobHistory>
+    internal class XactJobHistoryEntityConfiguration : IEntityTypeConfiguration<XactJobHistory>
     {
         private readonly ISqlDialect _sqlDialect;
         private readonly bool _includeInMigrations;

@@ -19,8 +19,30 @@ For a new installation, run the install script instead: it creates the same sche
 
 On SQL Server, run the scripts with `QUOTED_IDENTIFIER` and `ANSI_NULLS` on, which are SqlClient's and SSMS's defaults (`sqlcmd` needs `-I`).
 
-Until 1.0 the API can still change between minor versions (0.x). Breaking changes are listed in the
+## Versions
+
+From 1.0, XactJobs follows [semantic versioning](https://semver.org/):
+
+- **Patch versions** (1.0.x) fix bugs.
+- **Minor versions** (1.x) add features, and support for new .NET and EF Core versions. Code that compiles against an earlier 1.x
+  version compiles against them. A schema change comes with its script.
+- **Major versions** may break the API, with what to change listed here. Jobs already in your database keep running: the way a job is
+  stored never changes.
+
+The public API is the public types and members of `XactJobs` and `XactJobs.UI`. Each package lists it in its `PublicAPI.Shipped.txt`
+(released) and `PublicAPI.Unshipped.txt` (changed since the last release), and a build fails if the code doesn't match them, so every
+change to the API shows in its pull request. Log messages and metric names don't change in a minor version either.
+
+Until 1.0, the API can still change between minor versions (0.x). Breaking changes are listed in the
 [release notes](https://github.com/XactJobs/XactJobs/releases), with how to migrate.
+
+## v1.0.0
+
+No schema change. Types that were public by mistake are internal: the SQL dialects (`XactJobs.Internal.SqlDialects`), the entity
+configurations (`XactJobs.EntityConfigurations.XactJob*EntityConfiguration`; `ApplyXactJobsConfigurations` applies them), the cron
+scheduler's base class (`XactJobs.DependencyInjection.XactJobsCronScheduler<TDbContext>`), the expression compiler copied from ASP.NET
+MVC (`Microsoft.Web.Mvc.CachedExpressionCompiler`) and `XactJobs.Annotations.InstantHandleAttribute`. None of them is needed to use
+XactJobs.
 
 ## v0.9.0
 

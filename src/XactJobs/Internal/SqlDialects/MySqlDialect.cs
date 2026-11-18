@@ -6,7 +6,7 @@ using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
-    public class MySqlDialect : ISqlDialect
+    internal class MySqlDialect : ISqlDialect
     {
         public bool HasSchemaSupport { get; } = false;
 

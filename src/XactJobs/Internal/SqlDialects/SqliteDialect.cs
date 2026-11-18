@@ -3,7 +3,7 @@ using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
-    public class SqliteDialect : ISqlDialect
+    internal class SqliteDialect : ISqlDialect
     {
         public string XactJobSchema { get; } = "xact_jobs";
         public string XactJobTable { get; } = "job";

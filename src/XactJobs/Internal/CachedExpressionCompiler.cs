@@ -14,7 +14,7 @@ namespace Microsoft.Web.Mvc
     // See the comments in the ExpressionUtil namespace for more information.
     //
     // The unit tests for the ExpressionUtil.* types are in the System.Web.Mvc.Test project.
-    public static class CachedExpressionCompiler
+    internal static class CachedExpressionCompiler
     {
         private static readonly ParameterExpression _unusedParameterExpr = Expression.Parameter(typeof(object), "_unused");
 
