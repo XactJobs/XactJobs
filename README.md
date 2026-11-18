@@ -426,6 +426,8 @@ For v0.9.0, run the script first: it adds the column for the exclusions of perio
 `DefaultRetryStrategy` counts retries instead of attempts: `maxAttempts: 5` is now `maxRetries: 4`, and a positional `new DefaultRetryStrategy(1)`,
 which was one attempt, is now one retry. The default is 10 retries (11 attempts, one more than before).
 
+For v1.0.0 there's no script. Types that were public by mistake are internal: the SQL dialects, the entity configurations (`ApplyXactJobsConfigurations` applies them), the cron scheduler's base class, the expression compiler copied from ASP.NET MVC and `InstantHandleAttribute`.
+
 For v0.8.0, run the script first: it adds the column for the time zone of a periodic job's schedule (see [Time Zones](#time-zones)).
 Give a schedule a time zone only once all the workers run v0.8.0: a worker of an older version schedules the next run in UTC.
 The methods that take a cron expression take an `XactCronSchedule` instead, and a cron expression converts to it, so the calls compile

@@ -5,11 +5,9 @@ transaction as your data, in your own database. What's left before 1.0 is making
 
 ## Next
 
-- **0.9.0**: retries per job method (`[XactRetry]`), job filters and failure handlers, `L`, `W` and `#` in cron
-  expressions, and exclusions for periodic jobs.
-- **1.0.0-rc1**: the public API is tracked in the repository, so any change to it shows in a pull request, and the
-  packages are validated against the previous release. A release candidate is for trying in your apps: the API only
-  changes for what you report.
+- **1.0.0-rc1**, now: the API of 0.9.0, without the types that were public by mistake. The public API is tracked in
+  the repository, so any change to it shows in a pull request, and the packages are validated against the previous
+  release. A release candidate is for trying in your apps: the API only changes for what you report.
 - **1.0.0**: once the release candidate has had real use.
 
 ## After 1.0
