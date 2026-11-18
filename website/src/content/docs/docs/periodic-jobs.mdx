@@ -208,8 +208,8 @@ them match. Each of them can be a list in parentheses:
   next one with the current list.
 - An invalid item, a list longer than 2000 characters, or one that leaves no time throws when the schedule is created (`AddXactJobs` lists
   it with the other problems of the attributes).
-- The list is stored normalized: no spaces in an item, its parts in the order date, day, time, the days in capitals. So the same list
-  written differently doesn't count as a change.
+- The list is stored normalized: no spaces in an item, its parts in the order date, day, time, the days in capitals. So a list that
+  differs only in those doesn't count as a change (the order of the items and of the values in a list does).
 - Movable holidays (Easter...) are dates once, per year. For anything else, a [job filter can skip runs](../filters/#skipping-a-run).
 
 ## Several nodes
