@@ -2,6 +2,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Linq.Expressions;
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
@@ -1289,9 +1290,9 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
 
         var claimedAt = DateTime.UtcNow;
 
-        var claimed = await WithDbAsync(host, db => (Task<List<XactJob>>)fixture.Dialect.ClaimJobsAsync(db, QueueNames.Default, 10, Guid.NewGuid(), leaseSeconds, CancellationToken.None));
-
-        Assert.Single(claimed);
+        // until it's claimed: it's due by the database's clock, which can be a few milliseconds behind the app's (SQL Server on Linux)
+        await WaitForAsync(async () => (await WithDbAsync(host, db => (Task<List<XactJob>>)fixture.Dialect.ClaimJobsAsync(db, QueueNames.Default, 10, Guid.NewGuid(), leaseSeconds, CancellationToken.None))).Count == 1,
+            "the job to be claimed");
 
         await host.StartAsync();
 
@@ -1361,7 +1362,8 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
             }
         });
 
-        // the test's own connections are ended too: a failed check is tried again
+        // the test's own connections are ended too, and stay in the pool after the kills (ODP.NET hands them out unchecked): a failed
+        // check is tried again
         try
         {
             await WaitForAsync(async () =>
@@ -1370,7 +1372,7 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
                 {
                     return !await WithDbAsync(host, db => db.Jobs.AnyAsync(j => j.Queue != IntegrationJob.MarkerQueue));
                 }
-                catch (Exception) when (!stopKilling.IsCancellationRequested)
+                catch (Exception)
                 {
                     return false;
                 }
@@ -1385,6 +1387,9 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
 
         await stopKilling.CancelAsync();
         await killing;
+
+        // the checks below on new connections, not on ones the kills ended
+        await WithDbAsync(host, db => Task.FromResult(ClearAllPools(db)));
 
         // the ended sessions did hit the workers: failed attempts, or errors logged (claims, saves)
         var failedAttempts = await WithDbAsync(host, db => db.JobHistory.CountAsync(h => h.Status == XactJobStatus.Failed));
@@ -1504,6 +1509,17 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
     private static Task<int> CountMarkersAsync(IHost host)
     {
         return WithDbAsync(host, db => db.Jobs.CountAsync(j => j.Queue == IntegrationJob.MarkerQueue));
+    }
+
+    /// <summary>Empties the connection pools of the context's ADO.NET provider: each one has a static ClearAllPools.</summary>
+    private static bool ClearAllPools(DbContext db)
+    {
+        var clearAllPools = db.Database.GetDbConnection().GetType().GetMethod("ClearAllPools", BindingFlags.Public | BindingFlags.Static, Type.EmptyTypes)
+            ?? throw new InvalidOperationException($"{db.Database.GetDbConnection().GetType()} has no ClearAllPools");
+
+        clearAllPools.Invoke(null, null);
+
+        return true;
     }
 
     private static async Task<T> WithDbAsync<T>(IHost host, Func<TestDbContext, Task<T>> action)
