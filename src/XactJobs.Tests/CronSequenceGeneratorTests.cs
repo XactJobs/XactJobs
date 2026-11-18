@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using XactJobs.CronUtil;
 
 namespace XactJobs.Tests;
@@ -402,6 +402,8 @@ public sealed class CronSequenceGeneratorTests
     [InlineData("christmas")]
     [InlineData("MON-XYZ")]
     [InlineData("MON+TUE")]
+    [InlineData("1 2-25")]
+    [InlineData("12:0 0-13:00")]
     [InlineData("12-24+12-25")]
     [InlineData("MON+")]
     [InlineData("+MON")]

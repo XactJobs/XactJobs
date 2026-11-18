@@ -97,10 +97,11 @@ namespace XactJobs.CronUtil
             // the parts normalized
             string? dates = null, days = null, times = null;
 
-            foreach (var part in item.Replace(" ", "").Split('+'))
+            // spaces only around the separators: inside a value, they make it invalid
+            foreach (var part in item.Split('+', StringSplitOptions.TrimEntries))
             {
                 var grouped = part.StartsWith('(') && part.EndsWith(')');
-                var values = (grouped ? part[1..^1] : part).Split(',');
+                var values = (grouped ? part[1..^1] : part).Split(',', StringSplitOptions.TrimEntries);
 
                 if (values.Any(v => v.Length == 0 || v.Contains('(') || v.Contains(')'))) return null;
 
@@ -289,19 +290,23 @@ namespace XactJobs.CronUtil
                 if (Times == null) return MatchesDay(date) ? local.Date.AddDays(1) : null;
 
                 var time = TimeOnly.FromDateTime(local);
+                var today = MatchesDay(date);
+                var yesterday = MatchesDay(date.AddDays(-1));
+
+                if (!today && !yesterday) return null;
 
                 foreach (var (from, to) in Times)
                 {
                     if (from < to)
                     {
-                        if (time >= from && time < to && MatchesDay(date)) return local.Date + to.ToTimeSpan();
+                        if (today && time >= from && time < to) return local.Date + to.ToTimeSpan();
                     }
                     else if (time >= from)
                     {
                         // crosses midnight: from tonight to tomorrow, if it starts today
-                        if (MatchesDay(date)) return local.Date.AddDays(1) + to.ToTimeSpan();
+                        if (today) return local.Date.AddDays(1) + to.ToTimeSpan();
                     }
-                    else if (time < to && MatchesDay(date.AddDays(-1)))
+                    else if (yesterday && time < to)
                     {
                         // the part after midnight of a range that started yesterday
                         return local.Date + to.ToTimeSpan();
