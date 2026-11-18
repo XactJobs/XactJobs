@@ -55,8 +55,12 @@ namespace XactJobs.Internal.SqlDialects
             return SqlDialectExtensions.ClaimJobsInOneStatementAsync(db, GetFetchJobsSql(queueName, maxJobs, leaser, leaseDurationInSeconds), cancellationToken);
         }
 
-        // The leaser is passed as a string, because the provider would bind a Guid in uppercase.
-        // All the statements must write and compare it in the same case.
+        /// <summary>
+        /// The leaser as EF writes a Guid on SQLite (uppercase text), so EF's checks of it match: it's a concurrency token. A string, as
+        /// the raw statements would otherwise bind it as the ADO provider does, not as EF's mapping.
+        /// </summary>
+        internal static string LeaserValue(Guid leaser) => leaser.ToString().ToUpperInvariant();
+
         public (string Sql, object[] Parameters) GetFetchJobsSql(string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds) => ($@"
 WITH cte AS (
   SELECT {ColId}, {ColQueue}, {ColScheduledAt}
@@ -76,7 +80,7 @@ WHERE
     AND {XactJobSchema}_{XactJobTable}.{ColQueue} = cte.{ColQueue}
     AND {XactJobSchema}_{XactJobTable}.{ColScheduledAt} = cte.{ColScheduledAt}
 RETURNING *
-", [queueName ?? QueueNames.Default, maxJobs, leaser.ToString(), leaseDurationInSeconds]);
+", [queueName ?? QueueNames.Default, maxJobs, LeaserValue(leaser), leaseDurationInSeconds]);
 
         // The primary key is just the id on Sqlite (see XactJobEntityConfiguration).
         public Task<List<XactJob>> ClaimContinuationsAsync(DbContext db, string? queueName, int maxJobs, Guid leaser, int leaseDurationInSeconds, DateTime claimedAt, CancellationToken cancellationToken)
@@ -103,11 +107,11 @@ SET {ColLeaser} = {{3}},
 FROM cte
 WHERE {XactJobSchema}_{XactJobTable}.{ColId} = cte.{ColId}
 RETURNING *
-", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs, leaser.ToString(), leaseDurationInSeconds, claimedAt]);
+", [queueName ?? QueueNames.Default, XactJobBase.AwaitingBatchScheduledAt, maxJobs, LeaserValue(leaser), leaseDurationInSeconds, claimedAt]);
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {
-            List<object> parameters = [leaseDurationInSeconds, leaser.ToString()];
+            List<object> parameters = [leaseDurationInSeconds, LeaserValue(leaser)];
 
             var jobIds = BuildJobIdList(jobs, parameters);
 
@@ -121,7 +125,7 @@ WHERE {ColLeaser} = {{1}}
 
         public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs)
         {
-            List<object> parameters = [leaser.ToString()];
+            List<object> parameters = [LeaserValue(leaser)];
 
             var jobIds = BuildJobIdList(jobs, parameters);
 

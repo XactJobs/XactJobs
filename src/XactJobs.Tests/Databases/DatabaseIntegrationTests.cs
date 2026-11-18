@@ -1166,7 +1166,33 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
         await AssertWritesAreLostWhenTheRowIsGoneAsync(host, jobId);
     }
 
-    private async Task AssertWritesAreLostWhenTheRowIsGoneAsync(IHost host, long jobId)
+    /// <summary>
+    /// The job's lease expired while it ran, and another worker claimed its row: the job's delete checks the leaser, so its writes are
+    /// lost, and the row is left to the other worker.
+    /// </summary>
+    [DockerFact]
+    public async Task JobWhoseRowAnotherWorkerClaimed_LosesItsWrites_AndLeavesTheRow()
+    {
+        var host = CreateHost();
+
+        var jobId = await EnqueueAsync(host, x => x.WriteWithoutSavingAsync());
+
+        await AssertWritesAreLostWhenTheRowIsGoneAsync(host, jobId, otherLeaser: Guid.NewGuid());
+    }
+
+    /// <summary>The same for a job that fails: its retry's update checks the leaser, and leaves the other worker's row as it is.</summary>
+    [DockerFact]
+    public async Task FailedJobWhoseRowAnotherWorkerClaimed_LeavesTheRow()
+    {
+        var host = CreateHost();
+
+        var jobId = await EnqueueAsync(host, x => x.FailWhenReleasedAsync());
+
+        await AssertWritesAreLostWhenTheRowIsGoneAsync(host, jobId, otherLeaser: Guid.NewGuid());
+    }
+
+    /// <param name="otherLeaser">Null: the row is deleted, as if another worker finished the job. Otherwise another worker claims it.</param>
+    private async Task AssertWritesAreLostWhenTheRowIsGoneAsync(IHost host, long jobId, Guid? otherLeaser = null)
     {
         var job = await WithDbAsync(host, db => db.Jobs.AsNoTracking().SingleAsync(j => j.Id == jobId));
 
@@ -1174,18 +1200,36 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
 
         await WaitForAsync(() => Task.FromResult(_state.BlockedCount == 1), "the job to start");
 
-        // Same effect as the lease expiring and another worker finishing the job first.
+        // Same effect as the lease expiring and another worker finishing the job first, or claiming it.
         // By primary key, because on SQL Server a scan would wait for the uncommitted row of the job, which waits for this.
-        await WithDbAsync(host, db => db.Jobs
-            .Where(j => j.Queue == job.Queue && j.ScheduledAt == job.ScheduledAt && j.Id == jobId)
-            .ExecuteDeleteAsync());
+        var row = (IQueryable<XactJob> jobs) => jobs.Where(j => j.Queue == job.Queue && j.ScheduledAt == job.ScheduledAt && j.Id == jobId);
+
+        if (otherLeaser == null)
+        {
+            await WithDbAsync(host, db => row(db.Jobs).ExecuteDeleteAsync());
+        }
+        else
+        {
+            await WithDbAsync(host, db => row(db.Jobs).ExecuteUpdateAsync(s => s
+                .SetProperty(j => j.Leaser, otherLeaser)
+                .SetProperty(j => j.LeasedUntil, DateTime.UtcNow.AddHours(1))));
+        }
 
         _state.Release();
 
-        await WaitForAsync(() => Task.FromResult(_logs.Contains("Job row is already gone")), "the lost row to be logged");
+        await WaitForAsync(() => Task.FromResult(_logs.Contains("Job row is gone or claimed by another worker")), "the lost row to be logged");
 
         Assert.Equal(0, await CountMarkersAsync(host));
         Assert.False(await WithDbAsync(host, db => db.JobHistory.AnyAsync(h => h.Id == jobId)));
+
+        if (otherLeaser != null)
+        {
+            // as the other worker claimed it: not deleted, not moved to a retry
+            var left = await WithDbAsync(host, db => row(db.Jobs).AsNoTracking().SingleAsync());
+
+            Assert.Equal(otherLeaser, left.Leaser);
+            Assert.Equal(0, left.ErrorCount);
+        }
     }
 
     /// <summary>
@@ -1562,6 +1606,15 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
             AddMarker();
 
             await BlockUntilReleasedAsync();
+        }
+
+        public async Task FailWhenReleasedAsync()
+        {
+            AddMarker();
+
+            await BlockUntilReleasedAsync();
+
+            throw new InvalidOperationException("Failed when released");
         }
 
         public async Task SaveInOpenTransactionAsync()

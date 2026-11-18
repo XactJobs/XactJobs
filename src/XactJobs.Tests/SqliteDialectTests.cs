@@ -120,7 +120,7 @@ public class SqliteDialectTests
         Assert.Contains("LIMIT {1}", sql);
         Assert.Contains($"SET {_dialect.ColLeaser} = {{2}}", sql);
         Assert.Contains("datetime('subsec', '+' || {3} || ' seconds')", sql);
-        Assert.Equal([queueName, maxJobs, leaser.ToString(), leaseDuration], parameters);
+        Assert.Equal([queueName, maxJobs, SqliteDialect.LeaserValue(leaser), leaseDuration], parameters);
     }
 
     [Fact]
@@ -179,7 +179,7 @@ public class SqliteDialectTests
         Assert.Contains($"SET {_dialect.ColLeasedUntil} = datetime('subsec', '+' || {{0}} || ' seconds')", sql);
         Assert.Contains($"WHERE {_dialect.ColLeaser} = {{1}}", sql);
         Assert.Contains($"{_dialect.ColId} IN ({{2}}, {{3}})", sql);
-        Assert.Equal([leaseDuration, leaser.ToString(), 7L, 9L], parameters);
+        Assert.Equal([leaseDuration, SqliteDialect.LeaserValue(leaser), 7L, 9L], parameters);
     }
 
     [Fact]
@@ -198,7 +198,7 @@ public class SqliteDialectTests
         Assert.Contains($"SET {_dialect.ColLeaser} = NULL, {_dialect.ColLeasedUntil} = NULL", sql);
         Assert.Contains($"WHERE {_dialect.ColLeaser} = {{0}}", sql);
         Assert.Contains($"{_dialect.ColId} IN ({{1}}, {{2}})", sql);
-        Assert.Equal([leaser.ToString(), 7L, 9L], parameters);
+        Assert.Equal([SqliteDialect.LeaserValue(leaser), 7L, 9L], parameters);
     }
 
     private static XactJob CreateJob(long id)
