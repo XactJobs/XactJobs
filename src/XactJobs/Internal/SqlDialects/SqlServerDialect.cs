@@ -6,7 +6,7 @@ using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
-    public class SqlServerDialect : ISqlDialect
+    internal class SqlServerDialect : ISqlDialect
     {
         /// <param name="schema">The schema of XactJobs' tables, XactJobs by default.</param>
         public SqlServerDialect(string? schema = null)

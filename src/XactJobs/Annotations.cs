@@ -4,5 +4,5 @@
 namespace XactJobs.Annotations
 {
     [AttributeUsage(AttributeTargets.Parameter)]
-    public sealed class InstantHandleAttribute : Attribute { }
+    internal sealed class InstantHandleAttribute : Attribute { }
 }

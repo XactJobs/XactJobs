@@ -6,7 +6,7 @@ using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
-    public class PostgreSqlDialect : ISqlDialect
+    internal class PostgreSqlDialect : ISqlDialect
     {
         /// <param name="schema">The schema of XactJobs' tables, xact_jobs by default. Lowercase: the SQL doesn't quote it.</param>
         public PostgreSqlDialect(string? schema = null)

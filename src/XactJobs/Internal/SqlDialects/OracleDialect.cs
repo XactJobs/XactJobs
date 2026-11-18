@@ -6,7 +6,7 @@ using System.Data;
 
 namespace XactJobs.Internal.SqlDialects
 {
-    public class OracleDialect : ISqlDialect
+    internal class OracleDialect : ISqlDialect
     {
         public bool HasSchemaSupport { get; } = false;
 

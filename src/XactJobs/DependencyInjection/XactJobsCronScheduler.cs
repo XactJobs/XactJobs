@@ -10,7 +10,7 @@ using XactJobs.Internal;
 
 namespace XactJobs.DependencyInjection
 {
-    public abstract class XactJobsCronScheduler<TDbContext> : BackgroundService where TDbContext : DbContext
+    internal abstract class XactJobsCronScheduler<TDbContext> : BackgroundService where TDbContext : DbContext
     {
         protected ILogger<XactJobsCronScheduler<TDbContext>> Logger { get; }
         protected IServiceScopeFactory ScopeFactory { get; }

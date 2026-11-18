@@ -14,7 +14,7 @@ transaction as your data, in your own database. What's left before 1.0 is making
 
 ## After 1.0
 
-[Semantic versioning](https://semver.org/):
+[Semantic versioning](https://semver.org/) ([Versions](https://xactjobs.com/docs/upgrading/#versions) has the details):
 
 - **Patch versions** fix bugs.
 - **Minor versions** add features, and support for new .NET and EF Core versions. They don't break your code or
