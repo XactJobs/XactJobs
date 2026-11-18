@@ -87,6 +87,13 @@ The docs pages (`website/src/content/docs/docs/`) follow the README and the code
 - Threading analyzer (VSTHRD111) is enforced as error - async methods must return Task, not void
 - Nullable reference types are enabled
 
+## Packages and Repository
+
+- `src/Package.props`, imported by `XactJobs.csproj` and `XactJobs.UI.csproj`: the packages' common settings, the version (one place for both), and symbols (`.snupkg`) with Source Link. Release builds are `ContinuousIntegrationBuild` (deterministic, paths normalized to `/_/`), so a package built on any machine maps its sources to the commit on GitHub
+- `SECURITY.md` (private reports in the Security tab), `CONTRIBUTING.md` (the test commands above, what a change includes), `ROADMAP.md` (1.0, semver, what's not planned), `.github/ISSUE_TEMPLATE/` (bug and feature forms; blank issues for questions)
+- `.github/dependabot.yml`: NuGet, npm and Actions once a month, one grouped pull request each; NuGet without major versions (EF Core 9 stays on net8.0 and net9.0, Pomelo on EF Core 9). The database images in the tests aren't updated by it (exact versions, on purpose)
+- `.github/workflows/codeql.yml`: C#, the dashboard's own scripts and the workflows, without a build (`build-mode: none`), on pull requests, pushes to main and weekly; the vendored `Assets/lib` and the website are ignored
+
 ## Architecture Overview
 
 XactJobs is a .NET library for background job processing with full database transaction support via Entity Framework Core. Jobs are stored in the same database as business data and only execute if the transaction commits.

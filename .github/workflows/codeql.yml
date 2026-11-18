@@ -1,0 +1,57 @@
+# CodeQL: the C# code, the dashboard's own scripts and the workflows, on pull requests, on pushes to main and
+# once a week (new queries find issues in code that didn't change). The results are in the Security tab.
+name: CodeQL
+
+on:
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '**.md'
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'website/**'
+      - 'docs/**'
+      - '**.md'
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        # without a build: CodeQL reads the C# sources (build-mode none)
+        language: [csharp, javascript-typescript, actions]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          # the dashboard's copies of Bootstrap, Chart.js and htmx aren't ours to fix, and the website is static
+          config: |
+            paths-ignore:
+              - src/XactJobs.UI/Assets/lib
+              - website
+
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
