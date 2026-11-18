@@ -11,7 +11,8 @@ namespace XactJobs
     public class XactJob: XactJobBase
     {
         public DateTime? LeasedUntil { get; init; }
-        public Guid? Leaser { get; init; }
+        /// <summary>The worker holding the job. A concurrency token: deleting the row checks it.</summary>
+        public Guid? Leaser { get; internal set; }
 
         // Not mapped: the context the job was added to by the API, so that continuations can be added to it before it's saved.
         internal DbContext? AddedTo { get; set; }

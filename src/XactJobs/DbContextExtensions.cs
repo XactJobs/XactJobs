@@ -375,11 +375,12 @@ namespace XactJobs
         /// a retry of a continuation is still one, but doesn't wait anymore (its scheduled time isn't the reserved one).
         /// The scheduled time is part of the primary key, so it's an UPDATE by the old key (EF doesn't change the key of a tracked entity).
         /// </summary>
-        /// <returns>False if the row is gone: another worker processed the job after its lease expired.</returns>
-        internal static async Task<bool> RescheduleAsync(this DbContext dbContext, XactJob job, DateTime scheduledAt, int errorCount, DateTime originallyScheduledAt, CancellationToken cancellationToken)
+        /// <returns>False if the row is gone, or another worker holds it: its lease expired, or a shutdown cleared it.</returns>
+        internal static async Task<bool> RescheduleAsync(this DbContext dbContext, XactJob job, Guid leaser, DateTime scheduledAt, int errorCount, DateTime originallyScheduledAt, CancellationToken cancellationToken)
         {
+            // only while the worker holds it: not after its lease expired and another worker claimed it, nor after a shutdown cleared it
             var updated = await dbContext.Set<XactJob>()
-                .Where(j => j.Queue == job.Queue && j.ScheduledAt == job.ScheduledAt && j.Id == job.Id)
+                .Where(j => j.Queue == job.Queue && j.ScheduledAt == job.ScheduledAt && j.Id == job.Id && j.Leaser == leaser)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(j => j.ScheduledAt, scheduledAt)
                     .SetProperty(j => j.ErrorCount, errorCount)

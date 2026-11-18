@@ -128,8 +128,8 @@ namespace XactJobs.Internal.SqlDialects
                 : "";
 
             object[] parameters = claimedAt.HasValue
-                ? [.. lockParameters, Math.Min(maxJobs, MaxJobsPerClaim), leaser.ToString("N"), leaseDurationInSeconds, claimedAt.Value]
-                : [.. lockParameters, Math.Min(maxJobs, MaxJobsPerClaim), leaser.ToString("N"), leaseDurationInSeconds];
+                ? [.. lockParameters, Math.Min(maxJobs, MaxJobsPerClaim), LeaserValue(leaser), leaseDurationInSeconds, claimedAt.Value]
+                : [.. lockParameters, Math.Min(maxJobs, MaxJobsPerClaim), LeaserValue(leaser), leaseDurationInSeconds];
 
             return ($@"
 DECLARE
@@ -157,11 +157,17 @@ BEGIN
 END;", parameters);
         }
 
+        /// <summary>
+        /// The leaser in hex as EF stores a Guid in a RAW(16), in the byte order of <see cref="Guid.ToByteArray()"/>, so EF's checks of
+        /// it match: it's a concurrency token. Not the Guid's text, whose byte order differs.
+        /// </summary>
+        internal static string LeaserValue(Guid leaser) => Convert.ToHexString(leaser.ToByteArray());
+
         private string Table => $"{XactJobSchema}_{XactJobTable}";
 
         public (string Sql, object[] Parameters) GetExtendLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs, int leaseDurationInSeconds)
         {
-            List<object> parameters = [leaseDurationInSeconds, leaser.ToString("N")];
+            List<object> parameters = [leaseDurationInSeconds, LeaserValue(leaser)];
 
             var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
 
@@ -175,7 +181,7 @@ WHERE {ColLeaser} = HEXTORAW({{1}})
 
         public (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs)
         {
-            List<object> parameters = [leaser.ToString("N")];
+            List<object> parameters = [LeaserValue(leaser)];
 
             var jobKeys = SqlDialectExtensions.BuildJobKeysPredicate(jobs, parameters, ColQueue, ColScheduledAt, ColId);
 

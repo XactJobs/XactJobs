@@ -254,7 +254,7 @@ public class SqliteLeaseTests : IAsyncLifetime
 
             await db.SaveChangesAsync();
 
-            await db.Database.ExecuteSqlRawAsync("UPDATE xact_jobs_job SET leaser = {0} WHERE id = {1}", leaser.ToString(), job.Id);
+            await db.Database.ExecuteSqlRawAsync("UPDATE xact_jobs_job SET leaser = {0} WHERE id = {1}", SqliteDialect.LeaserValue(leaser), job.Id);
 
             return job;
         });

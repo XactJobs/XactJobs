@@ -61,7 +61,12 @@ namespace XactJobs.EntityConfigurations
             builder.Property(x => x.ScheduledAt).HasColumnName(_sqlDialect.ColScheduledAt)
                 .HasColumnType(_sqlDialect.DateTimeColumnType);
 
-            builder.Property(x => x.Leaser).HasColumnName(_sqlDialect.ColLeaser);
+            // a concurrency token: deleting a job row also checks the leaser the row was read (or claimed) with, so a worker whose lease
+            // expired, or was cleared, can't settle a job that another worker claimed since, and the app can't delete a run claimed
+            // after it read it
+            builder.Property(x => x.Leaser).HasColumnName(_sqlDialect.ColLeaser)
+                .IsConcurrencyToken();
+
             builder.Property(x => x.TypeName).HasColumnName(_sqlDialect.ColTypeName);
             builder.Property(x => x.MethodName).HasColumnName(_sqlDialect.ColMethodName);
             builder.Property(x => x.MethodArgs).HasColumnName(_sqlDialect.ColMethodArgs);

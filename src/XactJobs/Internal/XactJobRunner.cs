@@ -22,10 +22,10 @@ namespace XactJobs.Internal
         internal static readonly TimeSpan FailureHandlersTimeout = TimeSpan.FromSeconds(30);
 
         /// <summary>
-        /// The attempts to record a job's failure: the waits between them double from a second, about half a minute in all, which a
-        /// restart or a failover of the database usually takes.
+        /// The attempts to record a job's failure, a second apart: enough for a pooled connection the database closed, short enough not
+        /// to hold up a stop. If they all fail, the job runs again when its lease expires.
         /// </summary>
-        private const int MaxFailureRecordAttempts = 6;
+        private const int MaxFailureRecordAttempts = 3;
 
         /// <summary>When a retry strategy throws.</summary>
         private static readonly DefaultRetryStrategy FallbackRetryStrategy = new();
@@ -472,6 +472,9 @@ namespace XactJobs.Internal
 
             foreach (var job in jobs)
             {
+                // MySQL's and Oracle's claims return the rows as they were before the lease: the deletes and the retry's update check it
+                job.Leaser = _leaser;
+
                 _inFlightJobs[GetKey(job)] = job;
             }
 
@@ -754,7 +757,7 @@ namespace XactJobs.Internal
                 }
                 catch (DbUpdateConcurrencyException ex)
                 {
-                    _logger.LogWarning(ex, "{Queue}: Job row is already gone, failure not recorded (lease expired and another worker may have processed it): {TypeName}.{MethodName} ({Id})",
+                    _logger.LogWarning(ex, "{Queue}: Job row is gone or claimed by another worker, failure not recorded (its lease expired or was cleared): {TypeName}.{MethodName} ({Id})",
                         GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
 
                     return null;
@@ -766,7 +769,7 @@ namespace XactJobs.Internal
                     _logger.LogWarning(ex, "{Queue}: Failed recording job failure, trying again ({Attempt} of {Attempts}): {TypeName}.{MethodName} ({Id})",
                         GetQueueDisplayName(), attempt, MaxFailureRecordAttempts, job.TypeName, job.MethodName, job.Id);
 
-                    await Task.Delay(TimeSpan.FromSeconds(1 << (attempt - 1))).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -807,12 +810,12 @@ namespace XactJobs.Internal
                 if (retryAt != null)
                 {
                     // the same row moves to its retry (the history row is saved below, in the same transaction)
-                    var isRescheduled = await dbContext.RescheduleAsync(job, retryAt.Value, job.ErrorCount + 1, job.GetOriginallyScheduledAt(claimedAt), token)
+                    var isRescheduled = await dbContext.RescheduleAsync(job, _leaser, retryAt.Value, job.ErrorCount + 1, job.GetOriginallyScheduledAt(claimedAt), token)
                         .ConfigureAwait(false);
 
                     if (!isRescheduled)
                     {
-                        throw new DbUpdateConcurrencyException("The job's row is gone.");
+                        throw new DbUpdateConcurrencyException("The job's row is gone, or claimed by another worker.");
                     }
                 }
                 else

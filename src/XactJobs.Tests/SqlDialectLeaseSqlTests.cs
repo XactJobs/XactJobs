@@ -107,7 +107,7 @@ public class SqlDialectLeaseSqlTests
         var (sql, parameters) = new SqliteDialect().GetFetchJobsSql("queue-a", 10, Leaser, LeaseDuration);
 
         AssertFullyParameterized(sql, parameters);
-        Assert.Equal(["queue-a", 10, Leaser.ToString(), LeaseDuration], parameters);
+        Assert.Equal(["queue-a", 10, SqliteDialect.LeaserValue(Leaser), LeaseDuration], parameters);
     }
 
     [Fact]
@@ -166,7 +166,7 @@ public class SqlDialectLeaseSqlTests
         Assert.Contains("SET LEASER = HEXTORAW({2})", sql);
         Assert.Contains("NUMTODSINTERVAL({3}, 'SECOND')", sql);
         Assert.Contains("DBMS_SQL.RETURN_RESULT(result);", sql);
-        Assert.Equal(["queue-a", 10, Leaser.ToString("N"), LeaseDuration], parameters);
+        Assert.Equal(["queue-a", 10, OracleDialect.LeaserValue(Leaser), LeaseDuration], parameters);
 
         // the result is opened before the lease, so it returns the rows as they were locked
         Assert.True(sql.IndexOf("OPEN result FOR", StringComparison.Ordinal) < sql.IndexOf("FORALL", StringComparison.Ordinal));
@@ -187,7 +187,7 @@ public class SqlDialectLeaseSqlTests
         Assert.Contains("BULK COLLECT INTO claimed LIMIT {2}", sql);
         Assert.Contains("SET LEASER = HEXTORAW({3})", sql);
         Assert.Contains("NUMTODSINTERVAL({4}, 'SECOND'),\n        ORIGINALLY_SCHEDULED_AT = COALESCE(ORIGINALLY_SCHEDULED_AT, {5})\n    WHERE ROWID", sql);
-        Assert.Equal(["queue-a", XactJobBase.AwaitingBatchScheduledAt, 10, Leaser.ToString("N"), LeaseDuration, ClaimedAt], parameters);
+        Assert.Equal(["queue-a", XactJobBase.AwaitingBatchScheduledAt, 10, OracleDialect.LeaserValue(Leaser), LeaseDuration, ClaimedAt], parameters);
     }
 
     [Fact]
