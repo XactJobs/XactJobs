@@ -41,7 +41,9 @@ namespace XactJobs.Internal
         // Jobs that were cancelled because of a shutdown stay here, so their leases get cleared.
         private readonly ConcurrentDictionary<(string Queue, DateTime ScheduledAt, long Id), XactJob> _inFlightJobs = new();
 
-        // Signals that a job task has finished. It doesn't count them: a reader has to check the state it's waiting for.
+        // Signals that a job task has finished, or that a waiting job of a batch has started. It doesn't count them: a reader has
+        // to check the state it's waiting for. The polling loop waits for it without a timeout, so every change of _inFlightJobs or
+        // _runningJobCount outside the polling loop must be followed by a write, or the loop can miss it (see ShouldClaimMore)
         private readonly Channel<bool> _jobFinished = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
         {
             FullMode = BoundedChannelFullMode.DropWrite
@@ -716,7 +718,14 @@ namespace XactJobs.Internal
 
             Interlocked.Increment(ref _runningJobCount);
 
-            if (!stoppingToken.IsCancellationRequested) return true;
+            if (!stoppingToken.IsCancellationRequested)
+            {
+                // one fewer waits: the polling loop may now claim. The job that freed the slot wrote its signal before this one
+                // counted itself as running, so the loop may have counted it as waiting
+                _jobFinished.Writer.TryWrite(true);
+
+                return true;
+            }
 
             Interlocked.Decrement(ref _runningJobCount);
 
