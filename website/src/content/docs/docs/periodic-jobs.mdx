@@ -166,9 +166,9 @@ local date.
 
 ## Exclusions
 
-`Exclusions` leaves times out of a schedule, like Quartz's calendars: dates, every year (`12-25`) or once (`2026-04-06`), and daily time
-ranges (`12:00-13:00`, the end not included; `22:00-06:00` crosses midnight), in a comma-separated list, local to the schedule's time zone.
-As a `const string`, one list can be shared by many jobs, attributes too:
+`Exclusions` leaves times out of a schedule, like Quartz's calendars: dates, every year (`12-25`) or once (`2026-04-06`), days of the week
+(`SAT`, `MON-FRI`, `FRI-MON`) and daily time ranges (`12:00-13:00`, the end not included; `22:00-06:00` crosses midnight), in a
+comma-separated list, local to the schedule's time zone. As a `const string`, one list can be shared by many jobs, attributes too:
 
 ```csharp
 public static class Calendars
@@ -189,6 +189,18 @@ dbContext.JobEnsurePeriodic<ReportJobs>(
     new XactCronSchedule("0 0 9 * * MON-FRI", "Europe/Zagreb") { Exclusions = Calendars.Croatia + ", 12:00-13:00" });
 ```
 
+An item can join a date, a day of the week and a time range with `+`, at most one of each, and then excludes only the times that all of
+them match. Each of them can be a list in parentheses:
+
+| Item | Excludes |
+| --- | --- |
+| `MON-FRI+00:00-05:00` | weekday nights until 05:00 |
+| `01-15+MON-FRI` | 15 January, when it's a weekday |
+| `MON+22:00-01:00` | Monday 22:00 to Tuesday 01:00: a time range that crosses midnight belongs to the day it starts |
+| `12-31+22:00-02:00` | New Year's Eve from 22:00, until 02:00 on 1 January |
+| `(MON,WED,FRI)+(00:00-01:00,06:00-07:00)` | the two hours on each of the three days |
+| `(12-24,12-31)+FRI+12:00-00:00` | Christmas Eve and New Year's Eve from noon to midnight, when they fall on a Friday |
+
 - The next run is the next time of the cron expression that the exclusions don't leave out: the excluded ones are never scheduled.
 - They belong to the periodic job, like its state, not to its definition: changing them doesn't make a new version. The next run moves to
   the next time the new list allows. A run that's due, a retry, or a running run keeps its time: when it's claimed, a run whose time the
@@ -196,8 +208,9 @@ dbContext.JobEnsurePeriodic<ReportJobs>(
   next one with the current list.
 - An invalid item, a list longer than 2000 characters, or one that leaves no time throws when the schedule is created (`AddXactJobs` lists
   it with the other problems of the attributes).
-- Weekdays have no exclusions of their own: the cron expression's day of the week does it (`MON-FRI`). Movable holidays (Easter...) are
-  dates once, per year. For anything else, a [job filter can skip runs](../filters/#skipping-a-run).
+- The list is stored normalized: no spaces in an item, its parts in the order date, day, time, the days in capitals. So the same list
+  written differently doesn't count as a change.
+- Movable holidays (Easter...) are dates once, per year. For anything else, a [job filter can skip runs](../filters/#skipping-a-run).
 
 ## Several nodes
 

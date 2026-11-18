@@ -147,7 +147,7 @@ Cron expressions have 6 fields, starting with the seconds. Their day fields also
 `FRI#3` (the third Friday), e.g. `0 0 18 L * *` at 18:00 on the last day of every month. The days of the week are 0 to 7 (0 and 7 are
 Sunday), not Quartz's 1 to 7.
 
-Exclusions leave times out of a schedule, like Quartz's calendars: dates, every year (`12-25`) or once (`2026-04-06`), and daily time ranges (`12:00-13:00`), local to the schedule's time zone, e.g. a `const string` of holidays shared by many jobs:
+Exclusions leave times out of a schedule, like Quartz's calendars: dates, every year (`12-25`) or once (`2026-04-06`), days of the week (`SAT`, `MON-FRI`) and daily time ranges (`12:00-13:00`), and their combinations joined with `+` (`MON-FRI+00:00-05:00`, `(MON,WED)+(06:00-07:00,18:00-19:00)`), local to the schedule's time zone, e.g. a `const string` of holidays shared by many jobs:
 `[XactPeriodicJob("daily_report", "0 0 9 * * MON-FRI", TimeZone = "Europe/Zagreb", Exclusions = Calendars.Croatia)]`, or `new XactCronSchedule(...) { Exclusions = ... }`. They belong to the periodic job, not to its definition: changing them doesn't make a new version, and the pending run moves.
 
 #### Time Zones
