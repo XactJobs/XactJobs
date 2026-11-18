@@ -66,7 +66,7 @@ its test in `Databases/`, so it runs on every database.
   // Licensed under the MIT License. See LICENSE in the repository root.
   ```
 
-[CLAUDE.md](CLAUDE.md) describes the architecture and the reasons behind its less obvious parts, for people and for
+[AGENTS.md](AGENTS.md) describes the architecture and the reasons behind its less obvious parts, for people and for
 coding agents alike.
 
 ## Pull Requests
