@@ -124,9 +124,8 @@ public sealed class SqliteObservabilityTests : IAsyncLifetime
 
         ObservabilityJobs.Release(key);
 
-        await WaitForAsync(() => _metrics.Observe("xactjobs.job.held") == 0, "the job to finish");
-
-        Assert.Equal(0, _metrics.Observe("xactjobs.job.running"));
+        // the job leaves the held jobs when its commit is done, and the running ones a moment later, when its slot is released
+        await WaitForAsync(() => _metrics.Observe("xactjobs.job.held") == 0 && _metrics.Observe("xactjobs.job.running") == 0, "the job to finish");
     }
 
     [Fact]
