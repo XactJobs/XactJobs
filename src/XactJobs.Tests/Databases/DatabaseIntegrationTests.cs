@@ -1233,6 +1233,47 @@ public abstract class DatabaseIntegrationTests(DatabaseFixture fixture) : IAsync
     }
 
     /// <summary>
+    /// The central promise: a job is saved with the app's data, in its transaction. One enqueued in a transaction that rolls back never
+    /// exists; one in a transaction that commits runs.
+    /// </summary>
+    [DockerFact]
+    public async Task JobEnqueuedInATransactionThatRollsBack_NeverExists_AndOneThatCommitsRuns()
+    {
+        var host = CreateHost();
+
+        await WithDbAsync(host, async db =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+
+            db.JobEnqueue<IntegrationJob>(x => x.Count(1));
+            await db.SaveChangesAsync();
+
+            await transaction.RollbackAsync();
+
+            return 0;
+        });
+
+        await WithDbAsync(host, async db =>
+        {
+            await using var transaction = await db.Database.BeginTransactionAsync();
+
+            db.JobEnqueue<IntegrationJob>(x => x.Count(2));
+            await db.SaveChangesAsync();
+
+            await transaction.CommitAsync();
+
+            return 0;
+        });
+
+        await host.StartAsync();
+
+        await WaitForAsync(() => WithDbAsync(host, async db => !await db.Jobs.AnyAsync()), "the committed job to complete");
+
+        Assert.Equal([2], _state.Runs.Keys);
+        Assert.Equal(1, await WithDbAsync(host, db => db.JobHistory.CountAsync()));
+    }
+
+    /// <summary>
     /// A worker that died holding a job (killed, or its machine lost) leaves the row leased, with no history, and its uncommitted writes
     /// gone with its connection. Here the job is claimed with the claim statement of the database and never heard of again. Another
     /// worker runs it once the lease expires, and its writes commit once.

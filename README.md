@@ -855,6 +855,10 @@ With the default settings this fits in the default 30 second shutdown timeout of
 
 A job that ignores the cancellation token may still be running when its lease is cleared, so it can end up running on another worker at the same time, which the next section covers.
 
+## Guarantees and Limitations
+
+What XactJobs guarantees, each with the test that shows it on every database, what it doesn't (a job's code can run more than once, there's no order between jobs, missed periodic runs aren't caught up), its limits (EF Core and your database only, no lock per job) and the versions it supports are on one page: [Guarantees and limitations](https://xactjobs.com/docs/guarantees/).
+
 ## Exactly-Once Database Effects
 A lease can expire while a job is still running, for example if a node loses its database connection for a while. Another worker can then run the same job. For the database writes
 this is safe, as long as the job uses the scoped `TDbContext` injected into its class and does one of these two things:

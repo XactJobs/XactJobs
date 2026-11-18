@@ -6,6 +6,7 @@ export const sidebar = [
       { label: 'Getting started', slug: 'docs/getting-started' },
       { label: 'Jobs', slug: 'docs/jobs' },
       { label: 'A job is a unit of work', slug: 'docs/unit-of-work' },
+      { label: 'Guarantees and limitations', slug: 'docs/guarantees' },
     ],
   },
   {
