@@ -255,9 +255,13 @@ public sealed class SqlServerFixture : DatabaseFixture
 
     private readonly MsSqlContainer _container = new MsSqlBuilder("mcr.microsoft.com/mssql/server:2022-CU27-GDR1-ubuntu-22.04").Build();
 
+    // no idle connection resiliency: SqlClient would reconnect a connection the database ended while it was idle, silently, so
+    // KillOtherSessionsAsync would only show when it hit a command, by chance. Without it, a job holding an ended connection fails, as
+    // on the other databases
     private string ConnectionString => new SqlConnectionStringBuilder(_container.GetConnectionString())
     {
-        InitialCatalog = DatabaseName
+        InitialCatalog = DatabaseName,
+        ConnectRetryCount = 0
     }.ConnectionString;
 
     public override dynamic Dialect { get; } = new SqlServerDialect();
