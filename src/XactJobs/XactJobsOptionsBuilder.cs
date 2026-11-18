@@ -193,6 +193,16 @@ namespace XactJobs
             return this;
         }
 
+        /// <summary>
+        /// Asks <typeparamref name="TGate"/> before every claim whether this node's workers may claim jobs: see
+        /// <see cref="IXactJobsWorkerGate"/>. It's registered as a singleton, unless the app registered it. Applies to all the queues.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithWorkerGate<TGate>() where TGate : class, IXactJobsWorkerGate
+        {
+            Options.WorkerGate = typeof(TGate);
+            return this;
+        }
+
         public XactJobsOptionsBuilder<TDbContext> WithPriorityQueue(Action<XactJobsQueueOptionsBuilder<TDbContext>>? configureAction = null)
         {
             WithIsolatedQueue(QueueNames.Priority, options =>

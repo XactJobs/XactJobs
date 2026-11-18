@@ -776,6 +776,23 @@ its slots, also when another worker is idle, and wait for their leases to expire
 `MaxDegreeOfParallelism`, there's no batch: a worker only picks up jobs it can start immediately, so they never wait behind a slow job while
 another worker is free. When the worker stops, the jobs it holds that haven't started are released right away, for the other workers.
 
+## Worker Gate
+`WithWorkerGate<T>()` lets the application decide at run time whether this node's workers may claim jobs, e.g. so that a machine marked
+inactive in the application's database doesn't take jobs from the others:
+
+```csharp
+public class ActiveNodeGate(NodeState node) : IXactJobsWorkerGate
+{
+    public ValueTask<bool> CanClaimAsync(string queueName, CancellationToken cancellationToken) => ValueTask.FromResult(node.IsActive);
+}
+
+builder.Services.AddXactJobs<UserDbContext>(options => options.WithWorkerGate<ActiveNodeGate>());
+```
+
+Every worker of every queue asks it before each claim, also when woken by QuickPoll or a finished batch. False claims nothing until the next
+poll; the jobs the worker holds or runs finish as usual. An exception counts as false and is logged, and each worker logs when its gate
+closes and opens again. The details are on the website: [Worker gate](https://xactjobs.com/docs/queues-and-polling/#worker-gate).
+
 ## Throughput
 On a Hetzner Cloud CX33 (cost-optimized, 4 shared vCPUs, AMD EPYC Rome, 8 GB of RAM), with PostgreSQL 16 in a container on the same machine
 (its default settings, so every commit waits for the disk), .NET 10 and EF Core 10, XactJobs drained a backlog of 20,000 no-op jobs at

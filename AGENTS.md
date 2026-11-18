@@ -229,6 +229,11 @@ XactJobs is a .NET library for background job processing with full database tran
 - A completed run deletes its row and adds the next run in one `SaveChanges`: EF orders the deletes of a table before its inserts, which the unique index needs (a second worker after an expired lease then gets the `DbUpdateConcurrencyException` of its delete, as before). A run added at the same time outside of that (resume, `JobEnsurePeriodic` with a new version, the dashboard's Trigger, the reconciliation) fails with a unique key violation: `DbExceptionExtensions.IsUniqueKeyViolation` (public) knows each provider's error; the scheduler runs its cycle again right away, the dashboard answers a conflict. `PeriodicRunIndexScenarios` runs on every database
 - A new index adds a write to every job's insert and delete, unless it's filtered. On PostgreSQL, a claim must not change an indexed column, so it stays a HOT update
 
+### Worker Gate
+
+- `IXactJobsWorkerGate` (`WithWorkerGate<T>()`, `XactJobsOptions.WorkerGate`, all the queues): a singleton (`TryAddSingleton`, so the app's own registration wins), resolved once by the dispatcher and passed to every runner. `PollUntilStoppedAsync` asks it (`CanClaimAsync`) right before `ClaimAndStartJobsAsync`, after the free-slots check, so every claim goes through it: the polling interval, QuickPoll and continuation wakes, a backlog. False: `lastPollFilledSlots = false`, so the worker waits for its next poll. Only claims stop: held jobs run, the lease timer extends them
+- An exception counts as false and is logged (not while stopping: then it ends the loop like any cancellation). Each runner logs when the answer changes (it starts open, so a first false is logged). No gate: one null check per poll. `SqliteWorkerGateTests`
+
 ### Shutdown
 
 - Once the stopping token (or a job's token) is cancelled, an exception counts as that cancellation, not only an `OperationCanceledException`: SqlClient throws a `SqlException` ("Operation cancelled by user") for a cancelled command. So a stop doesn't log errors (the poll loop, the lease timer, the cron scheduler), and a job cancelled by it runs again without a failed attempt, unless it threw `XactJobCancelException`. `SqliteShutdownCancellationTests` simulates such a provider

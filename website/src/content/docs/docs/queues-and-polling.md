@@ -71,6 +71,44 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 });
 ```
 
+## Worker gate
+
+A worker gate lets the application decide at run time whether this node's workers may claim jobs: e.g. the same service runs on several
+machines, and one marked inactive in the application's database must not take jobs from the others. It starts claiming again once it's
+marked active.
+
+```csharp
+public class ActiveNodeGate(IServiceScopeFactory scopeFactory) : IXactJobsWorkerGate
+{
+    private bool _active;
+    private DateTime _readAt;
+
+    public async ValueTask<bool> CanClaimAsync(string queueName, CancellationToken cancellationToken)
+    {
+        // asked by every worker at every poll: read the node's state every few seconds
+        if (DateTime.UtcNow - _readAt > TimeSpan.FromSeconds(5))
+        {
+            using var scope = scopeFactory.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<UserDbContext>();
+
+            _active = await db.Nodes.AnyAsync(n => n.Name == Environment.MachineName && n.IsActive, cancellationToken);
+            _readAt = DateTime.UtcNow;
+        }
+
+        return _active;
+    }
+}
+
+builder.Services.AddXactJobs<UserDbContext>(options => options.WithWorkerGate<ActiveNodeGate>());
+```
+
+- It's asked before every claim, by every worker of every queue (`queueName` is `QueueNames.Default` or an isolated queue's name), also
+  when a QuickPoll notification or a finished batch wakes a worker. False claims nothing, and the worker asks again at its next poll.
+- Only claiming stops: the jobs a worker already holds or runs finish, and their leases are extended as usual.
+- An exception counts as false, and is logged as an error. The worker keeps polling.
+- A worker logs when its gate closes, and when it opens again.
+- It's a singleton, registered by `WithWorkerGate` unless the app registered it. Without a gate, the workers always claim, as before.
+
 ## QuickPoll
 
 QuickPoll can be used if a job should be executed immediately, without waiting for the next poll interval. `QuickPoll<TDbContext>` is

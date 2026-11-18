@@ -68,6 +68,7 @@ namespace XactJobs.Internal
         private readonly XactJobsOptionsBase<TDbContext> _options;
         private readonly XactJobSaveChecker _saveChecker;
         private readonly XactJobHooks _hooks;
+        private readonly IXactJobsWorkerGate? _gate;
         private readonly XactJobsMetrics _metrics;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
@@ -75,12 +76,16 @@ namespace XactJobs.Internal
         // continuations are claimed at most once per polling interval, unless a finished batch wakes the queue
         private DateTime _nextContinuationClaimAt = DateTime.MinValue;
 
+        // the gate's last answer, to log when it changes. Used only by the polling loop
+        private bool _gateOpen = true;
+
         public XactJobRunner(string queueName,
                              QuickPollChannel quickPollChannel,
                              QuickPollChannels quickPollChannels,
                              XactJobsOptionsBase<TDbContext> options,
                              XactJobSaveChecker saveChecker,
                              XactJobHooks hooks,
+                             IXactJobsWorkerGate? gate,
                              XactJobsMetrics metrics,
                              IServiceScopeFactory scopeFactory,
                              ILogger logger)
@@ -91,6 +96,7 @@ namespace XactJobs.Internal
             _options = options;
             _saveChecker = saveChecker;
             _hooks = hooks;
+            _gate = gate;
             _metrics = metrics;
             _scopeFactory = scopeFactory;
             _logger = logger;
@@ -193,6 +199,13 @@ namespace XactJobs.Internal
                         continue;
                     }
 
+                    if (_gate != null && !await CanClaimAsync(stoppingToken).ConfigureAwait(false))
+                    {
+                        // ask again at the next poll; the jobs it holds still run, and their leases are extended
+                        lastPollFilledSlots = false;
+                        continue;
+                    }
+
                     var claimedCount = await ClaimAndStartJobsAsync(freeSlots, jobsToken, stoppingToken)
                         .ConfigureAwait(false);
 
@@ -215,6 +228,44 @@ namespace XactJobs.Internal
 
             _earlyClaimCts?.Dispose();
             _earlyClaimCts = null;
+        }
+
+        /// <summary>
+        /// Asks the worker gate whether this worker may claim, and logs when the answer changes. An exception counts as false, unless
+        /// the worker is stopping (then it ends the polling loop, without an error).
+        /// </summary>
+        private async ValueTask<bool> CanClaimAsync(CancellationToken stoppingToken)
+        {
+            bool canClaim;
+
+            try
+            {
+                canClaim = await _gate!.CanClaimAsync(_queueName, stoppingToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex) when (!stoppingToken.IsCancellationRequested)
+            {
+                _logger.LogError(ex, "{Queue}: The worker gate failed. Not claiming jobs until the next poll", GetQueueDisplayName());
+
+                canClaim = false;
+            }
+
+            if (canClaim != _gateOpen)
+            {
+                _gateOpen = canClaim;
+
+                if (canClaim)
+                {
+                    _logger.LogInformation("{Queue}: The worker gate is open. Claiming jobs again", GetQueueDisplayName());
+                }
+                else
+                {
+                    _logger.LogInformation("{Queue}: The worker gate is closed. Not claiming jobs; the {Count} jobs held finish as usual",
+                        GetQueueDisplayName(), _inFlightJobs.Count);
+                }
+            }
+
+            return canClaim;
         }
 
         private int GetFreeSlots()

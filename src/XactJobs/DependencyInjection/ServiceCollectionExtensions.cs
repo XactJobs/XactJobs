@@ -35,6 +35,13 @@ public static class ServiceCollectionExtensions
         {
             services.TryAddScoped(type);
         }
+
+        // resolved once, by the dispatcher
+        if (optionsBuilder.Options.WorkerGate is { } workerGate)
+        {
+            services.TryAddSingleton(workerGate);
+        }
+
         services.AddSingleton(CreateQuickPollChannels(optionsBuilder.Options));
 
         services.AddScoped<QuickPoll<TDbContext>>();
@@ -46,7 +53,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <exception cref="InvalidOperationException">With every filter or failure handler type that isn't one (the lists are public).</exception>
+    /// <exception cref="InvalidOperationException">With every filter, failure handler or worker gate type that isn't one (the options are public).</exception>
     private static void CheckHookTypes<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
     {
         static string? Check(Type type, Type hook) =>
@@ -56,12 +63,13 @@ public static class ServiceCollectionExtensions
 
         var errors = options.JobFilters.Select(t => Check(t, typeof(IXactJobFilter)))
             .Concat(options.JobFailureHandlers.Select(t => Check(t, typeof(IXactJobFailureHandler))))
+            .Append(options.WorkerGate is { } gate ? Check(gate, typeof(IXactJobsWorkerGate)) : null)
             .OfType<string>()
             .ToList();
 
         if (errors.Count > 0)
         {
-            throw new InvalidOperationException($"Invalid job filters or failure handlers:\n- {string.Join("\n- ", errors)}");
+            throw new InvalidOperationException($"Invalid job filters, failure handlers or worker gate:\n- {string.Join("\n- ", errors)}");
         }
     }
 

@@ -1,1 +1,6 @@
 #nullable enable
+XactJobs.IXactJobsWorkerGate
+XactJobs.IXactJobsWorkerGate.CanClaimAsync(string! queueName, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+XactJobs.XactJobsOptions<TDbContext>.WorkerGate.get -> System.Type?
+XactJobs.XactJobsOptions<TDbContext>.WorkerGate.set -> void
+XactJobs.XactJobsOptionsBuilder<TDbContext>.WithWorkerGate<TGate>() -> XactJobs.XactJobsOptionsBuilder<TDbContext!>!

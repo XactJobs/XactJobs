@@ -113,6 +113,13 @@ namespace XactJobs
         public List<Type> JobFailureHandlers { get; set; } = [];
 
         /// <summary>
+        /// The <see cref="IXactJobsWorkerGate"/> type asked before every claim, whether this node's workers may claim jobs. Registered as
+        /// a singleton when the XactJobs services are added, unless the app registered it. Default null: the workers always claim.
+        /// Applies to all the queues.
+        /// </summary>
+        public Type? WorkerGate { get; set; }
+
+        /// <summary>
         /// List of isolated queues for which workers will be started
         /// </summary>
         public Dictionary<string, XactJobsOptionsBase<TDbContext>> IsolatedQueues { get; set; } = [];

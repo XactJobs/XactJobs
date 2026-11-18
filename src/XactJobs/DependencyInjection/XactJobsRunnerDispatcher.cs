@@ -25,7 +25,10 @@ namespace XactJobs.DependencyInjection
         private readonly XactJobsMetrics _metrics;
         private readonly XactJobHooks _hooks;
 
-        public XactJobsRunnerDispatcher(XactJobsOptions<TDbContext> options, QuickPollChannels quickPollChannels, IServiceScopeFactory scopeFactory, ILoggerFactory loggerFactory)
+        // null without WithWorkerGate: the runners don't ask
+        private readonly IXactJobsWorkerGate? _gate;
+
+        public XactJobsRunnerDispatcher(XactJobsOptions<TDbContext> options, QuickPollChannels quickPollChannels, IServiceProvider services, IServiceScopeFactory scopeFactory, ILoggerFactory loggerFactory)
         {
             _options = options;
             _quickPollChannels = quickPollChannels;
@@ -35,6 +38,7 @@ namespace XactJobs.DependencyInjection
             _saveChecker = new XactJobSaveChecker(options.SaveOutsideTransaction);
             _metrics = new XactJobsMetrics(options.JobTagsInMetrics);
             _hooks = new XactJobHooks([.. options.JobFilters], [.. options.JobFailureHandlers]);
+            _gate = options.WorkerGate is { } gateType ? (IXactJobsWorkerGate)services.GetRequiredService(gateType) : null;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -82,7 +86,7 @@ namespace XactJobs.DependencyInjection
 
                 var runnerLogger = _loggerFactory.CreateLogger<XactJobRunner<TDbContext>>();
 
-                var runner = new XactJobRunner<TDbContext>(queueName, quickPollChannel, _quickPollChannels, options, _saveChecker, _hooks, _metrics, _scopeFactory, runnerLogger);
+                var runner = new XactJobRunner<TDbContext>(queueName, quickPollChannel, _quickPollChannels, options, _saveChecker, _hooks, _gate, _metrics, _scopeFactory, runnerLogger);
 
                 var initialDelayMs = GetDelayStepMs(options) * runnerIndex;
 
