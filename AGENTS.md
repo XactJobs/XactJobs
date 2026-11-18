@@ -20,6 +20,8 @@ dotnet build -c Release src/XactJobs.sln
 dotnet build -c Release src/XactJobs/XactJobs.csproj
 ```
 
+`publish.sh` builds both packages at the version in `src/Package.props` and pushes them to nuget.org, with the API key it prompts for (never stored). It refuses uncommitted changes, and asks if HEAD isn't tagged `v<version>`.
+
 ## Test Commands
 
 ```bash
