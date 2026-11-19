@@ -52,6 +52,7 @@ these defaults, not from the default queue's settings.
 | `WithSaveOutsideTransaction(check)` | `XactJobSaveCheck.Warn` | When a job saves without a transaction: `Warn`, `Throw` or `Ignore`. See [the save check](../unit-of-work/#the-save-check) |
 | `WithJobFilter<T>()` | none | Runs an `IXactJobFilter` around every job, the first one added outermost: see [Job filters](../filters/) |
 | `WithJobFailureHandler<T>()` | none | Tells an `IXactJobFailureHandler` when a job has failed for good: see [Failure handlers](../filters/#failure-handlers) |
+| `WithUnresolvedJobGracePeriodInHours(hours)` | 24 | Hours from a job's original scheduled time during which a worker that doesn't have the job's type or method puts it back for another node instead of failing it. 0 fails it at once. See [Rolling deployments](../jobs/#rolling-deployments) |
 | `WithWorkerGate<T>()` | none | Asks an `IXactJobsWorkerGate` before every claim whether this node's workers may claim jobs: see [Worker gate](../queues-and-polling/#worker-gate) |
 | `WithJobTagsInMetrics(enabled?)` | off | Also tags the jobs' metrics with the job's type and method. See [Metrics, traces and logs](../observability/) |
 | `WithPriorityQueue(configure?)` | not started | Workers for `QueueNames.Priority`: 2, polling every 4 seconds |

@@ -90,21 +90,27 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// The type to create (for an instance method) and the method to call, from the job's stored strings. The compiler calls it
-        /// once per job method, and caches the result.
-        /// <para>
-        /// The method is the public one (instance or static, inherited too) whose signature is the stored <c>MethodName</c>. If there
-        /// isn't one (a job stored before 0.1.7, without a signature, or a parameter type that changed since), it's the only method
-        /// with that name and <paramref name="paramCount"/> parameters. When a method hides another one with <c>new</c>, the one
-        /// declared on the most derived type.
-        /// </para>
+        /// The type to create (for an instance method) and the method to call, from the job's stored strings: the public method
+        /// (instance or static, inherited too) whose signature is the stored <c>MethodName</c>. The compiler calls it once per job
+        /// method, and caches the result.
         /// </summary>
-        internal static (Type, MethodInfo) ToMethodInfo(this XactJob job, int paramCount)
+        /// <exception cref="XactJobNotFoundException">This node doesn't have the type or the method.</exception>
+        internal static (Type, MethodInfo) ToMethodInfo(this XactJob job)
         {
-            // Type.GetType throws if it's not found (the job fails, with the message in its history): failures aren't cached
-            var type = _types.GetOrAdd(job.TypeName, static typeName => Type.GetType(typeName, throwOnError: true)!);
+            // failures aren't cached: a type that isn't found throws each time
+            var type = _types.GetOrAdd(job.TypeName, static typeName =>
+            {
+                try
+                {
+                    return Type.GetType(typeName, throwOnError: true)!;
+                }
+                catch (Exception ex) when (ex is TypeLoadException or FileNotFoundException or FileLoadException)
+                {
+                    throw new XactJobNotFoundException($"The job's type '{typeName}' wasn't found: {ex.Message}", ex);
+                }
+            });
 
-            return (type, FindMethod(type, job.MethodName, paramCount));
+            return (type, FindMethod(type, job.MethodName));
         }
 
         /// <summary>
@@ -131,9 +137,9 @@ namespace XactJobs.Internal
 
             try
             {
-                runMethod = FindMethod(jobType, GetMethodSignature(method), method.GetParameters().Length);
+                runMethod = FindMethod(jobType, GetMethodSignature(method));
             }
-            catch (Exception ex) when (ex is MissingMethodException or AmbiguousMatchException)
+            catch (XactJobNotFoundException)
             {
                 runMethod = method;
             }
@@ -583,46 +589,28 @@ namespace XactJobs.Internal
 
         #region Run side
 
-        private static MethodInfo FindMethod(Type type, string methodName, int paramCount)
+        /// <summary>
+        /// The public method (instance or static, inherited too) whose signature is the stored <c>MethodName</c>. When a method hides
+        /// another one with <c>new</c>, the one declared on the most derived type (both have the same signature).
+        /// </summary>
+        /// <exception cref="XactJobNotFoundException">There's no such method.</exception>
+        private static MethodInfo FindMethod(Type type, string methodName)
         {
             var parenthesis = methodName.IndexOf('(');
             var name = parenthesis < 0 ? methodName : methodName[..parenthesis];
 
-            MethodInfo? bySignature = null;
-
-            // the methods with the name and the parameter count, by signature: a method hidden with new has the same one as the base method
-            var byParameterCount = new Dictionary<string, MethodInfo>();
+            MethodInfo? found = null;
 
             foreach (var method in type.GetMethods(PublicMethods))
             {
-                if (method.Name != name || method.IsGenericMethodDefinition) continue;
-
-                var signature = GetMethodSignature(method);
-
-                if (signature == methodName)
+                if (method.Name == name && !method.IsGenericMethodDefinition && GetMethodSignature(method) == methodName)
                 {
-                    bySignature = MostDerived(bySignature, method);
-                }
-
-                if (method.GetParameters().Length == paramCount)
-                {
-                    byParameterCount[signature] = MostDerived(byParameterCount.GetValueOrDefault(signature), method);
+                    found = MostDerived(found, method);
                 }
             }
 
-            if (bySignature != null) return bySignature;
-
-            // a job without a signature (stored before 0.1.7), or with one that no longer matches: the only method with its name and parameter count
-            return byParameterCount.Count switch
-            {
-                1 => byParameterCount.Values.Single(),
-
-                0 => throw new MissingMethodException(
-                    $"The job's method '{methodName}' wasn't found: the type '{type.FullName}' has no public method named '{name}' with {paramCount} parameter(s)."),
-
-                _ => throw new AmbiguousMatchException(
-                    $"The job's method '{methodName}' is ambiguous: the type '{type.FullName}' has several public methods named '{name}' with {paramCount} parameter(s)."),
-            };
+            return found ?? throw new XactJobNotFoundException(
+                $"The job's method '{methodName}' wasn't found: the type '{type.FullName}' has no public method with this signature.");
         }
 
         /// <summary>Of two methods with the same signature, the one declared on the more derived type.</summary>

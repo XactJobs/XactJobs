@@ -1,1 +1,4 @@
 #nullable enable
+XactJobs.XactJobsOptions<TDbContext>.UnresolvedJobGracePeriodInHours.get -> int
+XactJobs.XactJobsOptions<TDbContext>.UnresolvedJobGracePeriodInHours.set -> void
+XactJobs.XactJobsOptionsBuilder<TDbContext>.WithUnresolvedJobGracePeriodInHours(int hours) -> XactJobs.XactJobsOptionsBuilder<TDbContext!>!

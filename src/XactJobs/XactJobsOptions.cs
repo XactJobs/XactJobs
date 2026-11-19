@@ -113,6 +113,15 @@ namespace XactJobs
         public List<Type> JobFailureHandlers { get; set; } = [];
 
         /// <summary>
+        /// For how many hours, from the time a job was originally scheduled for, a worker that doesn't have the job's type, or its method
+        /// with the job's signature, puts it back for another node instead of failing it: during a rolling deployment, a job enqueued
+        /// by a node with a newer version. Default 24. Such a job is moved later by the time it has waited (at least 5 seconds, at most
+        /// 5 minutes), without counting an attempt or adding a history row. After this time, it fails as any other attempt, and is
+        /// retried. 0: it fails at once. Applies to all the queues.
+        /// </summary>
+        public int UnresolvedJobGracePeriodInHours { get; set; } = 24;
+
+        /// <summary>
         /// The <see cref="IXactJobsWorkerGate"/> type asked before every claim, whether this node's workers may claim jobs. Registered as
         /// a singleton when the XactJobs services are added, unless the app registered it. Default null: the workers always claim.
         /// Applies to all the queues.

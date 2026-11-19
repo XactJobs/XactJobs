@@ -621,6 +621,19 @@ will use `IServiceScopeFactory` to create a scope and then attempt to resolve ea
 This means the dependencies (`IEmailService` in the example) of the owning class must be registered in the DI service collection.
 The owning class itself (`EmailSender` in the example) does not have to be a registered service - it just has to have a public constructor.
 
+## Rolling Deployments
+
+A job is stored with its method's signature (its name and parameter types), and a worker runs the method with exactly that signature.
+During a rolling deployment, a node of the old version can claim a job the new version enqueued. If that node doesn't have the job's
+type, or its method with that signature, it isn't a failed attempt: the worker puts the job back for another node, without a history
+row, and moves it later by the time it has waited (at least 5 seconds, at most 5 minutes). It logs a warning once per job method,
+and the attempt counts as `deferred` in the metrics. That lasts 24 hours from the time the job was originally scheduled for
+(`WithUnresolvedJobGracePeriodInHours`, 0 fails it at once); then it fails as any other attempt, and is retried.
+
+So renaming a job method or changing its parameter types makes it a different job: keep the old method until the jobs enqueued before
+have run. A node of the old version ignores a property of an argument it doesn't know, and runs the job without it: add such a
+property in two deployments, first the version that reads it (and works without it), then the one that sends it.
+
 # Configuration
 
 ```csharp
@@ -637,6 +650,7 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
         .WithSaveOutsideTransaction(XactJobSaveCheck.Warn); // when a job saves without a transaction: Warn, Throw or Ignore (all the queues)
      // .WithHistoryRetentionPeriodInDays(30)       // deletes the older history every hour (default: the history is kept)
      // .WithJobTagsInMetrics()                     // tags the jobs' metrics with the job's type and method (all the queues)
+     // .WithUnresolvedJobGracePeriodInHours(24)    // hours a job this node doesn't have is put back for another node (all the queues)
 
     // isolated queues have their own settings
     options.WithLongRunningQueue(queue => queue.WithMaxDegreeOfParallelism(2));
@@ -936,7 +950,7 @@ builder.Services.AddOpenTelemetry()
 
 | Metric | Type | Unit | Description |
 |---|---|---|---|
-| `xactjobs.job.attempts` | counter | `{attempt}` | Attempts that ended, by `xactjobs.outcome`: `completed`; `skipped` (an inactive periodic job, or a continuation whose condition isn't met); `retried` (failed, and scheduled again); `failed` (out of retries, or cancelled itself); `interrupted` (stopped by the shutdown, it runs again) |
+| `xactjobs.job.attempts` | counter | `{attempt}` | Attempts that ended, by `xactjobs.outcome`: `completed`; `skipped` (an inactive periodic job, or a continuation whose condition isn't met); `retried` (failed, and scheduled again); `failed` (out of retries, or cancelled itself); `interrupted` (stopped by the shutdown, it runs again); `deferred` (this node doesn't have the job's type or method, it's put back for another node: see [Rolling deployments](#rolling-deployments)) |
 | `xactjobs.job.duration` | histogram | s | How long an attempt took, until its outcome was saved, by `xactjobs.outcome` |
 | `xactjobs.job.start_delay` | histogram | s | How long a job waited from the time it was due until it started: a queue falling behind shows here first. A continuation is due when it's picked up |
 | `xactjobs.claim.duration` | histogram | s | How long a worker's query for due jobs took |

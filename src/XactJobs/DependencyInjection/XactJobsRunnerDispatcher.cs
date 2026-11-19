@@ -86,7 +86,7 @@ namespace XactJobs.DependencyInjection
 
                 var runnerLogger = _loggerFactory.CreateLogger<XactJobRunner<TDbContext>>();
 
-                var runner = new XactJobRunner<TDbContext>(queueName, quickPollChannel, _quickPollChannels, options, _saveChecker, _hooks, _gate, _metrics, _scopeFactory, runnerLogger);
+                var runner = new XactJobRunner<TDbContext>(queueName, quickPollChannel, _quickPollChannels, options, _saveChecker, _hooks, _gate, TimeSpan.FromHours(_options.UnresolvedJobGracePeriodInHours), _metrics, _scopeFactory, runnerLogger);
 
                 var initialDelayMs = GetDelayStepMs(options) * runnerIndex;
 

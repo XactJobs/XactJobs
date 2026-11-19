@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -170,65 +169,11 @@ public class SqliteJobOverloadTests : IAsyncLifetime
         Assert.Equal(XactJobStatus.Completed, history.Single().Status);
     }
 
-    [Fact]
-    public async Task JobWithoutASignature_RunsTheOnlyMethodWithItsNameAndParameterCount()
-    {
-        // jobs stored before 0.1.7 only have the method's name
-        var id = await AddRawJobAsync(nameof(OverloadedJob.NotOverloaded), "x");
-
-        var history = await RunAndGetHistoryAsync(id);
-
-        Assert.Equal(XactJobStatus.Completed, history.Single().Status);
-        Assert.Equal(["not overloaded x"], Recorder.Calls);
-    }
-
-    [Fact]
-    public async Task JobWithAnOutdatedSignature_RunsTheOnlyMethodWithItsNameAndParameterCount()
-    {
-        // e.g. the parameter's type was renamed after the job was enqueued
-        var id = await AddRawJobAsync("NotOverloaded(Old.Namespace.Message)", "y");
-
-        var history = await RunAndGetHistoryAsync(id);
-
-        Assert.Equal(XactJobStatus.Completed, history.Single().Status);
-        Assert.Equal(["not overloaded y"], Recorder.Calls);
-    }
-
-    [Fact]
-    public async Task JobWithoutASignature_OnAnOverloadedMethod_Fails()
-    {
-        var id = await AddRawJobAsync(nameof(OverloadedJob.Record), "z");
-
-        var history = await RunAndGetHistoryAsync(id);
-
-        Assert.Equal(XactJobStatus.Failed, history.Single().Status);
-        Assert.Contains("several public methods named 'Record' with 1 parameter(s)", history.Single().ErrorMessage);
-        Assert.Empty(Recorder.Calls);
-    }
-
     private Task<long> EnqueueAsync(Func<TestDbContext, XactJob> enqueue)
     {
         return WithDbAsync(async db =>
         {
             var job = enqueue(db);
-
-            await db.SaveChangesAsync();
-
-            return job.Id;
-        });
-    }
-
-    private Task<long> AddRawJobAsync(string methodName, string arg)
-    {
-        return WithDbAsync(async db =>
-        {
-            var typeName = db.JobEnqueue<OverloadedJob>(x => x.NotOverloaded("template")).TypeName;
-
-            db.ChangeTracker.Clear();
-
-            var job = new XactJob(0, DateTime.UtcNow, typeName, methodName, JsonSerializer.Serialize(new object[] { arg }), QueueNames.Default);
-
-            db.Jobs.Add(job);
 
             await db.SaveChangesAsync();
 
@@ -295,8 +240,6 @@ public class SqliteJobOverloadTests : IAsyncLifetime
 
             recorder.Add($"async int {value}");
         }
-
-        public void NotOverloaded(string value) => recorder.Add($"not overloaded {value}");
     }
 
     public sealed class HidingJob(CallRecorder recorder) : OverloadedJob(recorder)
