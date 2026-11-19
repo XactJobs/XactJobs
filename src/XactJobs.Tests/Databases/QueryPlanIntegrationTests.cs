@@ -57,6 +57,9 @@ public abstract class QueryPlanIntegrationTests(DatabaseFixture fixture) : IAsyn
     public Task ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey() => _scenarios.ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey();
 
     [DockerFact]
+    public Task ScheduledJobsOfAllQueues_AreReadInThePrimaryKeysOrder_WithoutASort() => _scenarios.ScheduledJobsOfAllQueues_AreReadInThePrimaryKeysOrder_WithoutASort();
+
+    [DockerFact]
     public Task JobQueues_JumpFromQueueToQueue() => _scenarios.JobQueues_JumpFromQueueToQueue();
 
     [DockerFact]

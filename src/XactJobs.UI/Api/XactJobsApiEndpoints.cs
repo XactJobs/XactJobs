@@ -71,7 +71,8 @@ internal static class XactJobsApiEndpoints
             return Results.Ok(await service.GetJobCountsOverTimeAsync(fromDate, toDate, interval, ct));
         }).WithName("XactJobsGetChartData");
 
-        // Scheduled/Pending jobs, of one queue: they're read in the order of the primary key, which starts with the queue
+        // Scheduled/Pending jobs, of a queue or of all of them: they're read in the order of the primary key, which starts with
+        // the queue
         group.MapGet("/jobs", async (
             IXactJobsUIService service,
             [FromQuery] int? page,
@@ -79,9 +80,7 @@ internal static class XactJobsApiEndpoints
             [FromQuery] string? queue,
             [FromQuery] string? search,
             CancellationToken ct) =>
-            string.IsNullOrEmpty(queue)
-                ? Results.BadRequest(new { message = "The queue is required (see /queues)." })
-                : Results.Ok(await service.GetScheduledJobsAsync(queue, search, page ?? 1, pageSize ?? options.DefaultPageSize, ct)))
+            Results.Ok(await service.GetScheduledJobsAsync(queue, search, page ?? 1, pageSize ?? options.DefaultPageSize, ct)))
             .WithName("XactJobsGetScheduledJobs");
 
         group.MapGet("/queues", async (IXactJobsUIService service, CancellationToken ct) =>

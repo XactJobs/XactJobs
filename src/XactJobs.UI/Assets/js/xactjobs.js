@@ -115,9 +115,9 @@ function xactJobsSubmitFilters(form) {
         form.elements['to'].value = range ? range.to.toISOString() : '';
     }
 
-    // without the empty fields in the URL
+    // without the empty fields in the URL, except a select's: an empty queue is "All", which on Scheduled isn't the default
     Array.from(form.elements).forEach(function (field) {
-        if (field.name && !field.value) field.disabled = true;
+        if (field.name && !field.value && field.tagName !== 'SELECT') field.disabled = true;
     });
 
     form.submit();

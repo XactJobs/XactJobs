@@ -380,6 +380,14 @@ public class XactJobsUIServiceTests : IDisposable
         Assert.Equal((XactJobsUIService<UiTestDbContext>.MaxCount, true), (jobs.TotalCount, jobs.IsTotalCountCapped));
         Assert.Equal((1, false), (emails.TotalCount, emails.IsTotalCountCapped));
         Assert.Equal("emails", Assert.Single(emails.Items).Queue);
+
+        // all the queues: in the primary key's order, queue by queue ("*" before "emails")
+        var all = await WithServiceAsync(s => s.GetScheduledJobsAsync(null, null, 1, 20));
+        var lastPage = await WithServiceAsync(s => s.GetScheduledJobsAsync(null, null, 501, 20));
+
+        Assert.Equal((XactJobsUIService<UiTestDbContext>.MaxCount, true), (all.TotalCount, all.IsTotalCountCapped));
+        Assert.All(all.Items, j => Assert.Equal(QueueNames.Default, j.Queue));
+        Assert.Equal("emails", lastPage.Items[^1].Queue);
     }
 
     [Fact]

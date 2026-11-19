@@ -710,7 +710,7 @@ The API endpoints that change data require an antiforgery token, which the dashb
 ## Pages and Actions
 
 - **Dashboard** - due, scheduled and running jobs, continuations waiting for their batch, succeeded and failed jobs in the last 24 hours, and a chart per hour
-- **Scheduled** - the pending and running jobs of one queue, the default queue first (one queue at a time: the job table is read in the order of its primary key, which starts with the queue, so a backlog isn't sorted on each refresh). A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
+- **Scheduled** - the pending and running jobs of a queue, the default queue first, or of all the queues (the job table is read in the order of its primary key, which starts with the queue, so a backlog isn't sorted on each refresh: all the queues are listed queue by queue). A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
   - *Run now* makes a pending job due now, and the job keeps the time it was scheduled for as `XactJobContext.OriginallyScheduledAt`. A continuation that waits for its batch can't: it starts when the batch is finished
   - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead.
     A cancelled job of a batch counts as a failed job of the batch, and if it was the last one, the batch's continuations start
@@ -751,7 +751,7 @@ All under the API base path (`/api/XactJobs` by default):
 | GET | `/stats` | Dashboard counts |
 | GET | `/chart-data?from=&to=&intervalMinutes=` | Counts per interval (default: the last 24 hours) |
 | GET | `/queues` | The queues: of the workers configured in this process, of the pending jobs, and of the periodic jobs |
-| GET | `/jobs?queue=&search=&page=&pageSize=` | Pending and running jobs of a queue (required) |
+| GET | `/jobs?queue=&search=&page=&pageSize=` | Pending and running jobs of a queue, or of all of them (queue by queue) |
 | GET | `/jobs/{id}?queue=&scheduledAt=` | A pending or running job |
 | POST | `/jobs/{id}/run-now?queue=&scheduledAt=` | Make a pending job due now |
 | POST | `/jobs/{id}/cancel?queue=&scheduledAt=` | Cancel a pending job |

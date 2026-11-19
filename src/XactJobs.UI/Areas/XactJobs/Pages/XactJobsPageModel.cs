@@ -46,11 +46,6 @@ public abstract class XactJobsPageModel : PageModel
     protected virtual bool HasQueueFilter => true;
 
     /// <summary>
-    /// Whether the queue filter has "All": not on the scheduled jobs, which are read one queue at a time.
-    /// </summary>
-    public virtual bool AllowsAllQueues => true;
-
-    /// <summary>
     /// The table of the current page, relative to the current URL.
     /// </summary>
     public virtual string TableUrl => "?handler=Table" + PagingQuery(PageNumber);

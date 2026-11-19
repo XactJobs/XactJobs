@@ -12,14 +12,15 @@ public class IndexModel : XactJobsPageModel
 
     public PagedResultDto<JobDto> Jobs { get; private set; } = new();
 
-    // one queue at a time: the rows are read in the order of the primary key, which starts with the queue
-    public override bool AllowsAllQueues => false;
-
     public override bool HasSearch => true;
+
+    // the default queue first: "All" is an empty queue in the query (queue=), kept in the page's links
+    public override string FilterQuery =>
+        (string.IsNullOrEmpty(Queue) ? "&queue=" : QueryPart("queue", Queue)) + QueryPart("search", Search);
 
     protected override async Task LoadAsync(CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(Queue))
+        if (string.IsNullOrEmpty(Queue) && !Request.Query.ContainsKey("queue"))
         {
             Queue = QueueNames.Default;
         }
