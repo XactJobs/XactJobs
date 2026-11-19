@@ -21,9 +21,11 @@ XactJobs.UI.Pages.BatchBadgesModel.Deconstruct(out XactJobs.UI.Pages.XactJobsPag
 XactJobs.UI.Pages.BatchBadgesModel.Owner.get -> XactJobs.UI.Pages.XactJobsPageModel!
 XactJobs.UI.Pages.BatchBadgesModel.Owner.init -> void
 XactJobs.UI.Pages.Batches.IndexModel
-XactJobs.UI.Pages.Batches.IndexModel.Batches.get -> XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.BatchDto!>!
+XactJobs.UI.Pages.Batches.IndexModel.ActiveBatches.get -> XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.BatchDto!>!
 XactJobs.UI.Pages.Batches.IndexModel.Current.get -> (XactJobs.UI.Services.Models.BatchState State, string! Title, string! Icon, string! Description)
+XactJobs.UI.Pages.Batches.IndexModel.FinishedBatches.get -> XactJobs.UI.Services.Models.CursorPageDto<XactJobs.UI.Services.Models.BatchDto!>!
 XactJobs.UI.Pages.Batches.IndexModel.IndexModel(XactJobs.UI.Services.IXactJobsUIService! service, XactJobs.UI.XactJobsUIOptions! options) -> void
+XactJobs.UI.Pages.Batches.IndexModel.Items.get -> System.Collections.Generic.IReadOnlyList<XactJobs.UI.Services.Models.BatchDto!>!
 XactJobs.UI.Pages.Batches.IndexModel.State.get -> XactJobs.UI.Services.Models.BatchState
 XactJobs.UI.Pages.Batches.IndexModel.StateName.get -> string?
 XactJobs.UI.Pages.Batches.IndexModel.StateName.set -> void
@@ -36,7 +38,7 @@ XactJobs.UI.Pages.History.IndexModel.CategoryUrl(XactJobs.UI.Services.Models.His
 XactJobs.UI.Pages.History.IndexModel.Current.get -> (XactJobs.UI.Services.Models.HistoryCategory Category, string! Title, string! Icon, string! Description)
 XactJobs.UI.Pages.History.IndexModel.HasActions.get -> bool
 XactJobs.UI.Pages.History.IndexModel.IndexModel(XactJobs.UI.Services.IXactJobsUIService! service, XactJobs.UI.XactJobsUIOptions! options) -> void
-XactJobs.UI.Pages.History.IndexModel.Jobs.get -> XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.JobHistoryDto!>!
+XactJobs.UI.Pages.History.IndexModel.Jobs.get -> XactJobs.UI.Services.Models.CursorPageDto<XactJobs.UI.Services.Models.JobHistoryDto!>!
 XactJobs.UI.Pages.History.IndexModel.ShowsErrors.get -> bool
 XactJobs.UI.Pages.HistoryRowsModel
 XactJobs.UI.Pages.HistoryRowsModel.CurrentBatchId.get -> System.Guid?
@@ -64,13 +66,16 @@ XactJobs.UI.Pages.JobRowModel.JobRowModel(XactJobs.UI.Pages.XactJobsPageModel! O
 XactJobs.UI.Pages.JobRowModel.Owner.get -> XactJobs.UI.Pages.XactJobsPageModel!
 XactJobs.UI.Pages.JobRowModel.Owner.init -> void
 XactJobs.UI.Pages.PaginationModel
-XactJobs.UI.Pages.PaginationModel.Deconstruct(out XactJobs.UI.Pages.XactJobsPageModel! Owner, out int Page, out int TotalPages, out int TotalCount) -> void
+XactJobs.UI.Pages.PaginationModel.Deconstruct(out XactJobs.UI.Pages.XactJobsPageModel! Owner, out int Page, out int TotalPages, out int TotalCount, out bool IsTotalCountCapped) -> void
+XactJobs.UI.Pages.PaginationModel.DisplayTotal.get -> string!
+XactJobs.UI.Pages.PaginationModel.IsTotalCountCapped.get -> bool
+XactJobs.UI.Pages.PaginationModel.IsTotalCountCapped.init -> void
 XactJobs.UI.Pages.PaginationModel.Owner.get -> XactJobs.UI.Pages.XactJobsPageModel!
 XactJobs.UI.Pages.PaginationModel.Owner.init -> void
 XactJobs.UI.Pages.PaginationModel.Page.get -> int
 XactJobs.UI.Pages.PaginationModel.Page.init -> void
 XactJobs.UI.Pages.PaginationModel.PaginationModel(XactJobs.UI.Pages.PaginationModel! original) -> void
-XactJobs.UI.Pages.PaginationModel.PaginationModel(XactJobs.UI.Pages.XactJobsPageModel! Owner, int Page, int TotalPages, int TotalCount) -> void
+XactJobs.UI.Pages.PaginationModel.PaginationModel(XactJobs.UI.Pages.XactJobsPageModel! Owner, int Page, int TotalPages, int TotalCount, bool IsTotalCountCapped) -> void
 XactJobs.UI.Pages.PaginationModel.TotalCount.get -> int
 XactJobs.UI.Pages.PaginationModel.TotalCount.init -> void
 XactJobs.UI.Pages.PaginationModel.TotalPages.get -> int
@@ -103,23 +108,40 @@ XactJobs.UI.Pages.XactJobsPageModel.PagingQuery(int pageNumber) -> string!
 XactJobs.UI.Pages.XactJobsPageModel.Queue.get -> string?
 XactJobs.UI.Pages.XactJobsPageModel.Queue.set -> void
 XactJobs.UI.Pages.XactJobsPageModel.Queues.get -> System.Collections.Generic.IReadOnlyList<string!>?
+XactJobs.UI.Pages.XactJobsPageModel.Search.get -> string?
+XactJobs.UI.Pages.XactJobsPageModel.Search.set -> void
 XactJobs.UI.Pages.XactJobsPageModel.Service.get -> XactJobs.UI.Services.IXactJobsUIService!
-XactJobs.UI.Pages.XactJobsPageModel.TableUrl.get -> string!
 XactJobs.UI.Pages.XactJobsPageModel.XactJobsPageModel(XactJobs.UI.Services.IXactJobsUIService! service, XactJobs.UI.XactJobsUIOptions! options) -> void
+XactJobs.UI.Pages.XactJobsPeriodPageModel
+XactJobs.UI.Pages.XactJobsPeriodPageModel.CurrentPeriod.get -> string!
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Cursor.get -> string?
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Cursor.set -> void
+XactJobs.UI.Pages.XactJobsPeriodPageModel.CursorQuery(string? cursor) -> string!
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Day.get -> string?
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Day.set -> void
+XactJobs.UI.Pages.XactJobsPeriodPageModel.From.get -> string?
+XactJobs.UI.Pages.XactJobsPeriodPageModel.From.set -> void
+XactJobs.UI.Pages.XactJobsPeriodPageModel.GetPeriod() -> (System.DateTime From, System.DateTime? To)
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Period.get -> string?
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Period.set -> void
+XactJobs.UI.Pages.XactJobsPeriodPageModel.To.get -> string?
+XactJobs.UI.Pages.XactJobsPeriodPageModel.To.set -> void
+XactJobs.UI.Pages.XactJobsPeriodPageModel.XactJobsPeriodPageModel(XactJobs.UI.Services.IXactJobsUIService! service, XactJobs.UI.XactJobsUIOptions! options) -> void
 XactJobs.UI.Services.IXactJobsUIService
 XactJobs.UI.Services.IXactJobsUIService.CancelJobAsync(XactJobs.UI.Services.Models.JobKey! key, string? cancelledBy, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
 XactJobs.UI.Services.IXactJobsUIService.DeletePeriodicJobAsync(string! id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
+XactJobs.UI.Services.IXactJobsUIService.GetActiveBatchesAsync(int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.BatchDto!>!>!
 XactJobs.UI.Services.IXactJobsUIService.GetBatchAsync(System.Guid id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.BatchDetailsDto?>!
-XactJobs.UI.Services.IXactJobsUIService.GetBatchesAsync(XactJobs.UI.Services.Models.BatchState state, int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.BatchDto!>!>!
 XactJobs.UI.Services.IXactJobsUIService.GetDashboardStatsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.DashboardStatsDto!>!
-XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory category, int page, int pageSize, string? queue = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.JobHistoryDto!>!>!
+XactJobs.UI.Services.IXactJobsUIService.GetFinishedBatchesAsync(System.DateTime from, System.DateTime? to, string? cursor, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.CursorPageDto<XactJobs.UI.Services.Models.BatchDto!>!>!
+XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory category, System.DateTime from, System.DateTime? to, string? queue, string? search, string? cursor, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.CursorPageDto<XactJobs.UI.Services.Models.JobHistoryDto!>!>!
 XactJobs.UI.Services.IXactJobsUIService.GetJobAsync(XactJobs.UI.Services.Models.JobKey! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.JobDto?>!
 XactJobs.UI.Services.IXactJobsUIService.GetJobCountsOverTimeAsync(System.DateTime from, System.DateTime to, System.TimeSpan interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<XactJobs.UI.Services.Models.JobCountsOverTimeDto!>!>!
 XactJobs.UI.Services.IXactJobsUIService.GetJobHistoryByIdAsync(long id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.JobHistoryDto?>!
 XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobByIdAsync(string! id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PeriodicJobDto?>!
-XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.PeriodicJobDto!>!>!
+XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(string? search, int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.PeriodicJobDto!>!>!
 XactJobs.UI.Services.IXactJobsUIService.GetQueuesAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
-XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(int page, int pageSize, string? queue = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.JobDto!>!>!
+XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(string? queue, string? search, int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.JobDto!>!>!
 XactJobs.UI.Services.IXactJobsUIService.RetryJobAsync(long historyId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
 XactJobs.UI.Services.IXactJobsUIService.RunJobNowAsync(XactJobs.UI.Services.Models.JobKey! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
 XactJobs.UI.Services.IXactJobsUIService.SetPeriodicJobActiveAsync(string! id, bool isActive, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
@@ -182,6 +204,21 @@ XactJobs.UI.Services.Models.BatchDto.TypeName.init -> void
 XactJobs.UI.Services.Models.BatchState
 XactJobs.UI.Services.Models.BatchState.Active = 0 -> XactJobs.UI.Services.Models.BatchState
 XactJobs.UI.Services.Models.BatchState.Finished = 1 -> XactJobs.UI.Services.Models.BatchState
+XactJobs.UI.Services.Models.CursorPageDto<T>
+XactJobs.UI.Services.Models.CursorPageDto<T>.CursorPageDto() -> void
+XactJobs.UI.Services.Models.CursorPageDto<T>.CursorPageDto(XactJobs.UI.Services.Models.CursorPageDto<T>! original) -> void
+XactJobs.UI.Services.Models.CursorPageDto<T>.IsTotalCountCapped.get -> bool
+XactJobs.UI.Services.Models.CursorPageDto<T>.IsTotalCountCapped.init -> void
+XactJobs.UI.Services.Models.CursorPageDto<T>.Items.get -> System.Collections.Generic.IReadOnlyList<T>!
+XactJobs.UI.Services.Models.CursorPageDto<T>.Items.init -> void
+XactJobs.UI.Services.Models.CursorPageDto<T>.NewerCursor.get -> string?
+XactJobs.UI.Services.Models.CursorPageDto<T>.NewerCursor.init -> void
+XactJobs.UI.Services.Models.CursorPageDto<T>.OlderCursor.get -> string?
+XactJobs.UI.Services.Models.CursorPageDto<T>.OlderCursor.init -> void
+XactJobs.UI.Services.Models.CursorPageDto<T>.PageSize.get -> int
+XactJobs.UI.Services.Models.CursorPageDto<T>.PageSize.init -> void
+XactJobs.UI.Services.Models.CursorPageDto<T>.TotalCount.get -> int
+XactJobs.UI.Services.Models.CursorPageDto<T>.TotalCount.init -> void
 XactJobs.UI.Services.Models.DashboardStatsDto
 XactJobs.UI.Services.Models.DashboardStatsDto.AwaitingContinuations.get -> int
 XactJobs.UI.Services.Models.DashboardStatsDto.AwaitingContinuations.init -> void
@@ -325,6 +362,8 @@ XactJobs.UI.Services.Models.JobKey.ToQueryString() -> string!
 XactJobs.UI.Services.Models.PagedResultDto<T>
 XactJobs.UI.Services.Models.PagedResultDto<T>.HasNextPage.get -> bool
 XactJobs.UI.Services.Models.PagedResultDto<T>.HasPreviousPage.get -> bool
+XactJobs.UI.Services.Models.PagedResultDto<T>.IsTotalCountCapped.get -> bool
+XactJobs.UI.Services.Models.PagedResultDto<T>.IsTotalCountCapped.init -> void
 XactJobs.UI.Services.Models.PagedResultDto<T>.Items.get -> System.Collections.Generic.IReadOnlyList<T>!
 XactJobs.UI.Services.Models.PagedResultDto<T>.Items.init -> void
 XactJobs.UI.Services.Models.PagedResultDto<T>.Page.get -> int
@@ -373,17 +412,18 @@ XactJobs.UI.Services.Models.PeriodicJobDto.Version.init -> void
 XactJobs.UI.Services.XactJobsUIService<TDbContext>
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.CancelJobAsync(XactJobs.UI.Services.Models.JobKey! key, string? cancelledBy, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.DeletePeriodicJobAsync(string! id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
+XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetActiveBatchesAsync(int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.BatchDto!>!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetBatchAsync(System.Guid id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.BatchDetailsDto?>!
-XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetBatchesAsync(XactJobs.UI.Services.Models.BatchState state, int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.BatchDto!>!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetDashboardStatsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.DashboardStatsDto!>!
-XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory category, int page, int pageSize, string? queue = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.JobHistoryDto!>!>!
+XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetFinishedBatchesAsync(System.DateTime from, System.DateTime? to, string? cursor, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.CursorPageDto<XactJobs.UI.Services.Models.BatchDto!>!>!
+XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory category, System.DateTime from, System.DateTime? to, string? queue, string? search, string? cursor, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.CursorPageDto<XactJobs.UI.Services.Models.JobHistoryDto!>!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetJobAsync(XactJobs.UI.Services.Models.JobKey! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.JobDto?>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetJobCountsOverTimeAsync(System.DateTime from, System.DateTime to, System.TimeSpan interval, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<XactJobs.UI.Services.Models.JobCountsOverTimeDto!>!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetJobHistoryByIdAsync(long id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.JobHistoryDto?>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetPeriodicJobByIdAsync(string! id, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PeriodicJobDto?>!
-XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetPeriodicJobsAsync(int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.PeriodicJobDto!>!>!
+XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetPeriodicJobsAsync(string? search, int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.PeriodicJobDto!>!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetQueuesAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!
-XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetScheduledJobsAsync(int page, int pageSize, string? queue = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.JobDto!>!>!
+XactJobs.UI.Services.XactJobsUIService<TDbContext>.GetScheduledJobsAsync(string? queue, string? search, int page, int pageSize, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.PagedResultDto<XactJobs.UI.Services.Models.JobDto!>!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.RetryJobAsync(long historyId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.RunJobNowAsync(XactJobs.UI.Services.Models.JobKey! key, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
 XactJobs.UI.Services.XactJobsUIService<TDbContext>.SetPeriodicJobActiveAsync(string! id, bool isActive, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
@@ -427,14 +467,18 @@ XactJobs.UI.XactJobsUIOptionsBuilder.XactJobsUIOptionsBuilder() -> void
 abstract XactJobs.UI.Pages.XactJobsPageModel.LoadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
 const XactJobs.UI.Services.XactJobsUIService<TDbContext>.CancelledMessage = "Cancelled from the dashboard" -> string!
 const XactJobs.UI.Services.XactJobsUIService<TDbContext>.MaxChartIntervals = 200 -> int
+const XactJobs.UI.Services.XactJobsUIService<TDbContext>.MaxCount = 10000 -> int
 const XactJobs.UI.Services.XactJobsUIService<TDbContext>.MaxPageSize = 500 -> int
 override XactJobs.UI.Pages.Batch.IndexModel.HasQueueFilter.get -> bool
 override XactJobs.UI.Pages.Batch.IndexModel.LoadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
 override XactJobs.UI.Pages.BatchBadgesModel.Equals(object? obj) -> bool
 override XactJobs.UI.Pages.BatchBadgesModel.GetHashCode() -> int
 override XactJobs.UI.Pages.BatchBadgesModel.ToString() -> string!
+override XactJobs.UI.Pages.Batches.IndexModel.HasPeriodFilter.get -> bool
 override XactJobs.UI.Pages.Batches.IndexModel.HasQueueFilter.get -> bool
 override XactJobs.UI.Pages.Batches.IndexModel.LoadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
+override XactJobs.UI.Pages.Batches.IndexModel.UsesCursor.get -> bool
+override XactJobs.UI.Pages.History.IndexModel.HasSearch.get -> bool
 override XactJobs.UI.Pages.History.IndexModel.LoadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
 override XactJobs.UI.Pages.HistoryRowsModel.Equals(object? obj) -> bool
 override XactJobs.UI.Pages.HistoryRowsModel.GetHashCode() -> int
@@ -446,11 +490,16 @@ override XactJobs.UI.Pages.PaginationModel.Equals(object? obj) -> bool
 override XactJobs.UI.Pages.PaginationModel.GetHashCode() -> int
 override XactJobs.UI.Pages.PaginationModel.ToString() -> string!
 override XactJobs.UI.Pages.Periodic.IndexModel.HasQueueFilter.get -> bool
+override XactJobs.UI.Pages.Periodic.IndexModel.HasSearch.get -> bool
 override XactJobs.UI.Pages.Periodic.IndexModel.LoadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
 override XactJobs.UI.Pages.RetryButtonModel.Equals(object? obj) -> bool
 override XactJobs.UI.Pages.RetryButtonModel.GetHashCode() -> int
 override XactJobs.UI.Pages.RetryButtonModel.ToString() -> string!
+override XactJobs.UI.Pages.Scheduled.IndexModel.FilterQuery.get -> string!
+override XactJobs.UI.Pages.Scheduled.IndexModel.HasSearch.get -> bool
 override XactJobs.UI.Pages.Scheduled.IndexModel.LoadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
+override XactJobs.UI.Pages.XactJobsPeriodPageModel.FilterQuery.get -> string!
+override XactJobs.UI.Pages.XactJobsPeriodPageModel.TableUrl.get -> string!
 override XactJobs.UI.Services.Models.ActionResultDto.Equals(object? obj) -> bool
 override XactJobs.UI.Services.Models.ActionResultDto.GetHashCode() -> int
 override XactJobs.UI.Services.Models.ActionResultDto.ToString() -> string!
@@ -460,6 +509,9 @@ override XactJobs.UI.Services.Models.BatchDetailsDto.ToString() -> string!
 override XactJobs.UI.Services.Models.BatchDto.Equals(object? obj) -> bool
 override XactJobs.UI.Services.Models.BatchDto.GetHashCode() -> int
 override XactJobs.UI.Services.Models.BatchDto.ToString() -> string!
+override XactJobs.UI.Services.Models.CursorPageDto<T>.Equals(object? obj) -> bool
+override XactJobs.UI.Services.Models.CursorPageDto<T>.GetHashCode() -> int
+override XactJobs.UI.Services.Models.CursorPageDto<T>.ToString() -> string!
 override XactJobs.UI.Services.Models.DashboardStatsDto.Equals(object? obj) -> bool
 override XactJobs.UI.Services.Models.DashboardStatsDto.GetHashCode() -> int
 override XactJobs.UI.Services.Models.DashboardStatsDto.ToString() -> string!
@@ -498,7 +550,9 @@ static XactJobs.UI.Pages.RetryButtonModel.operator ==(XactJobs.UI.Pages.RetryBut
 static XactJobs.UI.Pages.XactJobsPageModel.DisplayBatch(System.Guid batchId) -> string!
 static XactJobs.UI.Pages.XactJobsPageModel.DisplayQueue(string! queue) -> string!
 static XactJobs.UI.Pages.XactJobsPageModel.OriginalTime(System.DateTime? originallyScheduledAt) -> Microsoft.AspNetCore.Html.IHtmlContent!
+static XactJobs.UI.Pages.XactJobsPageModel.QueryPart(string! name, string? value) -> string!
 static XactJobs.UI.Pages.XactJobsPageModel.Time(System.DateTime? utc) -> Microsoft.AspNetCore.Html.IHtmlContent!
+static XactJobs.UI.Pages.XactJobsPeriodPageModel.Periods.get -> System.Collections.Generic.IReadOnlyList<(string! Value, string! Title)>!
 static XactJobs.UI.Services.Models.ActionResultDto.Conflict(string! message) -> XactJobs.UI.Services.Models.ActionResultDto!
 static XactJobs.UI.Services.Models.ActionResultDto.Done(string! message) -> XactJobs.UI.Services.Models.ActionResultDto!
 static XactJobs.UI.Services.Models.ActionResultDto.NotFound(string! message) -> XactJobs.UI.Services.Models.ActionResultDto!
@@ -508,6 +562,8 @@ static XactJobs.UI.Services.Models.BatchDetailsDto.operator !=(XactJobs.UI.Servi
 static XactJobs.UI.Services.Models.BatchDetailsDto.operator ==(XactJobs.UI.Services.Models.BatchDetailsDto? left, XactJobs.UI.Services.Models.BatchDetailsDto? right) -> bool
 static XactJobs.UI.Services.Models.BatchDto.operator !=(XactJobs.UI.Services.Models.BatchDto? left, XactJobs.UI.Services.Models.BatchDto? right) -> bool
 static XactJobs.UI.Services.Models.BatchDto.operator ==(XactJobs.UI.Services.Models.BatchDto? left, XactJobs.UI.Services.Models.BatchDto? right) -> bool
+static XactJobs.UI.Services.Models.CursorPageDto<T>.operator !=(XactJobs.UI.Services.Models.CursorPageDto<T>? left, XactJobs.UI.Services.Models.CursorPageDto<T>? right) -> bool
+static XactJobs.UI.Services.Models.CursorPageDto<T>.operator ==(XactJobs.UI.Services.Models.CursorPageDto<T>? left, XactJobs.UI.Services.Models.CursorPageDto<T>? right) -> bool
 static XactJobs.UI.Services.Models.DashboardStatsDto.operator !=(XactJobs.UI.Services.Models.DashboardStatsDto? left, XactJobs.UI.Services.Models.DashboardStatsDto? right) -> bool
 static XactJobs.UI.Services.Models.DashboardStatsDto.operator ==(XactJobs.UI.Services.Models.DashboardStatsDto? left, XactJobs.UI.Services.Models.DashboardStatsDto? right) -> bool
 static XactJobs.UI.Services.Models.JobCountsOverTimeDto.operator !=(XactJobs.UI.Services.Models.JobCountsOverTimeDto? left, XactJobs.UI.Services.Models.JobCountsOverTimeDto? right) -> bool
@@ -526,6 +582,7 @@ static XactJobs.UI.Services.Models.PagedResultDto<T>.operator !=(XactJobs.UI.Ser
 static XactJobs.UI.Services.Models.PagedResultDto<T>.operator ==(XactJobs.UI.Services.Models.PagedResultDto<T>? left, XactJobs.UI.Services.Models.PagedResultDto<T>? right) -> bool
 static XactJobs.UI.Services.Models.PeriodicJobDto.operator !=(XactJobs.UI.Services.Models.PeriodicJobDto? left, XactJobs.UI.Services.Models.PeriodicJobDto? right) -> bool
 static XactJobs.UI.Services.Models.PeriodicJobDto.operator ==(XactJobs.UI.Services.Models.PeriodicJobDto? left, XactJobs.UI.Services.Models.PeriodicJobDto? right) -> bool
+static readonly XactJobs.UI.Pages.XactJobsPeriodPageModel.MaxPeriod -> System.TimeSpan
 virtual XactJobs.UI.Pages.BatchBadgesModel.<Clone>$() -> XactJobs.UI.Pages.BatchBadgesModel!
 virtual XactJobs.UI.Pages.BatchBadgesModel.EqualityContract.get -> System.Type!
 virtual XactJobs.UI.Pages.BatchBadgesModel.Equals(XactJobs.UI.Pages.BatchBadgesModel? other) -> bool
@@ -546,7 +603,12 @@ virtual XactJobs.UI.Pages.RetryButtonModel.<Clone>$() -> XactJobs.UI.Pages.Retry
 virtual XactJobs.UI.Pages.RetryButtonModel.EqualityContract.get -> System.Type!
 virtual XactJobs.UI.Pages.RetryButtonModel.Equals(XactJobs.UI.Pages.RetryButtonModel? other) -> bool
 virtual XactJobs.UI.Pages.RetryButtonModel.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual XactJobs.UI.Pages.XactJobsPageModel.FilterQuery.get -> string!
 virtual XactJobs.UI.Pages.XactJobsPageModel.HasQueueFilter.get -> bool
+virtual XactJobs.UI.Pages.XactJobsPageModel.HasSearch.get -> bool
+virtual XactJobs.UI.Pages.XactJobsPageModel.TableUrl.get -> string!
+virtual XactJobs.UI.Pages.XactJobsPeriodPageModel.HasPeriodFilter.get -> bool
+virtual XactJobs.UI.Pages.XactJobsPeriodPageModel.UsesCursor.get -> bool
 virtual XactJobs.UI.Services.Models.ActionResultDto.<Clone>$() -> XactJobs.UI.Services.Models.ActionResultDto!
 virtual XactJobs.UI.Services.Models.ActionResultDto.EqualityContract.get -> System.Type!
 virtual XactJobs.UI.Services.Models.ActionResultDto.Equals(XactJobs.UI.Services.Models.ActionResultDto? other) -> bool
@@ -559,6 +621,10 @@ virtual XactJobs.UI.Services.Models.BatchDto.<Clone>$() -> XactJobs.UI.Services.
 virtual XactJobs.UI.Services.Models.BatchDto.EqualityContract.get -> System.Type!
 virtual XactJobs.UI.Services.Models.BatchDto.Equals(XactJobs.UI.Services.Models.BatchDto? other) -> bool
 virtual XactJobs.UI.Services.Models.BatchDto.PrintMembers(System.Text.StringBuilder! builder) -> bool
+virtual XactJobs.UI.Services.Models.CursorPageDto<T>.<Clone>$() -> XactJobs.UI.Services.Models.CursorPageDto<T>!
+virtual XactJobs.UI.Services.Models.CursorPageDto<T>.EqualityContract.get -> System.Type!
+virtual XactJobs.UI.Services.Models.CursorPageDto<T>.Equals(XactJobs.UI.Services.Models.CursorPageDto<T>? other) -> bool
+virtual XactJobs.UI.Services.Models.CursorPageDto<T>.PrintMembers(System.Text.StringBuilder! builder) -> bool
 virtual XactJobs.UI.Services.Models.DashboardStatsDto.<Clone>$() -> XactJobs.UI.Services.Models.DashboardStatsDto!
 virtual XactJobs.UI.Services.Models.DashboardStatsDto.EqualityContract.get -> System.Type!
 virtual XactJobs.UI.Services.Models.DashboardStatsDto.Equals(XactJobs.UI.Services.Models.DashboardStatsDto? other) -> bool
