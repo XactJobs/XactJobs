@@ -89,7 +89,7 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         Assert.Equal(2, history.ErrorCount);
         Assert.Null(history.ErrorStackTrace);
 
-        var cancelled = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Cancelled, 1, 20));
+        var cancelled = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Cancelled, DateTime.UtcNow.AddDays(-1), null, null, null, 20));
 
         Assert.Equal(pendingId, Assert.Single(cancelled.Items).Id);
     }
@@ -217,13 +217,13 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         await AddJobAsync(DateTime.UtcNow.AddMinutes(-1), leasedUntil: DateTime.UtcNow.AddMinutes(5));
 
         async Task<long> SingleIdAsync(HistoryCategory category) =>
-            Assert.Single((await WithServiceAsync(s => s.GetHistoryAsync(category, 1, 20))).Items).Id;
+            Assert.Single((await WithServiceAsync(s => s.GetHistoryAsync(category, DateTime.UtcNow.AddDays(-1), null, null, null, 20))).Items).Id;
 
         Assert.Equal(3, await SingleIdAsync(HistoryCategory.Failed));
         Assert.Equal(4, await SingleIdAsync(HistoryCategory.Cancelled));
         Assert.Equal(5, await SingleIdAsync(HistoryCategory.Retried));
         Assert.Equal(6, await SingleIdAsync(HistoryCategory.Skipped));
-        Assert.Equal(2, (await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, 1, 20))).TotalCount);
+        Assert.Equal(2, (await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddDays(-1), null, null, null, 20))).TotalCount);
 
         var stats = await WithServiceAsync(s => s.GetDashboardStatsAsync());
 
@@ -240,7 +240,7 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
 
         Assert.Equal([QueueNames.Default, "emails"], queues);
 
-        var emails = await WithServiceAsync(s => s.GetScheduledJobsAsync(1, 20, "emails"));
+        var emails = await WithServiceAsync(s => s.GetScheduledJobsAsync("emails", 1, 20));
 
         Assert.Equal("emails", Assert.Single(emails.Items).Queue);
     }
@@ -279,7 +279,7 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
             return (batch.Id, continuation.Id);
         });
 
-        var activeBatch = Assert.Single((await WithServiceAsync(s => s.GetBatchesAsync(BatchState.Active, 1, 20))).Items);
+        var activeBatch = Assert.Single((await WithServiceAsync(s => s.GetActiveBatchesAsync(1, 20))).Items);
 
         Assert.Equal(active, activeBatch.Id);
         Assert.Equal(2, activeBatch.PendingJobs);
@@ -290,7 +290,7 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         Assert.True(activeBatch.NextRunAt < DateTime.UtcNow.AddHours(1.5), "The next run is the earliest one");
         Assert.NotNull(activeBatch.TypeName);
 
-        var finishedBatch = Assert.Single((await WithServiceAsync(s => s.GetBatchesAsync(BatchState.Finished, 1, 20))).Items);
+        var finishedBatch = Assert.Single((await WithServiceAsync(s => s.GetFinishedBatchesAsync(DateTime.UtcNow.AddDays(-1), null, null, 20))).Items);
 
         Assert.Equal(finished, finishedBatch.Id);
         Assert.Equal(1, finishedBatch.SucceededJobs);

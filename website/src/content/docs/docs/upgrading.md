@@ -54,6 +54,17 @@ the same method replaces them.
 A worker that doesn't have a job's type or method puts the job back for another node, for 24 hours, instead of failing it: see
 [Rolling deployments](../jobs/#rolling-deployments).
 
+The dashboard reads less of large tables (see [Dashboard](../dashboard/#pages-and-actions)), which changes its API, and
+`IXactJobsUIService` for code that calls it:
+
+- The scheduled jobs are of one queue: `/jobs` requires `queue`, and `GetScheduledJobsAsync` takes it first. `/queues` lists them.
+- The history and the finished batches are in a period, read a page at a time from the last row seen: `/history` takes `from`, `to`
+  and `cursor` instead of `page`, and returns `newerCursor` and `olderCursor` instead of page numbers (`GetHistoryAsync` returns a
+  `CursorPageDto`).
+- `/batches?state=` is `/batches/active` and `/batches/finished`, and `GetBatchesAsync` is `GetActiveBatchesAsync` and
+  `GetFinishedBatchesAsync`.
+- The counts stop at 10,000 (`IsTotalCountCapped`).
+
 ## v0.9.0
 
 Run the script first: it adds the column for the exclusions of periodic jobs (see [Exclusions](../periodic-jobs/#exclusions)). Give a

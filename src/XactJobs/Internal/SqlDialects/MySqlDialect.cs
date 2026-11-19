@@ -161,6 +161,9 @@ WHERE {ColLeaser} = {{0}}
         // They also belong to the session, not to the transaction: the scheduler releases it, also when its cycle fails.
         public string GetTableLockNameSql(string tableSchema, string tableName) => $"CONCAT('{tableSchema}_{tableName}:', MD5(DATABASE()))";
 
+        // MySQL jumps from one queue to the next in the primary key on its own (a loose index scan: "Using index for group-by")
+        public string JobQueuesSql => $@"SELECT DISTINCT {ColQueue} AS Value FROM {XactJobSchema}_{XactJobTable}";
+
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
             var result = await db.Database.ExecuteScalarIntAsync($"SELECT GET_LOCK({GetTableLockNameSql(tableSchema, tableName)}, 30)", cancellationToken)

@@ -71,18 +71,21 @@ internal static class XactJobsApiEndpoints
             return Results.Ok(await service.GetJobCountsOverTimeAsync(fromDate, toDate, interval, ct));
         }).WithName("XactJobsGetChartData");
 
-        // Scheduled/Pending jobs
+        // Scheduled/Pending jobs, of one queue: they're read in the order of the primary key, which starts with the queue
         group.MapGet("/jobs", async (
             IXactJobsUIService service,
             [FromQuery] int? page,
             [FromQuery] int? pageSize,
             [FromQuery] string? queue,
             CancellationToken ct) =>
-            Results.Ok(await service.GetScheduledJobsAsync(
-                page ?? 1,
-                pageSize ?? options.DefaultPageSize,
-                queue, ct)))
+            string.IsNullOrEmpty(queue)
+                ? Results.BadRequest(new { message = "The queue is required (see /queues)." })
+                : Results.Ok(await service.GetScheduledJobsAsync(queue, page ?? 1, pageSize ?? options.DefaultPageSize, ct)))
             .WithName("XactJobsGetScheduledJobs");
+
+        group.MapGet("/queues", async (IXactJobsUIService service, CancellationToken ct) =>
+            Results.Ok(await service.GetQueuesAsync(ct)))
+            .WithName("XactJobsGetQueues");
 
         // a pending job is identified by its primary key: the id, and the queue and the scheduled time in the query string (see JobKey)
         group.MapGet("/jobs/{id:long}", async (
@@ -112,7 +115,9 @@ internal static class XactJobsApiEndpoints
         group.MapGet("/history", async (
             IXactJobsUIService service,
             [FromQuery] string? category,
-            [FromQuery] int? page,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to,
+            [FromQuery] string? cursor,
             [FromQuery] int? pageSize,
             [FromQuery] string? queue,
             CancellationToken ct) =>
@@ -122,11 +127,10 @@ internal static class XactJobsApiEndpoints
                 return Results.BadRequest(new { message = $"Unknown category, use one of: {string.Join(", ", Enum.GetNames<HistoryCategory>())}." });
             }
 
+            if (!TryGetPeriod(from, to, out var period)) return PeriodInvalid();
+
             return Results.Ok(await service.GetHistoryAsync(
-                historyCategory,
-                page ?? 1,
-                pageSize ?? options.DefaultPageSize,
-                queue, ct));
+                historyCategory, period.From, period.To, queue, cursor, pageSize ?? options.DefaultPageSize, ct));
         }).WithName("XactJobsGetHistory");
 
         group.MapGet("/history/{id:long}", async (
@@ -142,22 +146,26 @@ internal static class XactJobsApiEndpoints
             .WithName("XactJobsRetryJob");
 
         // Batches
-        group.MapGet("/batches", async (
+        group.MapGet("/batches/active", async (
             IXactJobsUIService service,
-            [FromQuery] string? state,
             [FromQuery] int? page,
             [FromQuery] int? pageSize,
             CancellationToken ct) =>
+            Results.Ok(await service.GetActiveBatchesAsync(page ?? 1, pageSize ?? options.DefaultPageSize, ct)))
+            .WithName("XactJobsGetActiveBatches");
+
+        group.MapGet("/batches/finished", async (
+            IXactJobsUIService service,
+            [FromQuery] DateTime? from,
+            [FromQuery] DateTime? to,
+            [FromQuery] string? cursor,
+            [FromQuery] int? pageSize,
+            CancellationToken ct) =>
         {
-            var batchState = BatchState.Active;
+            if (!TryGetPeriod(from, to, out var period)) return PeriodInvalid();
 
-            if (!string.IsNullOrEmpty(state) && !(Enum.TryParse(state, ignoreCase: true, out batchState) && Enum.IsDefined(batchState)))
-            {
-                return Results.BadRequest(new { message = $"Unknown state, use one of: {string.Join(", ", Enum.GetNames<BatchState>())}." });
-            }
-
-            return Results.Ok(await service.GetBatchesAsync(batchState, page ?? 1, pageSize ?? options.DefaultPageSize, ct));
-        }).WithName("XactJobsGetBatches");
+            return Results.Ok(await service.GetFinishedBatchesAsync(period.From, period.To, cursor, pageSize ?? options.DefaultPageSize, ct));
+        }).WithName("XactJobsGetFinishedBatches");
 
         group.MapGet("/batches/{id:guid}", async (
             IXactJobsUIService service, Guid id, CancellationToken ct) =>
@@ -236,6 +244,27 @@ internal static class XactJobsApiEndpoints
     {
         message = "A pending job is identified by its primary key: the id in the route, and the queue and the scheduledAt (UTC, e.g. 2026-11-07T10:00:00.1234567Z) of the job in the query string."
     });
+
+    /// <summary>The longest period of the history and the finished batches: the rows are read within it.</summary>
+    private static readonly TimeSpan MaxPeriod = TimeSpan.FromDays(31);
+
+    /// <summary>
+    /// The period's UTC times: by default the last 24 hours, and no end (until now, and the rows that arrive later). Invalid if it
+    /// doesn't start before its end, or is longer than <see cref="MaxPeriod"/>.
+    /// </summary>
+    private static bool TryGetPeriod(DateTime? from, DateTime? to, out (DateTime From, DateTime? To) period)
+    {
+        var now = DateTime.UtcNow;
+        var start = from?.ToUniversalTime() ?? now.AddHours(-24);
+        var end = to?.ToUniversalTime();
+
+        period = (start, end);
+
+        return (end ?? now) > start && (end ?? now) - start <= MaxPeriod;
+    }
+
+    private static IResult PeriodInvalid() =>
+        Results.BadRequest(new { message = "The period (from, to) must start before it ends, and be at most 31 days." });
 
     private static bool TryParseCategory(string? value, out HistoryCategory category)
     {

@@ -151,6 +151,23 @@ WHERE [{ColLeaser}] = {{0}}
 ", parameters.ToArray());
         }
 
+        // the recursive part can't have an aggregate, TOP or a subquery: the first row by ROW_NUMBER instead, which SQL Server reads with a
+        // seek and stops after it (Paul White's "superfast DISTINCT")
+        public string JobQueuesSql => $@"
+WITH q (v) AS (
+  SELECT MIN([{ColQueue}]) FROM [{XactJobSchema}].[{XactJobTable}]
+  UNION ALL
+  SELECT r.v
+  FROM (
+    SELECT [{ColQueue}] AS v, ROW_NUMBER() OVER (ORDER BY [{ColQueue}]) AS rn
+    FROM [{XactJobSchema}].[{XactJobTable}]
+    JOIN q ON q.v < [{ColQueue}]
+  ) AS r
+  WHERE r.rn = 1
+)
+SELECT v AS [Value] FROM q WHERE v IS NOT NULL
+OPTION (MAXRECURSION 0)";
+
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
             var tableLockName = $"[{XactJobSchema}].[{XactJobPeriodicTable}]";

@@ -36,18 +36,31 @@ public abstract class XactJobsPageModel : PageModel
     protected virtual bool HasQueueFilter => true;
 
     /// <summary>
+    /// Whether the queue filter has "All": not on the scheduled jobs, which are read one queue at a time.
+    /// </summary>
+    public virtual bool AllowsAllQueues => true;
+
+    /// <summary>
     /// The table of the current page, relative to the current URL.
     /// </summary>
-    public string TableUrl => "?handler=Table" + PagingQuery(PageNumber);
+    public virtual string TableUrl => "?handler=Table" + PagingQuery(PageNumber);
 
     /// <summary>
     /// The query of a page of the table, relative to the current URL.
     /// </summary>
     public string PagingQuery(int pageNumber)
     {
-        var query = "&p=" + pageNumber.ToString(CultureInfo.InvariantCulture);
+        return "&p=" + pageNumber.ToString(CultureInfo.InvariantCulture) + FilterQuery;
+    }
 
-        return string.IsNullOrEmpty(Queue) ? query : query + "&queue=" + Uri.EscapeDataString(Queue);
+    /// <summary>
+    /// The query of the page's filters, each one starting with &amp;.
+    /// </summary>
+    public virtual string FilterQuery => QueryPart("queue", Queue);
+
+    protected static string QueryPart(string name, string? value)
+    {
+        return string.IsNullOrEmpty(value) ? "" : "&" + name + "=" + Uri.EscapeDataString(value);
     }
 
     public string ApiUrl(string path) => Url.Content("~" + Options.ApiBasePath + path);

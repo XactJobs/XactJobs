@@ -150,6 +150,16 @@ WHERE {ColLeaser} = {{0}}
             return string.Join(", ", placeholders);
         }
 
+        public string JobQueuesSql => $@"
+WITH RECURSIVE q (v) AS (
+  SELECT MIN({ColQueue}) FROM {XactJobSchema}_{XactJobTable}
+  UNION ALL
+  SELECT (SELECT MIN({ColQueue}) FROM {XactJobSchema}_{XactJobTable} WHERE {ColQueue} > q.v)
+  FROM q
+  WHERE q.v IS NOT NULL
+)
+SELECT v AS Value FROM q WHERE v IS NOT NULL";
+
         public Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
             return Task.CompletedTask;

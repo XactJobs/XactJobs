@@ -2,3 +2,4 @@
 XactJobs.XactJobsOptions<TDbContext>.UnresolvedJobGracePeriodInHours.get -> int
 XactJobs.XactJobsOptions<TDbContext>.UnresolvedJobGracePeriodInHours.set -> void
 XactJobs.XactJobsOptionsBuilder<TDbContext>.WithUnresolvedJobGracePeriodInHours(int hours) -> XactJobs.XactJobsOptionsBuilder<TDbContext!>!
+static XactJobs.DbContextExtensions.JobGetQueuesAsync(this Microsoft.EntityFrameworkCore.DbContext! dbContext, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<string!>!>!

@@ -89,6 +89,67 @@ document.addEventListener('htmx:afterSwap', function (evt) {
 // the page itself, and content swapped in another way (outerHTML replaces the target)
 htmx.onLoad(xactJobsLocalizeTimes);
 
+// Submits a page's filters (_Filters.cshtml). The period's times are worked out here, in the browser's time zone, and sent as UTC
+// times (from, to); the last 24 hours, the default, are worked out by the server at each request, so they move with the time
+function xactJobsSubmitFilters(form) {
+    const period = form.elements['period'];
+
+    if (period) {
+        const day = form.elements['day'];
+        day.hidden = period.value !== 'day';
+
+        const range = xactJobsPeriodRange(period.value, day.value);
+
+        // a day without a date yet: wait for one
+        if (period.value === 'day' && !range) {
+            day.focus();
+            return;
+        }
+
+        form.elements['from'].value = range ? range.from.toISOString() : '';
+        form.elements['to'].value = range ? range.to.toISOString() : '';
+    }
+
+    // without the empty fields in the URL
+    Array.from(form.elements).forEach(function (field) {
+        if (field.name && !field.value) field.disabled = true;
+    });
+
+    form.submit();
+}
+
+// The local start (included) and end (excluded) of a period, or null for the last 24 hours. Weeks start on Monday
+function xactJobsPeriodRange(period, day) {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    // by the calendar, so a day with a daylight saving change still ends at midnight
+    function addDays(date, days) {
+        const result = new Date(date);
+        result.setDate(result.getDate() + days);
+        return result;
+    }
+
+    switch (period) {
+        case 'today':
+            return { from: today, to: addDays(today, 1) };
+        case 'yesterday':
+            return { from: addDays(today, -1), to: today };
+        case 'week': {
+            const monday = addDays(today, -((today.getDay() + 6) % 7));
+            return { from: monday, to: addDays(monday, 7) };
+        }
+        case 'day': {
+            const parts = (day || '').split('-').map(Number);
+            if (parts.length !== 3 || parts.some(isNaN)) return null;
+            const start = new Date(parts[0], parts[1] - 1, parts[2]);
+            return { from: start, to: addDays(start, 1) };
+        }
+        default:
+            return null;
+    }
+}
+
 // Marks the chosen theme in the switch, and shows its icon on the switch's button
 function xactJobsShowThemeChoice() {
     if (!window.xactJobsTheme) return;

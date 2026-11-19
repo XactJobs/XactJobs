@@ -48,8 +48,14 @@ public partial class DashboardWebTests : IAsyncDisposable
     [InlineData("/XactJobs/periodic")]
     [InlineData("/XactJobs/periodic?handler=Table&p=1")]
     [InlineData("/api/XactJobs/stats")]
-    [InlineData("/api/XactJobs/jobs")]
+    [InlineData("/XactJobs/scheduled?queue=emails")]
+    [InlineData("/XactJobs/history/succeeded?period=today&from=2020-01-01T00:00:00.000Z&to=2020-01-02T00:00:00.000Z")]
+    [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=o638675712000000000_42")]
+    [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=not-a-cursor")]
+    [InlineData("/api/XactJobs/jobs?queue=" + QueueNames.Default)]
+    [InlineData("/api/XactJobs/queues")]
     [InlineData("/api/XactJobs/history?category=failed")]
+    [InlineData("/api/XactJobs/history?category=succeeded&from=2020-01-01T00:00:00Z&to=2020-01-02T00:00:00Z&cursor=n1_1")]
     [InlineData("/api/XactJobs/periodic")]
     public async Task Pages_RenderWithData(string url)
     {
@@ -76,7 +82,10 @@ public partial class DashboardWebTests : IAsyncDisposable
     [InlineData("/XactJobs/batch/" + SeedBatch + "?handler=Table&p=1")]
     [InlineData("/XactJobs/batch/00000000-0000-0000-0000-000000000001")]
     [InlineData("/XactJobs/history/skipped")]
-    [InlineData("/api/XactJobs/batches?state=finished")]
+    [InlineData("/XactJobs/batches/finished?period=yesterday&from=2020-01-01T00:00:00.000Z&to=2020-01-02T00:00:00.000Z")]
+    [InlineData("/XactJobs/batches/finished?handler=Table&cursor=o638675712000000000_42")]
+    [InlineData("/api/XactJobs/batches/active")]
+    [InlineData("/api/XactJobs/batches/finished")]
     [InlineData("/api/XactJobs/batches/" + SeedBatch)]
     public async Task BatchPages_RenderWithData(string url)
     {
@@ -129,11 +138,13 @@ public partial class DashboardWebTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task BatchApi_RejectsAnUnknownState_AndAnUnknownBatchIsNotFound()
+    public async Task Api_RejectsScheduledJobsWithoutAQueue_AndInvalidPeriods_AndAnUnknownBatchIsNotFound()
     {
         var client = await StartAsync(o => o.AllowAnonymous());
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/batches?state=nope")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/jobs")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/history?category=failed&from=2020-01-02T00:00:00Z&to=2020-01-01T00:00:00Z")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/batches/finished?from=2020-01-01T00:00:00Z&to=2020-03-01T00:00:00Z")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/XactJobs/batches/" + Guid.NewGuid())).StatusCode);
     }
 
@@ -223,16 +234,37 @@ public partial class DashboardWebTests : IAsyncDisposable
             return await db.SaveChangesAsync();
         });
 
-        var all = await client.GetStringAsync("/XactJobs/scheduled");
+        // one queue at a time, the default queue first: no "All"
+        var initial = await client.GetStringAsync("/XactJobs/scheduled");
         var emails = await client.GetStringAsync("/XactJobs/scheduled?queue=emails");
 
-        Assert.Contains("<option value=\"emails\">", all);
+        Assert.Contains("<option value=\"emails\">", initial);
+        Assert.Contains($"<option value=\"{QueueNames.Default}\" selected=\"selected\">", initial);
+        Assert.DoesNotContain("<option value=\"\">All</option>", initial);
         Assert.Contains("<option value=\"emails\" selected=\"selected\">", emails);
-        Assert.Equal(3, Regex.Matches(all, "<code>\\d+</code>").Count);
+        Assert.Equal(2, Regex.Matches(initial, "<code>\\d+</code>").Count);
         Assert.Single(Regex.Matches(emails, "<code>\\d+</code>"));
 
         // the table keeps the filter when it refreshes
         Assert.Contains("?handler=Table&amp;p=1&amp;queue=emails", emails);
+    }
+
+    [Fact]
+    public async Task HistoryPage_HasThePeriodFilter_AndTheTableKeepsThePeriod()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedAsync();
+
+        var lastDay = await client.GetStringAsync("/XactJobs/history/succeeded");
+        var yesterday = await client.GetStringAsync("/XactJobs/history/succeeded?period=yesterday&from=2020-01-01T00:00:00.000Z&to=2020-01-02T00:00:00.000Z");
+
+        Assert.Contains("<option value=\"24h\" selected=\"selected\">Last 24 hours</option>", lastDay);
+        Assert.Contains("<option value=\"yesterday\" selected=\"selected\">Yesterday</option>", yesterday);
+
+        // nothing in 2020: the period is applied, and the table refreshes with it
+        Assert.Contains("No jobs found in this period", yesterday);
+        Assert.Contains("?handler=Table&amp;period=yesterday&amp;from=2020-01-01T00%3A00%3A00.000Z&amp;to=2020-01-02T00%3A00%3A00.000Z", yesterday);
     }
 
     [Fact]

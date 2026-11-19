@@ -16,6 +16,11 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     public const int MaxPageSize = 500;
 
     /// <summary>
+    /// The most rows the lists count: a count reads every row it counts, and a backlog or a long history can have millions.
+    /// </summary>
+    public const int MaxCount = 10_000;
+
+    /// <summary>
     /// The most intervals of the chart: each is a query.
     /// </summary>
     public const int MaxChartIntervals = 200;
@@ -39,33 +44,33 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         var now = DateTime.UtcNow;
         var last24h = now.AddHours(-24);
 
-        var processingJobs = await db.Set<XactJob>()
-            .CountAsync(j => j.LeasedUntil != null && j.LeasedUntil >= now, ct);
-
-        var dueJobs = await db.Set<XactJob>()
-            .CountAsync(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt <= now, ct);
-
         var awaiting = XactJobBase.AwaitingBatchScheduledAt;
 
-        var scheduledJobs = await db.Set<XactJob>()
-            .CountAsync(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt > now && j.ScheduledAt != awaiting, ct);
-
-        var awaitingContinuations = await db.Set<XactJob>()
-            .CountAsync(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt == awaiting, ct);
+        // one read of each table, with a count per condition (COUNT(CASE WHEN ... THEN 1 END)). No rows: no group
+        var jobs = await db.Set<XactJob>()
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Processing = g.Count(j => j.LeasedUntil != null && j.LeasedUntil >= now),
+                Due = g.Count(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt <= now),
+                Scheduled = g.Count(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt > now && j.ScheduledAt != awaiting),
+                Awaiting = g.Count(j => (j.LeasedUntil == null || j.LeasedUntil < now) && j.ScheduledAt == awaiting),
+            })
+            .FirstOrDefaultAsync(ct);
 
         var historyLast24h = await db.Set<XactJobHistory>()
             .Where(h => h.ProcessedAt >= last24h)
-            .GroupBy(h => h.Status)
-            .Select(g => new { Status = g.Key, Count = g.Count() })
-            .ToListAsync(ct);
+            .GroupBy(_ => 1)
+            .Select(g => new
+            {
+                Succeeded = g.Count(h => h.Status == XactJobStatus.Completed),
+                Failed = g.Count(h => h.Status == XactJobStatus.Cancelled && h.ErrorStackTrace != null),
+                Retried = g.Count(h => h.Status == XactJobStatus.Failed),
+            })
+            .FirstOrDefaultAsync(ct);
 
-        var cancelledFromDashboard = await ApplyCategory(db.Set<XactJobHistory>(), HistoryCategory.Cancelled)
-            .CountAsync(h => h.ProcessedAt >= last24h, ct);
-
-        int CountOf(XactJobStatus status) => historyLast24h.FirstOrDefault(x => x.Status == status)?.Count ?? 0;
-
-        var succeeded = CountOf(XactJobStatus.Completed);
-        var failed = CountOf(XactJobStatus.Cancelled) - cancelledFromDashboard;
+        var succeeded = historyLast24h?.Succeeded ?? 0;
+        var failed = historyLast24h?.Failed ?? 0;
         var finished = succeeded + failed;
 
         // a list, because the Oracle provider can't translate IsActive (it has a value converter) in other ways
@@ -75,13 +80,13 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         return new DashboardStatsDto
         {
-            DueJobs = dueJobs,
-            ScheduledJobs = scheduledJobs,
-            AwaitingContinuations = awaitingContinuations,
-            ProcessingJobs = processingJobs,
+            DueJobs = jobs?.Due ?? 0,
+            ScheduledJobs = jobs?.Scheduled ?? 0,
+            AwaitingContinuations = jobs?.Awaiting ?? 0,
+            ProcessingJobs = jobs?.Processing ?? 0,
             SucceededLast24h = succeeded,
             FailedLast24h = failed,
-            RetriedLast24h = CountOf(XactJobStatus.Failed),
+            RetriedLast24h = historyLast24h?.Retried ?? 0,
             PeriodicJobsActive = periodicActive.Count(x => x),
             PeriodicJobsInactive = periodicActive.Count(x => !x),
             SuccessRateLast24h = finished > 0 ? (double)succeeded / finished * 100 : 100
@@ -148,7 +153,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
             queues.UnionWith(jobsOptions.IsolatedQueues.Keys);
         }
 
-        queues.UnionWith(await db.Set<XactJob>().Select(j => j.Queue).Distinct().ToListAsync(ct));
+        // one index seek per queue: a DISTINCT would read the whole job table
+        queues.UnionWith(await db.JobGetQueuesAsync(ct));
         queues.UnionWith(await db.Set<XactJobPeriodic>().Select(p => p.Queue).Distinct().ToListAsync(ct));
 
         // the default queue first
@@ -156,18 +162,16 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     }
 
     public async Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
-        int page, int pageSize, string? queue = null, CancellationToken ct = default)
+        string queue, int page, int pageSize, CancellationToken ct = default)
     {
+        ArgumentException.ThrowIfNullOrEmpty(queue);
+
         (page, pageSize) = Normalize(page, pageSize);
 
-        var query = db.Set<XactJob>().AsNoTracking();
+        // one queue: the primary key starts with it, so the rows are read in their order, without sorting the whole table
+        var query = db.Set<XactJob>().AsNoTracking().Where(j => j.Queue == queue);
 
-        if (!string.IsNullOrEmpty(queue))
-        {
-            query = query.Where(j => j.Queue == queue);
-        }
-
-        var totalCount = await query.CountAsync(ct);
+        var (totalCount, isCapped) = await CountAsync(query, ct);
 
         var items = await query
             .OrderBy(j => j.ScheduledAt)
@@ -181,6 +185,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         {
             Items = await WithBatchJobsLeftAsync(items, ct),
             TotalCount = totalCount,
+            IsTotalCountCapped = isCapped,
             Page = page,
             PageSize = pageSize
         };
@@ -255,35 +260,35 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         return await RunNowAsync(job, $"Job #{id}", ct);
     }
 
-    public async Task<PagedResultDto<JobHistoryDto>> GetHistoryAsync(
-        HistoryCategory category, int page, int pageSize, string? queue = null, CancellationToken ct = default)
+    public async Task<CursorPageDto<JobHistoryDto>> GetHistoryAsync(
+        HistoryCategory category, DateTime from, DateTime? to, string? queue, string? cursor, int pageSize, CancellationToken ct = default)
     {
-        (page, pageSize) = Normalize(page, pageSize);
+        (_, pageSize) = Normalize(1, pageSize);
 
-        var query = ApplyCategory(db.Set<XactJobHistory>().AsNoTracking(), category);
+        // the period first: the index of the processed time
+        var query = InPeriod(db.Set<XactJobHistory>().AsNoTracking(), from, to);
+
+        query = ApplyCategory(query, category);
 
         if (!string.IsNullOrEmpty(queue))
         {
             query = query.Where(h => h.Queue == queue);
         }
 
-        var totalCount = await query.CountAsync(ct);
+        var (totalCount, isCapped) = await CountAsync(query, ct);
 
-        var items = await query
-            .OrderByDescending(h => h.ProcessedAt)
-            .ThenByDescending(h => h.Id)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(ToJobHistoryDto)
-            .ToListAsync(ct);
+        var page = await ReadPageAsync(PageCursor.Parse(cursor), pageSize,
+            newest: () => query.OrderByDescending(h => h.ProcessedAt).ThenByDescending(h => h.Id),
+            olderThan: (at, id) => query
+                .Where(h => h.ProcessedAt <= at && (h.ProcessedAt < at || h.Id < id))
+                .OrderByDescending(h => h.ProcessedAt).ThenByDescending(h => h.Id),
+            newerThan: (at, id) => query
+                .Where(h => h.ProcessedAt >= at && (h.ProcessedAt > at || h.Id > id))
+                .OrderBy(h => h.ProcessedAt).ThenBy(h => h.Id),
+            read: (rows, count) => rows.Take(count).Select(ToJobHistoryDto).ToListAsync(ct),
+            keyOf: h => (h.ProcessedAt, h.Id));
 
-        return new PagedResultDto<JobHistoryDto>
-        {
-            Items = items,
-            TotalCount = totalCount,
-            Page = page,
-            PageSize = pageSize
-        };
+        return page with { TotalCount = totalCount, IsTotalCountCapped = isCapped };
     }
 
     public async Task<JobHistoryDto?> GetJobHistoryByIdAsync(long id, CancellationToken ct = default)
@@ -605,15 +610,6 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         return replaced ? null : ActionResultDto.Conflict($"Job #{job.Id} started running or finished meanwhile.");
     }
 
-    public async Task<PagedResultDto<BatchDto>> GetBatchesAsync(BatchState state, int page, int pageSize, CancellationToken ct = default)
-    {
-        (page, pageSize) = Normalize(page, pageSize);
-
-        return state == BatchState.Active
-            ? await GetActiveBatchesAsync(page, pageSize, ct)
-            : await GetFinishedBatchesAsync(page, pageSize, ct);
-    }
-
     public async Task<BatchDetailsDto?> GetBatchAsync(Guid id, CancellationToken ct = default)
     {
         var jobs = await db.Set<XactJob>()
@@ -675,17 +671,16 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         };
     }
 
-    /// <summary>
-    /// Batches with jobs left, the earliest first: the ones whose jobs are all continuations that wait for another batch come last.
-    /// </summary>
-    private async Task<PagedResultDto<BatchDto>> GetActiveBatchesAsync(int page, int pageSize, CancellationToken ct)
+    public async Task<PagedResultDto<BatchDto>> GetActiveBatchesAsync(int page, int pageSize, CancellationToken ct = default)
     {
+        (page, pageSize) = Normalize(page, pageSize);
+
         var groups = db.Set<XactJob>()
             .Where(j => j.BatchId != null)
             .GroupBy(j => j.BatchId)
             .Select(g => new { Id = g.Key, FirstAt = g.Min(j => j.ScheduledAt) });
 
-        var totalCount = await groups.CountAsync(ct);
+        var (totalCount, isCapped) = await CountAsync(groups, ct);
 
         var ids = await groups
             .OrderBy(g => g.FirstAt)
@@ -701,42 +696,134 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         {
             Items = ids.Select(id => summaries[id]).ToList(),
             TotalCount = totalCount,
+            IsTotalCountCapped = isCapped,
             Page = page,
             PageSize = pageSize
         };
     }
 
-    /// <summary>
-    /// Batches without jobs left, the latest finished first.
-    /// </summary>
-    private async Task<PagedResultDto<BatchDto>> GetFinishedBatchesAsync(int page, int pageSize, CancellationToken ct)
+    public async Task<CursorPageDto<BatchDto>> GetFinishedBatchesAsync(
+        DateTime from, DateTime? to, string? cursor, int pageSize, CancellationToken ct = default)
     {
+        (_, pageSize) = Normalize(1, pageSize);
+
         var jobs = db.Set<XactJob>();
+        var history = db.Set<XactJobHistory>();
 
-        var groups = db.Set<XactJobHistory>()
-            .Where(h => h.BatchId != null && !jobs.Any(j => j.BatchId == h.BatchId))
+        // the batches with a row in the period (the index of the processed time), then all the rows of each (the batch index): a
+        // batch is in the period if its last row is, and its rows outside of it still count
+        var batchesInPeriod = InPeriod(history, from, to)
+            .Where(h => h.BatchId != null)
+            .Select(h => h.BatchId);
+
+        var groups = history
+            .Where(h => h.BatchId != null && batchesInPeriod.Contains(h.BatchId) && !jobs.Any(j => j.BatchId == h.BatchId))
             .GroupBy(h => h.BatchId)
-            .Select(g => new { Id = g.Key, LastAt = g.Max(h => h.ProcessedAt) });
+            // the smallest job id tells batches with the same last time apart: a job is in one batch
+            .Select(g => new BatchKey { Id = g.Key!.Value, LastAt = g.Max(h => h.ProcessedAt), FirstJobId = g.Min(h => h.Id) });
 
-        var totalCount = await groups.CountAsync(ct);
+        groups = to == null
+            ? groups.Where(g => g.LastAt >= from)
+            : groups.Where(g => g.LastAt >= from && g.LastAt < to);
 
-        var ids = await groups
-            .OrderByDescending(g => g.LastAt)
-            .ThenBy(g => g.Id)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(g => g.Id!.Value)
-            .ToListAsync(ct);
+        var (totalCount, isCapped) = await CountAsync(groups, ct);
 
-        var summaries = await GetBatchSummariesAsync(ids, ct);
+        var page = await ReadPageAsync(PageCursor.Parse(cursor), pageSize,
+            newest: () => groups.OrderByDescending(g => g.LastAt).ThenByDescending(g => g.FirstJobId),
+            olderThan: (at, id) => groups
+                .Where(g => g.LastAt <= at && (g.LastAt < at || g.FirstJobId < id))
+                .OrderByDescending(g => g.LastAt).ThenByDescending(g => g.FirstJobId),
+            newerThan: (at, id) => groups
+                .Where(g => g.LastAt >= at && (g.LastAt > at || g.FirstJobId > id))
+                .OrderBy(g => g.LastAt).ThenBy(g => g.FirstJobId),
+            read: (rows, count) => rows.Take(count).ToListAsync(ct),
+            keyOf: g => (g.LastAt, g.FirstJobId));
 
-        return new PagedResultDto<BatchDto>
+        var summaries = await GetBatchSummariesAsync(page.Items.Select(g => g.Id).ToList(), ct);
+
+        return new CursorPageDto<BatchDto>
         {
-            Items = ids.Select(id => summaries[id]).ToList(),
+            Items = page.Items.Select(g => summaries[g.Id]).ToList(),
             TotalCount = totalCount,
-            Page = page,
-            PageSize = pageSize
+            IsTotalCountCapped = isCapped,
+            PageSize = pageSize,
+            NewerCursor = page.NewerCursor,
+            OlderCursor = page.OlderCursor
         };
+    }
+
+    private sealed class BatchKey
+    {
+        public Guid Id { get; init; }
+        public DateTime LastAt { get; init; }
+        public long FirstJobId { get; init; }
+    }
+
+    /// <summary>The rows processed from <paramref name="from"/>, until <paramref name="to"/> (excluded) if it's set.</summary>
+    private static IQueryable<XactJobHistory> InPeriod(IQueryable<XactJobHistory> query, DateTime from, DateTime? to)
+    {
+        return to == null
+            ? query.Where(h => h.ProcessedAt >= from)
+            : query.Where(h => h.ProcessedAt >= from && h.ProcessedAt < to.Value);
+    }
+
+    /// <summary>The rows, up to <see cref="MaxCount"/>: a count reads every row it counts.</summary>
+    private static async Task<(int Count, bool IsCapped)> CountAsync<T>(IQueryable<T> query, CancellationToken ct)
+    {
+        var count = await query.Take(MaxCount + 1).CountAsync(ct);
+
+        return (Math.Min(count, MaxCount), count > MaxCount);
+    }
+
+    /// <summary>
+    /// A page of rows ordered by a time and an id, newest first, after the row of the cursor: the next older rows, or the next newer
+    /// ones (read oldest first, then reversed). A page of newer rows that reaches the newest ones is the newest page, which shows rows
+    /// that arrive later too, on the next refresh. Reads one row more than the page, to know if there are more.
+    /// </summary>
+    private static async Task<CursorPageDto<T>> ReadPageAsync<TRow, T>(PageCursor? cursor,
+                                                                       int pageSize,
+                                                                       Func<IQueryable<TRow>> newest,
+                                                                       Func<DateTime, long, IQueryable<TRow>> olderThan,
+                                                                       Func<DateTime, long, IQueryable<TRow>> newerThan,
+                                                                       Func<IQueryable<TRow>, int, Task<List<T>>> read,
+                                                                       Func<T, (DateTime At, long Id)> keyOf)
+    {
+        if (cursor is { IsNewer: true } newer)
+        {
+            var rows = await read(newerThan(newer.At, newer.Id), pageSize + 1);
+
+            if (rows.Count > pageSize)
+            {
+                rows.RemoveAt(pageSize);
+                rows.Reverse();
+
+                return new CursorPageDto<T>
+                {
+                    Items = rows,
+                    PageSize = pageSize,
+                    NewerCursor = Cursor(PageCursor.Newer, keyOf(rows[0])),
+                    OlderCursor = Cursor(PageCursor.Older, keyOf(rows[^1]))
+                };
+            }
+
+            cursor = null;
+        }
+
+        var page = await read(cursor is { } older ? olderThan(older.At, older.Id) : newest(), pageSize + 1);
+
+        var hasOlder = page.Count > pageSize;
+
+        if (hasOlder) page.RemoveAt(pageSize);
+
+        return new CursorPageDto<T>
+        {
+            Items = page,
+            PageSize = pageSize,
+            NewerCursor = cursor == null ? null : Cursor(PageCursor.Newer, page.Count > 0 ? keyOf(page[0]) : (cursor.Value.At, cursor.Value.Id)),
+            OlderCursor = hasOlder ? Cursor(PageCursor.Older, keyOf(page[^1])) : null
+        };
+
+        static string Cursor(Func<DateTime, long, PageCursor> create, (DateTime At, long Id) key) => create(key.At, key.Id).ToString();
     }
 
     /// <summary>
