@@ -45,6 +45,13 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Left>lib/net10.0/XactJobs.UI.dll</Left>
+    <Right>lib/net10.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.Int32,System.Int32,System.String,System.Threading.CancellationToken)</Target>
     <Left>lib/net10.0/XactJobs.UI.dll</Left>
     <Right>lib/net10.0/XactJobs.UI.dll</Right>
@@ -60,6 +67,13 @@
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:XactJobs.UI.Services.XactJobsUIService`1.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.Int32,System.Int32,System.String,System.Threading.CancellationToken)</Target>
+    <Left>lib/net10.0/XactJobs.UI.dll</Left>
+    <Right>lib/net10.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.XactJobsUIService`1.GetPeriodicJobsAsync(System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net10.0/XactJobs.UI.dll</Left>
     <Right>lib/net10.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -115,6 +129,13 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Left>lib/net8.0/XactJobs.UI.dll</Left>
+    <Right>lib/net8.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.Int32,System.Int32,System.String,System.Threading.CancellationToken)</Target>
     <Left>lib/net8.0/XactJobs.UI.dll</Left>
     <Right>lib/net8.0/XactJobs.UI.dll</Right>
@@ -130,6 +151,13 @@
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:XactJobs.UI.Services.XactJobsUIService`1.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.Int32,System.Int32,System.String,System.Threading.CancellationToken)</Target>
+    <Left>lib/net8.0/XactJobs.UI.dll</Left>
+    <Right>lib/net8.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.XactJobsUIService`1.GetPeriodicJobsAsync(System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net8.0/XactJobs.UI.dll</Left>
     <Right>lib/net8.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -185,6 +213,13 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Left>lib/net9.0/XactJobs.UI.dll</Left>
+    <Right>lib/net9.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.Int32,System.Int32,System.String,System.Threading.CancellationToken)</Target>
     <Left>lib/net9.0/XactJobs.UI.dll</Left>
     <Right>lib/net9.0/XactJobs.UI.dll</Right>
@@ -200,6 +235,13 @@
   <Suppression>
     <DiagnosticId>CP0002</DiagnosticId>
     <Target>M:XactJobs.UI.Services.XactJobsUIService`1.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.Int32,System.Int32,System.String,System.Threading.CancellationToken)</Target>
+    <Left>lib/net9.0/XactJobs.UI.dll</Left>
+    <Right>lib/net9.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.XactJobsUIService`1.GetPeriodicJobsAsync(System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net9.0/XactJobs.UI.dll</Left>
     <Right>lib/net9.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -227,14 +269,21 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0006</DiagnosticId>
-    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.DateTime,System.Nullable{System.DateTime},System.String,System.String,System.Int32,System.Threading.CancellationToken)</Target>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.DateTime,System.Nullable{System.DateTime},System.String,System.String,System.String,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net10.0/XactJobs.UI.dll</Left>
     <Right>lib/net10.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0006</DiagnosticId>
-    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Left>lib/net10.0/XactJobs.UI.dll</Left>
+    <Right>lib/net10.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0006</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.String,System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net10.0/XactJobs.UI.dll</Left>
     <Right>lib/net10.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -255,14 +304,21 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0006</DiagnosticId>
-    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.DateTime,System.Nullable{System.DateTime},System.String,System.String,System.Int32,System.Threading.CancellationToken)</Target>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.DateTime,System.Nullable{System.DateTime},System.String,System.String,System.String,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net8.0/XactJobs.UI.dll</Left>
     <Right>lib/net8.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0006</DiagnosticId>
-    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Left>lib/net8.0/XactJobs.UI.dll</Left>
+    <Right>lib/net8.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0006</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.String,System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net8.0/XactJobs.UI.dll</Left>
     <Right>lib/net8.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
@@ -283,14 +339,21 @@
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0006</DiagnosticId>
-    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.DateTime,System.Nullable{System.DateTime},System.String,System.String,System.Int32,System.Threading.CancellationToken)</Target>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetHistoryAsync(XactJobs.UI.Services.Models.HistoryCategory,System.DateTime,System.Nullable{System.DateTime},System.String,System.String,System.String,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net9.0/XactJobs.UI.dll</Left>
     <Right>lib/net9.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>
   </Suppression>
   <Suppression>
     <DiagnosticId>CP0006</DiagnosticId>
-    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetPeriodicJobsAsync(System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
+    <Left>lib/net9.0/XactJobs.UI.dll</Left>
+    <Right>lib/net9.0/XactJobs.UI.dll</Right>
+    <IsBaselineSuppression>true</IsBaselineSuppression>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0006</DiagnosticId>
+    <Target>M:XactJobs.UI.Services.IXactJobsUIService.GetScheduledJobsAsync(System.String,System.String,System.Int32,System.Int32,System.Threading.CancellationToken)</Target>
     <Left>lib/net9.0/XactJobs.UI.dll</Left>
     <Right>lib/net9.0/XactJobs.UI.dll</Right>
     <IsBaselineSuppression>true</IsBaselineSuppression>

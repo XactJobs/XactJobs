@@ -36,6 +36,8 @@ public class IndexModel : XactJobsPeriodPageModel
 
     public string CategoryUrl(HistoryCategory category) => PageUrl("/history/" + category.ToString().ToLowerInvariant());
 
+    public override bool HasSearch => true;
+
     protected override async Task LoadAsync(CancellationToken ct)
     {
         Category = Enum.TryParse<HistoryCategory>(CategoryName, ignoreCase: true, out var category) && Enum.IsDefined(category)
@@ -44,6 +46,6 @@ public class IndexModel : XactJobsPeriodPageModel
 
         var (from, to) = GetPeriod();
 
-        Jobs = await Service.GetHistoryAsync(Category, from, to, Queue, Cursor, Options.DefaultPageSize, ct);
+        Jobs = await Service.GetHistoryAsync(Category, from, to, Queue, Search, Cursor, Options.DefaultPageSize, ct);
     }
 }

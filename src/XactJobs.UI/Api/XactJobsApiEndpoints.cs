@@ -77,10 +77,11 @@ internal static class XactJobsApiEndpoints
             [FromQuery] int? page,
             [FromQuery] int? pageSize,
             [FromQuery] string? queue,
+            [FromQuery] string? search,
             CancellationToken ct) =>
             string.IsNullOrEmpty(queue)
                 ? Results.BadRequest(new { message = "The queue is required (see /queues)." })
-                : Results.Ok(await service.GetScheduledJobsAsync(queue, page ?? 1, pageSize ?? options.DefaultPageSize, ct)))
+                : Results.Ok(await service.GetScheduledJobsAsync(queue, search, page ?? 1, pageSize ?? options.DefaultPageSize, ct)))
             .WithName("XactJobsGetScheduledJobs");
 
         group.MapGet("/queues", async (IXactJobsUIService service, CancellationToken ct) =>
@@ -120,6 +121,7 @@ internal static class XactJobsApiEndpoints
             [FromQuery] string? cursor,
             [FromQuery] int? pageSize,
             [FromQuery] string? queue,
+            [FromQuery] string? search,
             CancellationToken ct) =>
         {
             if (!TryParseCategory(category, out var historyCategory))
@@ -130,7 +132,7 @@ internal static class XactJobsApiEndpoints
             if (!TryGetPeriod(from, to, out var period)) return PeriodInvalid();
 
             return Results.Ok(await service.GetHistoryAsync(
-                historyCategory, period.From, period.To, queue, cursor, pageSize ?? options.DefaultPageSize, ct));
+                historyCategory, period.From, period.To, queue, search, cursor, pageSize ?? options.DefaultPageSize, ct));
         }).WithName("XactJobsGetHistory");
 
         group.MapGet("/history/{id:long}", async (
@@ -179,8 +181,10 @@ internal static class XactJobsApiEndpoints
             IXactJobsUIService service,
             [FromQuery] int? page,
             [FromQuery] int? pageSize,
+            [FromQuery] string? search,
             CancellationToken ct) =>
             Results.Ok(await service.GetPeriodicJobsAsync(
+                search,
                 page ?? 1,
                 pageSize ?? options.DefaultPageSize, ct)))
             .WithName("XactJobsGetPeriodicJobs");

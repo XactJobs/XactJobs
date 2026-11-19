@@ -53,6 +53,9 @@ public partial class DashboardWebTests : IAsyncDisposable
     [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=o638675712000000000_42")]
     [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=not-a-cursor")]
     [InlineData("/api/XactJobs/jobs?queue=" + QueueNames.Default)]
+    [InlineData("/api/XactJobs/jobs?queue=" + QueueNames.Default + "&search=type:%20sample")]
+    [InlineData("/api/XactJobs/periodic?search=daily")]
+    [InlineData("/XactJobs/history/succeeded?search=periodic:%20daily")]
     [InlineData("/api/XactJobs/queues")]
     [InlineData("/api/XactJobs/history?category=failed")]
     [InlineData("/api/XactJobs/history?category=succeeded&from=2020-01-01T00:00:00Z&to=2020-01-02T00:00:00Z&cursor=n1_1")]
@@ -265,6 +268,43 @@ public partial class DashboardWebTests : IAsyncDisposable
         // nothing in 2020: the period is applied, and the table refreshes with it
         Assert.Contains("No jobs found in this period", yesterday);
         Assert.Contains("?handler=Table&amp;period=yesterday&amp;from=2020-01-01T00%3A00%3A00.000Z&amp;to=2020-01-02T00%3A00%3A00.000Z", yesterday);
+    }
+
+    [Theory]
+    [InlineData("/XactJobs/scheduled", true)]
+    [InlineData("/XactJobs/history/succeeded", true)]
+    [InlineData("/XactJobs/periodic", true)]
+    [InlineData("/XactJobs/batches", false)]
+    [InlineData("/XactJobs/batches/finished", false)]
+    public async Task ListPages_HaveTheSearch_ExceptTheBatches(string url, bool hasSearch)
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        var page = await client.GetStringAsync(url);
+
+        Assert.Equal(hasSearch, page.Contains("<input type=\"search\" name=\"search\""));
+    }
+
+    [Fact]
+    public async Task Search_NarrowsTheTable_AndTheTableKeepsIt()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedAsync();
+
+        await WithDbAsync(async db =>
+        {
+            db.JobEnqueue<SampleJobs>(x => x.Send("a", 1));
+            return await db.SaveChangesAsync();
+        });
+
+        var all = await client.GetStringAsync("/XactJobs/scheduled");
+        var send = await client.GetStringAsync("/XactJobs/scheduled?search=method%3A%20SEND");
+
+        Assert.True(Regex.Matches(all, "<code>\\d+</code>").Count > 1);
+        Assert.Single(Regex.Matches(send, "<code>\\d+</code>"));
+        Assert.Contains("value=\"method: SEND\"", send);
+        Assert.Contains("&amp;search=method%3A%20SEND", send);
     }
 
     [Fact]

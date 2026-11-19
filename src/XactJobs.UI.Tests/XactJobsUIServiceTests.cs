@@ -46,8 +46,8 @@ public class XactJobsUIServiceTests : IDisposable
         Assert.Equal($"{XactJobsUIService<UiTestDbContext>.CancelledMessage} by alice", history.ErrorMessage);
         Assert.Null(history.ErrorStackTrace);
 
-        var cancelled = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Cancelled, DateTime.UtcNow.AddDays(-1), null, null, null, 20));
-        var failed = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Failed, DateTime.UtcNow.AddDays(-1), null, null, null, 20));
+        var cancelled = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Cancelled, DateTime.UtcNow.AddDays(-1), null, null, null, null, 20));
+        var failed = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Failed, DateTime.UtcNow.AddDays(-1), null, null, null, null, 20));
 
         Assert.Equal(jobId, Assert.Single(cancelled.Items).Id);
         Assert.Empty(failed.Items);
@@ -183,14 +183,14 @@ public class XactJobsUIServiceTests : IDisposable
 
         await WithServiceAsync(s => s.SetPeriodicJobActiveAsync(PeriodicId, false));
 
-        var paused = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(1, 20))).Items);
+        var paused = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(null, 1, 20))).Items);
 
         Assert.False(paused.IsActive);
         Assert.Null(paused.NextRunAt);
 
         await WithServiceAsync(s => s.SetPeriodicJobActiveAsync(PeriodicId, true));
 
-        var resumed = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(1, 20))).Items);
+        var resumed = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(null, 1, 20))).Items);
 
         Assert.True(resumed.IsActive);
         Assert.NotNull(resumed.NextRunAt);
@@ -269,7 +269,7 @@ public class XactJobsUIServiceTests : IDisposable
         await AddHistoryAsync(5, XactJobStatus.Skipped);
 
         async Task<long> SingleIdAsync(HistoryCategory category) =>
-            Assert.Single((await WithServiceAsync(s => s.GetHistoryAsync(category, DateTime.UtcNow.AddDays(-1), null, null, null, 20))).Items).Id;
+            Assert.Single((await WithServiceAsync(s => s.GetHistoryAsync(category, DateTime.UtcNow.AddDays(-1), null, null, null, null, 20))).Items).Id;
 
         Assert.Equal(1, await SingleIdAsync(HistoryCategory.Succeeded));
         Assert.Equal(2, await SingleIdAsync(HistoryCategory.Failed));
@@ -317,7 +317,7 @@ public class XactJobsUIServiceTests : IDisposable
         await AddHistoryAsync(5, XactJobStatus.Completed, processedAt: at.AddMinutes(4));
 
         Task<CursorPageDto<JobHistoryDto>> PageAsync(string? cursor) =>
-            WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddDays(-1), null, null, cursor, 2));
+            WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddDays(-1), null, null, null, cursor, 2));
 
         var first = await PageAsync(null);
         var second = await PageAsync(first.OlderCursor);
@@ -352,8 +352,8 @@ public class XactJobsUIServiceTests : IDisposable
         await AddHistoryAsync(1, XactJobStatus.Completed, processedAt: DateTime.UtcNow.AddHours(-3));
         await AddHistoryAsync(2, XactJobStatus.Completed, processedAt: DateTime.UtcNow.AddHours(-30));
 
-        var lastDay = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddHours(-24), null, null, null, 20));
-        var dayBefore = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddHours(-48), DateTime.UtcNow.AddHours(-24), null, null, 20));
+        var lastDay = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddHours(-24), null, null, null, null, 20));
+        var dayBefore = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddHours(-48), DateTime.UtcNow.AddHours(-24), null, null, null, 20));
 
         Assert.Equal([1], lastDay.Items.Select(h => h.Id));
         Assert.Equal([2], dayBefore.Items.Select(h => h.Id));
@@ -374,8 +374,8 @@ public class XactJobsUIServiceTests : IDisposable
             await db.SaveChangesAsync();
         }
 
-        var jobs = await WithServiceAsync(s => s.GetScheduledJobsAsync(QueueNames.Default, 1, 20));
-        var emails = await WithServiceAsync(s => s.GetScheduledJobsAsync("emails", 1, 20));
+        var jobs = await WithServiceAsync(s => s.GetScheduledJobsAsync(QueueNames.Default, null, 1, 20));
+        var emails = await WithServiceAsync(s => s.GetScheduledJobsAsync("emails", null, 1, 20));
 
         Assert.Equal((XactJobsUIService<UiTestDbContext>.MaxCount, true), (jobs.TotalCount, jobs.IsTotalCountCapped));
         Assert.Equal((1, false), (emails.TotalCount, emails.IsTotalCountCapped));
@@ -424,11 +424,31 @@ public class XactJobsUIServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Search_IgnoresCase_AndTakesWildcardsAsText()
+    {
+        await using (var db = CreateDb())
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(1), "App.EmailSender, App", "Send(System.String)", "[]", QueueNames.Default));
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(2), "App.Cleanup, App", "Purge50%()", "[]", QueueNames.Default, "Nightly_Purge", Daily, 99));
+
+            await db.SaveChangesAsync();
+        }
+
+        async Task<string[]> SearchAsync(string search) =>
+            [.. (await WithServiceAsync(s => s.GetScheduledJobsAsync(QueueNames.Default, search, 1, 20))).Items.Select(j => j.MethodName)];
+
+        Assert.Equal(["Send(System.String)"], await SearchAsync("TYPE: email"));
+        Assert.Equal(["Purge50%()"], await SearchAsync("%("));
+        Assert.Equal(["Purge50%()"], await SearchAsync("periodic: _p"));
+        Assert.Empty(await SearchAsync("method: _s"));
+    }
+
+    [Fact]
     public async Task Paging_StartsAtTheFirstPage_AndLimitsThePageSize()
     {
         await AddJobAsync(DateTime.UtcNow);
 
-        var result = await WithServiceAsync(s => s.GetScheduledJobsAsync(QueueNames.Default, 0, 1_000_000));
+        var result = await WithServiceAsync(s => s.GetScheduledJobsAsync(QueueNames.Default, null, 0, 1_000_000));
 
         Assert.Equal(1, result.Page);
         Assert.Equal(XactJobsUIService<UiTestDbContext>.MaxPageSize, result.PageSize);
@@ -489,7 +509,7 @@ public class XactJobsUIServiceTests : IDisposable
     {
         var (batch, continuation) = await AddBatchAsync();
 
-        var jobs = (await WithServiceAsync(s => s.GetScheduledJobsAsync(QueueNames.Default, 1, 20))).Items;
+        var jobs = (await WithServiceAsync(s => s.GetScheduledJobsAsync(QueueNames.Default, null, 1, 20))).Items;
 
         var waiting = Assert.Single(jobs, j => j.IsAwaitingBatch);
 

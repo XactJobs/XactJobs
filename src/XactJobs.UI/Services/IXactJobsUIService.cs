@@ -17,10 +17,10 @@ public interface IXactJobsUIService
 
     /// <summary>
     /// The pending and running jobs of one queue, the earliest scheduled first, read in the order of the primary key. The count
-    /// stops at <c>MaxCount</c>.
+    /// stops at <c>MaxCount</c>. See <see cref="GetHistoryAsync"/> for <paramref name="search"/>.
     /// </summary>
     Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
-        string queue, int page, int pageSize, CancellationToken ct = default);
+        string queue, string? search, int page, int pageSize, CancellationToken ct = default);
 
     /// <summary>
     /// A pending or running job, by its primary key (see <see cref="JobKey"/>).
@@ -42,9 +42,14 @@ public interface IXactJobsUIService
     /// The history of a category processed from <paramref name="from"/>, until <paramref name="to"/> (excluded) if it's set, the
     /// latest first, a page at a time after the row of the <paramref name="cursor"/> (null, or text that isn't a cursor: the latest
     /// page). The count stops at <c>MaxCount</c>.
+    /// <para>
+    /// <paramref name="search"/> narrows the list to the rows whose type, method or periodic job contains the text, ignoring case, or
+    /// only one of them with <c>type:</c>, <c>method:</c> or <c>periodic:</c> before it (e.g. <c>method: send</c>). Null or empty:
+    /// no search. It can't use an index: the database reads the rows of the list (the queue, the period) until it fills a page.
+    /// </para>
     /// </summary>
     Task<CursorPageDto<JobHistoryDto>> GetHistoryAsync(
-        HistoryCategory category, DateTime from, DateTime? to, string? queue, string? cursor, int pageSize, CancellationToken ct = default);
+        HistoryCategory category, DateTime from, DateTime? to, string? queue, string? search, string? cursor, int pageSize, CancellationToken ct = default);
     Task<JobHistoryDto?> GetJobHistoryByIdAsync(long id, CancellationToken ct = default);
 
     /// <summary>
@@ -73,9 +78,11 @@ public interface IXactJobsUIService
     /// </summary>
     Task<BatchDetailsDto?> GetBatchAsync(Guid id, CancellationToken ct = default);
 
-    // Periodic Jobs
+    /// <summary>
+    /// The periodic jobs, by id. See <see cref="GetHistoryAsync"/> for <paramref name="search"/>: the periodic job is the id.
+    /// </summary>
     Task<PagedResultDto<PeriodicJobDto>> GetPeriodicJobsAsync(
-        int page, int pageSize, CancellationToken ct = default);
+        string? search, int page, int pageSize, CancellationToken ct = default);
     Task<PeriodicJobDto?> GetPeriodicJobByIdAsync(string id, CancellationToken ct = default);
     Task<ActionResultDto> SetPeriodicJobActiveAsync(string id, bool isActive, CancellationToken ct = default);
 

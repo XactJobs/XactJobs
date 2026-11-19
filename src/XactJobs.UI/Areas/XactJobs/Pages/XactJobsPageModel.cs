@@ -29,6 +29,16 @@ public abstract class XactJobsPageModel : PageModel
     public string? Queue { get; set; }
 
     /// <summary>
+    /// The search: the rows whose type, method or periodic job contains the text, or only one of them with <c>type:</c>,
+    /// <c>method:</c> or <c>periodic:</c>. Parsed by the service, in the database's query.
+    /// </summary>
+    [BindProperty(SupportsGet = true)]
+    public string? Search { get; set; }
+
+    /// <summary>Whether the page has the search field.</summary>
+    public virtual bool HasSearch => false;
+
+    /// <summary>
     /// The queues to filter by, or null if the page has no queue filter.
     /// </summary>
     public IReadOnlyList<string>? Queues { get; private set; }
@@ -56,7 +66,7 @@ public abstract class XactJobsPageModel : PageModel
     /// <summary>
     /// The query of the page's filters, each one starting with &amp;.
     /// </summary>
-    public virtual string FilterQuery => QueryPart("queue", Queue);
+    public virtual string FilterQuery => QueryPart("queue", Queue) + (HasSearch ? QueryPart("search", Search) : "");
 
     protected static string QueryPart(string name, string? value)
     {

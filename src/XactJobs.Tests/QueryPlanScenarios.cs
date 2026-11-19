@@ -95,7 +95,7 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
             var service = new XactJobsUIService<TestDbContext>(db);
 
             // the Periodic page: the runs of the listed periodic jobs
-            Assert.Equal(PeriodicJobs, (await service.GetPeriodicJobsAsync(1, 100)).Items.Count);
+            Assert.Equal(PeriodicJobs, (await service.GetPeriodicJobsAsync(null, 1, 100)).Items.Count);
 
             // Trigger: looks for the pending run, and runs it now
             Assert.Equal(ActionStatus.Done, (await service.TriggerPeriodicJobAsync("periodic-2")).Status);
@@ -179,6 +179,50 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
         foreach (var (sql, plan) in plans)
         {
             AssertUsesTheIndex($"(?:{BatchIndex})|(?:{PrimaryKey})", sql, plan);
+        }
+    }
+
+    public async Task ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey()
+    {
+        await AddRowsAsync();
+
+        // Oracle's EXPLAIN PLAN doesn't peek at the parameters: it takes the queue for an average one (here half of the table), and
+        // explains a full scan. Executed, Oracle peeks at the queue, and with a histogram of the queues (its automatic statistics
+        // gather one for a skewed column the queries filter on) reads a small queue through the key
+        if (Provider == Db.Oracle) return;
+
+        // a small queue next to the backlog's: the search reads only its rows (in the backlog's queue, that would be the whole table)
+        await using (var db = CreateDb(null))
+        {
+            for (var i = 0; i < 30; i++)
+            {
+                db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(1).AddSeconds(i), "T", i % 3 == 0 ? "Send()" : "M()", "[]", "small-queue"));
+            }
+
+            await db.SaveChangesAsync();
+
+            await db.Database.ExecuteSqlRawAsync(Statistics);
+        }
+
+        var recorder = new PlanRecorder(IsJobTableQuery);
+
+        await using (var db = CreateDb(recorder))
+        {
+            var jobs = await new XactJobsUIService<TestDbContext>(db).GetScheduledJobsAsync("small-queue", "method: SEND", 1, 20);
+
+            Assert.Equal((10, 10), (jobs.Items.Count, jobs.TotalCount));
+        }
+
+        var plans = await GetPlansAsync(recorder);
+
+        Assert.NotEmpty(plans);
+
+        // SQLite's primary key is the id: its index of the queue and the scheduled time
+        var index = Provider == Db.Sqlite ? @"USING (COVERING )?INDEX ix_job_queue_scheduled_at\b" : PrimaryKey;
+
+        foreach (var (sql, plan) in plans)
+        {
+            AssertUsesTheIndex(index, sql, plan);
         }
     }
 
