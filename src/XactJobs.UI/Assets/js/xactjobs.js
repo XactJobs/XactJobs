@@ -80,7 +80,13 @@ function xactJobsLocalizeTimes(root) {
     });
 }
 
-// runs for the page and for every piece of content htmx swaps in
+// right after htmx swaps content in, before the browser paints it: htmx.onLoad alone runs after the settle delay, so a refreshed
+// table showed its UTC times first, and flickered
+document.addEventListener('htmx:afterSwap', function (evt) {
+    xactJobsLocalizeTimes(evt.detail.target);
+});
+
+// the page itself, and content swapped in another way (outerHTML replaces the target)
 htmx.onLoad(xactJobsLocalizeTimes);
 
 // Marks the chosen theme in the switch, and shows its icon on the switch's button
