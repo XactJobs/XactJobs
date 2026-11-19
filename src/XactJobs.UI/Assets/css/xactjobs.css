@@ -185,3 +185,19 @@ pre::-webkit-scrollbar-thumb:hover {
 .dropdown-item[aria-pressed="true"] {
     font-weight: 600;
 }
+
+/* the search's help: left-aligned, its examples in the tooltip's own colors (the page's code style would hide them) */
+.xj-tooltip-wide {
+    --bs-tooltip-max-width: 18rem;
+}
+
+.xj-tooltip-wide .tooltip-inner {
+    text-align: left;
+}
+
+.xj-tooltip-wide code {
+    color: inherit;
+    background: none;
+    padding: 0;
+    font-weight: 600;
+}

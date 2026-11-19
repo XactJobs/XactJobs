@@ -12,9 +12,17 @@
         @if (Model.HasSearch)
         {
             @* submitted with Enter; searched in the database, within the list's queue or period *@
-            <input type="search" name="search" class="form-control form-control-sm" style="width: 14rem;" value="@Model.Search"
-                   maxlength="200" placeholder="Search" aria-label="Search by type, method or periodic job"
-                   title="The rows whose type, method or periodic job contains the text, ignoring case. Only one of them: type: text, method: text or periodic: text. Press Enter to search." />
+            <div class="input-group input-group-sm" style="width: 16rem;">
+                <input type="search" name="search" class="form-control" value="@Model.Search"
+                       maxlength="200" placeholder="Search" aria-label="Search by type, method or periodic job"
+                       aria-describedby="xj-search-help" />
+                @* the syntax, in a tooltip (xactjobs.js) *@
+                <span id="xj-search-help" class="input-group-text" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="bottom"
+                      data-bs-html="true" data-bs-custom-class="xj-tooltip-wide" aria-label="Search help: type, method or periodic job contains the text, ignoring case; type:, method: or periodic: searches one of them. Press Enter to search."
+                      data-bs-title="Rows whose type, method or periodic job contains the text, ignoring case. Only one of them:<br><code>type: text</code><br><code>method: text</code><br><code>periodic: text</code><br>Press Enter to search.">
+                    <i class="bi bi-question-circle"></i>
+                </span>
+            </div>
         }
         @if (Model.Queues != null)
         {

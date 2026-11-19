@@ -59,6 +59,11 @@ document.addEventListener('DOMContentLoaded', function () {
     });
     xactJobsShowThemeChoice();
 
+    // Bootstrap's tooltips start only when created (the search's help, in the filters, which htmx never swaps)
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+        new bootstrap.Tooltip(el);
+    });
+
     // Error details modal
     const errorModal = document.getElementById('xj-error-modal');
     if (errorModal) {
