@@ -21,6 +21,7 @@ namespace XactJobs.Internal
         public const string Retried = "retried";
         public const string Failed = "failed";
         public const string Interrupted = "interrupted";
+        public const string Deferred = "deferred";
 
         private const string QueueTag = "xactjobs.queue";
         private const string OutcomeTag = "xactjobs.outcome";

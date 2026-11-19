@@ -10,6 +10,9 @@ to run again by the retry strategy. A job that runs out of retries is recorded a
 own, tried up to 3 times, a second apart, if the database closed it (a restart, a failover); if it still can't be saved, the job runs again
 when its lease expires, without counting as a failed attempt. A retry is the same job: it keeps its id, so its attempts have the same id in the history, the logs and the traces.
 
+A job whose type or method the node doesn't have isn't a failed attempt for 24 hours: see
+[Rolling deployments](../jobs/#rolling-deployments).
+
 By default (`DefaultRetryStrategy`) a failed job is retried up to 10 times, waiting longer before each retry:
 
 | Retry | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |

@@ -30,6 +30,13 @@ namespace XactJobs.Internal
         /// <summary>When a retry strategy throws.</summary>
         private static readonly DefaultRetryStrategy FallbackRetryStrategy = new();
 
+        /// <summary>
+        /// How much later a job whose type or method this node doesn't have is moved: by the time it has waited, between these two. So
+        /// a node with the newer version gets it within seconds during a rolling deployment, and at most this late after it.
+        /// </summary>
+        private static readonly TimeSpan MinUnresolvedJobDelay = TimeSpan.FromSeconds(5);
+        private static readonly TimeSpan MaxUnresolvedJobDelay = TimeSpan.FromMinutes(5);
+
         // During a backlog, how long a worker with a batch waits for the batch to finish before it claims again, while fewer jobs
         // wait than it can run
         private static readonly TimeSpan EarlyClaimDelay = TimeSpan.FromSeconds(1);
@@ -69,6 +76,10 @@ namespace XactJobs.Internal
         private readonly XactJobSaveChecker _saveChecker;
         private readonly XactJobHooks _hooks;
         private readonly IXactJobsWorkerGate? _gate;
+        private readonly TimeSpan _unresolvedJobGracePeriod;
+
+        // the job methods this runner didn't find and logged, so that each one is logged once
+        private readonly ConcurrentDictionary<(string TypeName, string MethodName), bool> _unresolvedJobsLogged = new();
         private readonly XactJobsMetrics _metrics;
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger _logger;
@@ -86,6 +97,7 @@ namespace XactJobs.Internal
                              XactJobSaveChecker saveChecker,
                              XactJobHooks hooks,
                              IXactJobsWorkerGate? gate,
+                             TimeSpan unresolvedJobGracePeriod,
                              XactJobsMetrics metrics,
                              IServiceScopeFactory scopeFactory,
                              ILogger logger)
@@ -97,6 +109,7 @@ namespace XactJobs.Internal
             _saveChecker = saveChecker;
             _hooks = hooks;
             _gate = gate;
+            _unresolvedJobGracePeriod = unresolvedJobGracePeriod;
             _metrics = metrics;
             _scopeFactory = scopeFactory;
             _logger = logger;
@@ -648,6 +661,12 @@ namespace XactJobs.Internal
                 outcome = await RunJobAsync(job, periodicJob, claimedAt, retry, jobsToken)
                     .ConfigureAwait(false);
             }
+            catch (XactJobNotFoundException ex) when (IsInUnresolvedJobGracePeriod(job, claimedAt))
+            {
+                // not a failed attempt: a node with a newer version enqueued it, and another node can run it
+                outcome = await PutBackUnresolvedJobAsync(job, claimedAt, ex)
+                    .ConfigureAwait(false);
+            }
             catch (Exception ex)
             {
                 failure = ex;
@@ -708,6 +727,62 @@ namespace XactJobs.Internal
 
                 await NotifyFailureHandlersAsync(job, failure!)
                     .ConfigureAwait(false);
+            }
+        }
+
+        private bool IsInUnresolvedJobGracePeriod(XactJob job, DateTime claimedAt)
+        {
+            return DateTime.UtcNow - job.GetOriginallyScheduledAt(claimedAt) < _unresolvedJobGracePeriod;
+        }
+
+        /// <summary>
+        /// Moves a job whose type or method this node doesn't have later, for another node: the same row, with the same error count, as a
+        /// retry is moved, but without a history row. Never throws: if it can't be moved, the job runs again
+        /// when its lease expires.
+        /// </summary>
+        /// <returns>The outcome, deferred, or null if the job couldn't be moved.</returns>
+        private async Task<string?> PutBackUnresolvedJobAsync(XactJob job, DateTime claimedAt, XactJobNotFoundException notFound)
+        {
+            var originallyScheduledAt = job.GetOriginallyScheduledAt(claimedAt);
+
+            var waited = DateTime.UtcNow - originallyScheduledAt;
+            var delay = waited < MinUnresolvedJobDelay ? MinUnresolvedJobDelay : waited > MaxUnresolvedJobDelay ? MaxUnresolvedJobDelay : waited;
+
+            if (_unresolvedJobsLogged.TryAdd((job.TypeName, job.MethodName), true))
+            {
+                _logger.LogWarning(notFound, "{Queue}: Job's type or method not found on this node, it's put back for a node that has it (enqueued by a newer version?) until {Until:u}, then it fails: {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), originallyScheduledAt + _unresolvedJobGracePeriod, job.TypeName, job.MethodName, job.Id);
+            }
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+
+                var dbContext = scope.ServiceProvider.GetRequiredService<TDbContext>();
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.ClearLeaseTimeoutInSeconds));
+
+                var isMoved = await dbContext.RescheduleAsync(job, _leaser, DateTime.UtcNow + delay, job.ErrorCount, originallyScheduledAt, cts.Token)
+                    .ConfigureAwait(false);
+
+                if (!isMoved)
+                {
+                    _logger.LogWarning("{Queue}: Job row is gone or claimed by another worker, not put back (its lease expired or was cleared): {TypeName}.{MethodName} ({Id})",
+                        GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+                }
+
+                return isMoved ? XactJobsMetrics.Deferred : null;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "{Queue}: Failed putting back a job not found on this node, it will be claimed again when its lease expires: {TypeName}.{MethodName} ({Id})",
+                    GetQueueDisplayName(), job.TypeName, job.MethodName, job.Id);
+
+                return null;
+            }
+            finally
+            {
+                _inFlightJobs.TryRemove(GetKey(job), out _);
             }
         }
 

@@ -23,7 +23,7 @@ namespace XactJobs.Internal
     internal class XactJobCompiler
     {
         /// <summary>Per job method: its delegate, the method and its parameters, and its <see cref="XactRetryAttribute"/> (null without one).</summary>
-        private static readonly ConcurrentDictionary<XactJobDispatchKey, (Func<IServiceProvider, object?[], Task?>, MethodInfo, ParameterInfo[], XactJobRetry?)> _compiledJobs = new();
+        private static readonly ConcurrentDictionary<(string TypeName, string MethodName), (Func<IServiceProvider, object?[], Task?>, MethodInfo, ParameterInfo[], XactJobRetry?)> _compiledJobs = new();
 
         public static Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
@@ -40,12 +40,11 @@ namespace XactJobs.Internal
 
             var args = new object?[jsonArgs.RootElement.GetArrayLength()];
 
-            var key = new XactJobDispatchKey(job.TypeName, job.MethodName, args.Length);
-
-            // static, with the job as the factory's argument: a lambda capturing it would be allocated also when the job is cached
-            var (compiledFunc, method, parameters, retry) = _compiledJobs.GetOrAdd(key, static (key, job) =>
+            // static, with the job as the factory's argument: a lambda capturing it would be allocated also when the job is cached.
+            // The method name has the parameter types, so it tells overloads apart. Not found: XactJobNotFoundException, not cached
+            var (compiledFunc, method, parameters, retry) = _compiledJobs.GetOrAdd((job.TypeName, job.MethodName), static (_, job) =>
             {
-                var (type, method) = job.ToMethodInfo(key.ArgCount);
+                var (type, method) = job.ToMethodInfo();
                 return (BuildJobDelegate(type, method), method, method.GetParameters(), XactRetryAttribute.ReadFrom(method));
             }, job);
 

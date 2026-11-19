@@ -194,6 +194,19 @@ namespace XactJobs
         }
 
         /// <summary>
+        /// For how many hours, from the time a job was originally scheduled for, a worker that doesn't have the job's type, or its method
+        /// with the job's signature, puts it back for another node instead of failing it: during a rolling deployment, a job enqueued by
+        /// a node with a newer version. Default 24. 0: it fails at once. Applies to all the queues.
+        /// </summary>
+        public XactJobsOptionsBuilder<TDbContext> WithUnresolvedJobGracePeriodInHours(int hours)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(hours);
+
+            Options.UnresolvedJobGracePeriodInHours = hours;
+            return this;
+        }
+
+        /// <summary>
         /// Asks <typeparamref name="TGate"/> before every claim whether this node's workers may claim jobs: see
         /// <see cref="IXactJobsWorkerGate"/>. It's registered as a singleton, unless the app registered it. Applies to all the queues.
         /// </summary>

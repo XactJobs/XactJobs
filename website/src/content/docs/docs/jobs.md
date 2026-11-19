@@ -19,7 +19,9 @@ and take longer to serialize and deserialize.
 Because the arguments are evaluated when the job is enqueued, a key the database generates on `SaveChanges` isn't known yet: pass a
 value you already have, like a business key or a `Guid` you create.
 
-The method is stored with its parameter types, so overloaded methods can be jobs.
+The method is stored with its parameter types, so overloaded methods can be jobs. A worker runs the method with exactly that signature,
+so a change to the method's name or its parameter types, or to the names of its class, namespace or assembly, is a different job: see
+[Changing a job](#changing-a-job).
 
 ## Static methods
 
@@ -139,3 +141,33 @@ time zone east of UTC has the previous day's UTC date. Convert it to the schedul
 (`TimeZoneInfo.ConvertTimeFromUtc`), or format the key with the full time, e.g. `:yyyyMMddHHmmss`.
 
 [Idempotent external calls](../idempotent-external-calls/) shows how to use it.
+
+## Changing a job
+
+Jobs already in the database were stored with the method's signature, and their arguments as JSON. When you change a job method:
+
+- **Renaming it, or changing its parameter types** (also renaming a parameter's type, or moving it to another namespace) makes it a
+  different job: the jobs enqueued before can't find it. Keep the old method until they have run, e.g. calling the new one.
+- **Adding a parameter** is a new overload: keep the old one in the same way.
+- **Adding a property to an argument's class** is fine for the jobs enqueued before: the property gets its default value. Make the
+  method work without it.
+
+## Rolling deployments
+
+During a rolling deployment, nodes of the old and the new version share the database, and a node of the old version can claim a job
+the new version enqueued.
+
+A job whose type, or method with the job's signature, a node doesn't have isn't a failed attempt there: the worker puts it back for
+another node, without a history row, and moves it later by the time it has waited (at least 5 seconds, at most 5 minutes). So a node
+of the new version gets it within seconds, and at most 5 minutes late once the deployment is over. Each worker logs a warning once
+per job method, and the attempt counts as `deferred` in the [metrics](../observability/).
+
+That lasts 24 hours from the time the job was originally scheduled for. Then it fails as any other attempt, and is retried by the
+[retry strategy](../failures-and-retries/): that's a job no node has, e.g. one whose method was removed.
+`WithUnresolvedJobGracePeriodInHours(hours)` changes it, for all the queues; 0 fails such a job at once.
+
+What a node can't see is new data in the arguments of a method it has: a node of the old version ignores a property it doesn't know,
+and runs the job without it. Change such a job in two steps: first deploy the version that reads the new property (and works
+without it), then the one that sends it. The same goes for a new value of an enum.
+
+To keep the old nodes from claiming any job during a deployment, close their [worker gate](../queues-and-polling/#worker-gate).
