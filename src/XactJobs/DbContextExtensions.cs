@@ -150,6 +150,22 @@ namespace XactJobs
             return JobAddOrUpdatePeriodic(dbContext, jobExpression, id, schedule, null);
         }
 
+        /// <summary>
+        /// The queues that have jobs: pending, running, or continuations waiting for their batch. In ordinal order. The database jumps
+        /// from one queue to the next in the job table's primary key, so it doesn't read the whole table, also during a backlog: for a
+        /// dashboard's or a monitor's list of queues.
+        /// </summary>
+        public static async Task<IReadOnlyList<string>> JobGetQueuesAsync(this DbContext dbContext, CancellationToken cancellationToken = default)
+        {
+            var queues = await dbContext.Database.SqlQueryRaw<string>(dbContext.GetSqlDialect().JobQueuesSql)
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            queues.Sort(StringComparer.Ordinal);
+
+            return queues;
+        }
+
         public static async Task<bool> JobDeletePeriodicAsync(this DbContext dbContext, string id, CancellationToken cancellationToken)
         {
             var periodicJob = await dbContext.Set<XactJobPeriodic>()

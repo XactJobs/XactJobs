@@ -182,6 +182,48 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
         }
     }
 
+    public async Task JobQueues_JumpFromQueueToQueue()
+    {
+        await AddRowsAsync();
+
+        await using (var db = CreateDb(null))
+        {
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(1), "T", "M()", "[]", "a-queue"));
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(2), "T", "M()", "[]", "z-queue"));
+            db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(3), "T", "M()", "[]", "z-queue"));
+
+            await db.SaveChangesAsync();
+
+            await db.Database.ExecuteSqlRawAsync(Statistics);
+        }
+
+        var recorder = new PlanRecorder(_ => true);
+
+        await using (var db = CreateDb(recorder))
+        {
+            Assert.Equal(["a-queue", NotPolled, "z-queue"], await db.JobGetQueuesAsync());
+        }
+
+        var plans = await GetPlansAsync(recorder);
+
+        // SQLite's primary key is the id: its index of the queue and the scheduled time
+        var index = Provider == Db.Sqlite ? @"USING (COVERING )?INDEX ix_job_queue_scheduled_at\b" : PrimaryKey;
+
+        Assert.NotEmpty(plans);
+
+        foreach (var (sql, plan) in plans)
+        {
+            AssertUsesTheIndex(index, sql, plan);
+        }
+    }
+
+    public async Task JobQueues_OfAnEmptyTable_AreNone()
+    {
+        await using var db = CreateDb(null);
+
+        Assert.Empty(await db.JobGetQueuesAsync());
+    }
+
     // ---- per database
 
     private string ProviderName { get; set; } = "";
@@ -273,8 +315,11 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
             case Db.SqlServer:
                 XNamespace ns = "http://schemas.microsoft.com/sqlserver/2004/07/showplan";
 
+                // a scan without a condition right under a Top reads only the Top's rows: MIN of the index's first column
                 return XDocument.Parse(plan).Descendants(ns + "RelOp")
                     .Where(op => (string?)op.Attribute("PhysicalOp") is "Clustered Index Scan" or "Table Scan" or "Index Scan")
+                    .Where(op => !((string?)op.Ancestors(ns + "RelOp").FirstOrDefault()?.Attribute("PhysicalOp") == "Top"
+                        && !op.Elements().Elements(ns + "Predicate").Any()))
                     .SelectMany(op => op.Elements().Where(e => e.Name.LocalName is "IndexScan" or "TableScan").Elements(ns + "Object"))
                     .Any(o => (string?)o.Attribute("Table") == "[Job]" && (string?)o.Attribute("Index") is not ("[IX_Job_PeriodicJobId_Version]" or "[IX_Job_BatchId]" or "[IX_Job_AwaitsBatchId]"));
 

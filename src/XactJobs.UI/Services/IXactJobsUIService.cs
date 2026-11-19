@@ -10,13 +10,17 @@ public interface IXactJobsUIService
         DateTime from, DateTime to, TimeSpan interval, CancellationToken ct = default);
 
     /// <summary>
-    /// The queues of the workers configured in this process, and of the pending jobs and the periodic jobs.
+    /// The queues of the workers configured in this process, and of the pending jobs and the periodic jobs, the default queue first.
+    /// The pending jobs' queues are found with one index seek per queue (see <c>JobGetQueuesAsync</c>).
     /// </summary>
     Task<IReadOnlyList<string>> GetQueuesAsync(CancellationToken ct = default);
 
-    // Pending/Scheduled Jobs
+    /// <summary>
+    /// The pending and running jobs of one queue, the earliest scheduled first, read in the order of the primary key. The count
+    /// stops at <c>MaxCount</c>.
+    /// </summary>
     Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
-        int page, int pageSize, string? queue = null, CancellationToken ct = default);
+        string queue, int page, int pageSize, CancellationToken ct = default);
 
     /// <summary>
     /// A pending or running job, by its primary key (see <see cref="JobKey"/>).
@@ -34,9 +38,13 @@ public interface IXactJobsUIService
     /// </summary>
     Task<ActionResultDto> RunJobNowAsync(JobKey key, CancellationToken ct = default);
 
-    // Job History
-    Task<PagedResultDto<JobHistoryDto>> GetHistoryAsync(
-        HistoryCategory category, int page, int pageSize, string? queue = null, CancellationToken ct = default);
+    /// <summary>
+    /// The history of a category processed from <paramref name="from"/>, until <paramref name="to"/> (excluded) if it's set, the
+    /// latest first, a page at a time after the row of the <paramref name="cursor"/> (null, or text that isn't a cursor: the latest
+    /// page). The count stops at <c>MaxCount</c>.
+    /// </summary>
+    Task<CursorPageDto<JobHistoryDto>> GetHistoryAsync(
+        HistoryCategory category, DateTime from, DateTime? to, string? queue, string? cursor, int pageSize, CancellationToken ct = default);
     Task<JobHistoryDto?> GetJobHistoryByIdAsync(long id, CancellationToken ct = default);
 
     /// <summary>
@@ -48,10 +56,17 @@ public interface IXactJobsUIService
     // Batches
 
     /// <summary>
-    /// Active batches have jobs left, the earliest scheduled first. Finished batches have none, the latest finished first,
-    /// as long as their history is kept.
+    /// The batches with jobs left, the earliest scheduled first. The count stops at <c>MaxCount</c>.
     /// </summary>
-    Task<PagedResultDto<BatchDto>> GetBatchesAsync(BatchState state, int page, int pageSize, CancellationToken ct = default);
+    Task<PagedResultDto<BatchDto>> GetActiveBatchesAsync(int page, int pageSize, CancellationToken ct = default);
+
+    /// <summary>
+    /// The batches without jobs left whose last job was processed from <paramref name="from"/>, until <paramref name="to"/> (excluded)
+    /// if it's set, the latest finished first, a page at a time after the batch of the <paramref name="cursor"/>, as long as their
+    /// history is kept. The count stops at <c>MaxCount</c>.
+    /// </summary>
+    Task<CursorPageDto<BatchDto>> GetFinishedBatchesAsync(
+        DateTime from, DateTime? to, string? cursor, int pageSize, CancellationToken ct = default);
 
     /// <summary>
     /// The batch with its jobs, its history and its continuations, or null if nothing is left of it.

@@ -193,6 +193,17 @@ WHERE {ColLeaser} = HEXTORAW({{0}})
 ", parameters.ToArray());
         }
 
+        // without RECURSIVE: a WITH clause with a column list may refer to itself
+        public string JobQueuesSql => $@"
+WITH q (v) AS (
+  SELECT MIN({ColQueue}) FROM {Table}
+  UNION ALL
+  SELECT (SELECT MIN({ColQueue}) FROM {Table} WHERE {ColQueue} > q.v)
+  FROM q
+  WHERE q.v IS NOT NULL
+)
+SELECT v AS ""Value"" FROM q WHERE v IS NOT NULL";
+
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
             var sql = $@"LOCK TABLE {XactJobSchema}_{XactJobPeriodicTable} IN EXCLUSIVE MODE";

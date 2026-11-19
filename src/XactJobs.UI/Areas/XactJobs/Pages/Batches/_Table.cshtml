@@ -1,6 +1,6 @@
 @model XactJobs.UI.Pages.Batches.IndexModel
 
-@if (Model.Batches.Items.Count == 0)
+@if (Model.Items.Count == 0)
 {
     <div class="alert alert-info">
         <i class="bi bi-info-circle me-2"></i>No batches found.
@@ -21,7 +21,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var batch in Model.Batches.Items)
+                    @foreach (var batch in Model.Items)
                     {
                         <tr>
                             <td><a href="@Model.BatchUrl(batch.Id)" title="@batch.Id"><code>@batch.DisplayId</code></a></td>
@@ -73,5 +73,12 @@ else
         </div>
     </div>
 
-    <partial name="~/Areas/XactJobs/Pages/Partials/_Pagination.cshtml" model="new PaginationModel(Model, Model.Batches.Page, Model.Batches.TotalPages, Model.Batches.TotalCount)" />
+    @if (Model.State == BatchState.Finished)
+    {
+        <partial name="~/Areas/XactJobs/Pages/Partials/_CursorPagination.cshtml" model="new CursorPaginationModel(Model, Model.FinishedBatches.NewerCursor, Model.FinishedBatches.OlderCursor, Model.FinishedBatches.TotalCount, Model.FinishedBatches.IsTotalCountCapped)" />
+    }
+    else
+    {
+        <partial name="~/Areas/XactJobs/Pages/Partials/_Pagination.cshtml" model="new PaginationModel(Model, Model.ActiveBatches.Page, Model.ActiveBatches.TotalPages, Model.ActiveBatches.TotalCount, Model.ActiveBatches.IsTotalCountCapped)" />
+    }
 }

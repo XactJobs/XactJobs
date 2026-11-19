@@ -1,0 +1,41 @@
+@model XactJobsPageModel
+@{
+    var periodPage = Model as XactJobsPeriodPageModel;
+    var hasPeriod = periodPage?.HasPeriodFilter == true;
+}
+
+@if (Model.Queues != null || hasPeriod)
+{
+    @* a GET form to the current page: a change starts again at the first page. The browser works out the period's times
+       (xactJobsSubmitFilters), in its own time zone *@
+    <form method="get" class="d-flex align-items-center gap-2" data-xj-filters>
+        @if (Model.Queues != null)
+        {
+            <label for="xj-queue" class="text-muted small mb-0">Queue:</label>
+            <select id="xj-queue" name="queue" class="form-select form-select-sm" style="width: auto;" onchange="xactJobsSubmitFilters(this.form)">
+                @if (Model.AllowsAllQueues)
+                {
+                    <option value="">All</option>
+                }
+                @foreach (var queue in Model.Queues)
+                {
+                    <option value="@queue" selected="@(queue == Model.Queue)">@XactJobsPageModel.DisplayQueue(queue)</option>
+                }
+            </select>
+        }
+        @if (hasPeriod)
+        {
+            <label for="xj-period" class="text-muted small mb-0">Period:</label>
+            <select id="xj-period" name="period" class="form-select form-select-sm" style="width: auto;" onchange="xactJobsSubmitFilters(this.form)">
+                @foreach (var period in XactJobsPeriodPageModel.Periods)
+                {
+                    <option value="@period.Value" selected="@(period.Value == periodPage!.CurrentPeriod)">@period.Title</option>
+                }
+            </select>
+            <input type="date" name="day" class="form-control form-control-sm" style="width: auto;" value="@periodPage!.Day"
+                   hidden="@(periodPage.CurrentPeriod != "day")" onchange="xactJobsSubmitFilters(this.form)" aria-label="Day" />
+            <input type="hidden" name="from" />
+            <input type="hidden" name="to" />
+        }
+    </form>
+}

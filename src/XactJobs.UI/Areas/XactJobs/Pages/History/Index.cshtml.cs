@@ -4,7 +4,7 @@ using XactJobs.UI.Services.Models;
 
 namespace XactJobs.UI.Pages.History;
 
-public class IndexModel : XactJobsPageModel
+public class IndexModel : XactJobsPeriodPageModel
 {
     public IndexModel(IXactJobsUIService service, XactJobsUIOptions options)
         : base(service, options)
@@ -16,7 +16,7 @@ public class IndexModel : XactJobsPageModel
 
     public HistoryCategory Category { get; private set; }
 
-    public PagedResultDto<JobHistoryDto> Jobs { get; private set; } = new();
+    public CursorPageDto<JobHistoryDto> Jobs { get; private set; } = new();
 
     public static IReadOnlyList<(HistoryCategory Category, string Title, string Icon, string Description)> Categories { get; } =
     [
@@ -42,6 +42,8 @@ public class IndexModel : XactJobsPageModel
             ? category
             : HistoryCategory.Succeeded;
 
-        Jobs = await Service.GetHistoryAsync(Category, PageNumber, Options.DefaultPageSize, Queue, ct);
+        var (from, to) = GetPeriod();
+
+        Jobs = await Service.GetHistoryAsync(Category, from, to, Queue, Cursor, Options.DefaultPageSize, ct);
     }
 }

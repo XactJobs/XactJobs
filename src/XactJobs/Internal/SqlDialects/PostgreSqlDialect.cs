@@ -147,6 +147,16 @@ WHERE j.{ColQueue} = k.queue
             leaser
         ]);
 
+        public string JobQueuesSql => $@"
+WITH RECURSIVE q (v) AS (
+  SELECT MIN({ColQueue}) FROM {XactJobSchema}.{XactJobTable}
+  UNION ALL
+  SELECT (SELECT MIN({ColQueue}) FROM {XactJobSchema}.{XactJobTable} WHERE {ColQueue} > q.v)
+  FROM q
+  WHERE q.v IS NOT NULL
+)
+SELECT v AS ""Value"" FROM q WHERE v IS NOT NULL";
+
         public async Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken)
         {
             var sql = @$"LOCK TABLE {XactJobSchema}.{XactJobPeriodicTable} IN EXCLUSIVE MODE";

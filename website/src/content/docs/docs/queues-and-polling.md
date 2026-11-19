@@ -35,6 +35,10 @@ builder.Services.AddXactJobs<UserDbContext>(options =>
 An isolated queue has its own settings (workers, parallelism, batch size, polling, lease, shutdown timeout, retry strategy and periodic
 jobs), set in its configure action. It doesn't take them from the default queue. Long-running jobs are best kept in their own queue (see below).
 
+`dbContext.JobGetQueuesAsync()` returns the queues that have jobs, e.g. for a monitor. The database jumps from one queue to the next in
+the job table's primary key, which starts with the queue, so it doesn't read the whole table during a backlog (a `DISTINCT` would, on
+most databases).
+
 ## Polling
 
 A worker polls the database for due jobs and picks up a batch of them: it reserves them for a while (a lease, `WithLeaseDuration`), so no

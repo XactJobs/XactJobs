@@ -89,6 +89,13 @@ namespace XactJobs.Internal
         /// </summary>
         (string Sql, object[] Parameters) GetClearLeaseSql(Guid leaser, IReadOnlyCollection<XactJob> jobs);
 
+        /// <summary>
+        /// The queues of the job table, one per row, in a column named Value (for <c>SqlQueryRaw</c>). It jumps from one queue to the next
+        /// in the primary key (on SQLite, its index of the queue and the scheduled time), one seek per queue: a DISTINCT reads the whole
+        /// index, except on MySQL, which jumps on its own (a loose index scan).
+        /// </summary>
+        string JobQueuesSql { get; }
+
         Task AcquireTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken);
 
         Task ReleaseTableLockAsync(DbContext db, string tableSchema, string tableName, CancellationToken cancellationToken);

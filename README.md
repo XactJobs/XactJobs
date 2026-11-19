@@ -710,14 +710,14 @@ The API endpoints that change data require an antiforgery token, which the dashb
 ## Pages and Actions
 
 - **Dashboard** - due, scheduled and running jobs, continuations waiting for their batch, succeeded and failed jobs in the last 24 hours, and a chart per hour
-- **Scheduled** - the pending and running jobs. A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
+- **Scheduled** - the pending and running jobs of one queue, the default queue first (one queue at a time: the job table is read in the order of its primary key, which starts with the queue, so a backlog isn't sorted on each refresh). A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
   - *Run now* makes a pending job due now, and the job keeps the time it was scheduled for as `XactJobContext.OriginallyScheduledAt`. A continuation that waits for its batch can't: it starts when the batch is finished
   - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead.
     A cancelled job of a batch counts as a failed job of the batch, and if it was the last one, the batch's continuations start
-- **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts, and skipped runs and continuations, with the reason
+- **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts, and skipped runs and continuations, with the reason. In a period: the last 24 hours (the default), today, yesterday, this week (from Monday) or a day, in the browser's time zone, the latest first, with *Newer* and *Older* pages
   - *Retry* enqueues a failed or cancelled job, or a skipped one that isn't a periodic run (a continuation whose condition wasn't met, a job a filter skipped), again as a new job. A run of a periodic job is enqueued as a one-off job
     (not one that had a state, which it would run without), and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations. Like a retry by a worker, it keeps the time the job was originally scheduled for
-- **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress
+- **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress. The finished ones are in a period like the history, by the time their last job finished
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
 - **Periodic** - the periodic jobs, with their schedule and its time zone, their next run and their state
   - *Pause* removes the pending run, and no runs are scheduled until it's resumed. A paused job stays paused when the application starts again, even if an attribute, `WithPeriodicJob` or `JobEnsurePeriodic` defines it
@@ -749,14 +749,16 @@ All under the API base path (`/api/XactJobs` by default):
 |---|---|---|
 | GET | `/stats` | Dashboard counts |
 | GET | `/chart-data?from=&to=&intervalMinutes=` | Counts per interval (default: the last 24 hours) |
-| GET | `/jobs?page=&pageSize=&queue=` | Pending and running jobs |
+| GET | `/queues` | The queues: of the workers configured in this process, of the pending jobs, and of the periodic jobs |
+| GET | `/jobs?queue=&page=&pageSize=` | Pending and running jobs of a queue (required) |
 | GET | `/jobs/{id}?queue=&scheduledAt=` | A pending or running job |
 | POST | `/jobs/{id}/run-now?queue=&scheduledAt=` | Make a pending job due now |
 | POST | `/jobs/{id}/cancel?queue=&scheduledAt=` | Cancel a pending job |
-| GET | `/history?category=&page=&pageSize=&queue=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped` |
+| GET | `/history?category=&from=&to=&queue=&cursor=&pageSize=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped`, in a period |
 | GET | `/history/{id}` | A history row |
 | POST | `/history/{id}/retry` | Enqueue a failed or cancelled job, or a skipped one that isn't a periodic run, again |
-| GET | `/batches?state=&page=&pageSize=` | Batches: `active` or `finished` |
+| GET | `/batches/active?page=&pageSize=` | Batches with jobs left |
+| GET | `/batches/finished?from=&to=&cursor=&pageSize=` | Batches without jobs left, in a period |
 | GET | `/batches/{id}` | A batch with its jobs, history and continuations |
 | GET | `/periodic?page=&pageSize=` | Periodic jobs |
 | GET | `/periodic/{id}` | A periodic job |
@@ -766,6 +768,12 @@ All under the API base path (`/api/XactJobs` by default):
 | DELETE | `/periodic/{id}` | Delete a periodic job |
 
 The actions answer `200` with a message, `404` if the job doesn't exist, or `409` if its state doesn't allow the action (e.g. it's running).
+
+The lists count at most 10,000 rows (`TotalCount`, with `IsTotalCountCapped` when there are more): a count reads every row it counts.
+The history and the finished batches are in a period, `from` (included) and `to` (excluded), in UTC, by default the last 24 hours, and at
+most 31 days. They're read a page at a time from the last row seen, the latest first: pass a page's `olderCursor` or `newerCursor` as
+`cursor` for the next page (no cursor: the latest page). A page doesn't shift when new rows arrive, and an older page costs the same as
+the first one.
 
 A pending job is identified by its primary key: its `id`, `queue` and `scheduledAt`, as `/jobs` returns them, with `scheduledAt` in UTC
 (e.g. `2026-11-07T10:00:00.1234567Z`). On most databases there's no index on the id alone, so a lookup by the id would read the whole job table.
