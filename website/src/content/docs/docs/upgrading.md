@@ -57,7 +57,7 @@ A worker that doesn't have a job's type or method puts the job back for another 
 The dashboard reads less of large tables (see [Dashboard](../dashboard/#pages-and-actions)), which changes its API, and
 `IXactJobsUIService` for code that calls it:
 
-- The scheduled jobs are of one queue: `/jobs` requires `queue`, and `GetScheduledJobsAsync` takes it first. `/queues` lists them.
+- The scheduled jobs of all the queues are listed queue by queue, not by time: `/jobs` and `GetScheduledJobsAsync` (which takes the queue first, null for all of them) read the job table in its primary key's order. `/queues` lists the queues.
 - The history and the finished batches are in a period, read a page at a time from the last row seen: `/history` takes `from`, `to`
   and `cursor` instead of `page`, and returns `newerCursor` and `olderCursor` instead of page numbers (`GetHistoryAsync` returns a
   `CursorPageDto`).

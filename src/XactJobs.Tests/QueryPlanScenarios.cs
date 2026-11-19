@@ -226,6 +226,39 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
         }
     }
 
+    public async Task ScheduledJobsOfAllQueues_AreReadInThePrimaryKeysOrder_WithoutASort()
+    {
+        await AddRowsAsync();
+
+        var recorder = new PlanRecorder(sql => IsJobTableQuery(sql) && sql.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase));
+
+        await using (var db = CreateDb(recorder))
+        {
+            var jobs = await new XactJobsUIService<TestDbContext>(db).GetScheduledJobsAsync(null, null, 1, 20);
+
+            Assert.NotEmpty(jobs.Items);
+        }
+
+        var plans = await GetPlansAsync(recorder);
+
+        Assert.NotEmpty(plans);
+
+        // the rows come in the key's order (queue, scheduled time, id): a sort would read the whole table on each refresh
+        var sort = Provider switch
+        {
+            Db.PostgreSql => @"\bSort\b",
+            Db.SqlServer => @"PhysicalOp=""(Top N )?Sort""",
+            Db.Oracle => @"\bSORT ORDER BY\b",
+            Db.MySql => @"\bUsing filesort\b",
+            _ => @"\bUSE TEMP B-TREE FOR ORDER BY\b"
+        };
+
+        foreach (var (sql, plan) in plans)
+        {
+            Assert.False(Regex.IsMatch(plan, sort), $"The plan sorts the rows.\nSQL:\n{sql}\n\nPlan:\n{plan}");
+        }
+    }
+
     public async Task JobQueues_JumpFromQueueToQueue()
     {
         await AddRowsAsync();
@@ -505,7 +538,9 @@ public sealed class QueryPlanScenarios(Action<DbContextOptionsBuilder> configure
 
                 case Db.MySql:
                     command.CommandText = "EXPLAIN " + sql;
-                    return ReadAll(command, reader => $"table={reader["table"]} type={reader["type"]} key={reader["key"]}".TrimEnd());
+                    // the extra on a line of its own (a filesort), so the patterns of the access line stay anchored
+                    return ReadAll(command, reader => $"table={reader["table"]} type={reader["type"]} key={reader["key"]}".TrimEnd()
+                        + (reader["Extra"] is string { Length: > 0 } extra ? "\nextra=" + extra : ""));
 
                 default:
                     command.CommandText = "EXPLAIN QUERY PLAN " + sql;

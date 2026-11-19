@@ -52,6 +52,7 @@ public partial class DashboardWebTests : IAsyncDisposable
     [InlineData("/XactJobs/history/succeeded?period=today&from=2020-01-01T00:00:00.000Z&to=2020-01-02T00:00:00.000Z")]
     [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=o638675712000000000_42")]
     [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=not-a-cursor")]
+    [InlineData("/api/XactJobs/jobs")]
     [InlineData("/api/XactJobs/jobs?queue=" + QueueNames.Default)]
     [InlineData("/api/XactJobs/jobs?queue=" + QueueNames.Default + "&search=type:%20sample")]
     [InlineData("/api/XactJobs/periodic?search=daily")]
@@ -141,11 +142,10 @@ public partial class DashboardWebTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Api_RejectsScheduledJobsWithoutAQueue_AndInvalidPeriods_AndAnUnknownBatchIsNotFound()
+    public async Task Api_RejectsInvalidPeriods_AndAnUnknownBatchIsNotFound()
     {
         var client = await StartAsync(o => o.AllowAnonymous());
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/jobs")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/history?category=failed&from=2020-01-02T00:00:00Z&to=2020-01-01T00:00:00Z")).StatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.GetAsync("/api/XactJobs/batches/finished?from=2020-01-01T00:00:00Z&to=2020-03-01T00:00:00Z")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync("/api/XactJobs/batches/" + Guid.NewGuid())).StatusCode);
@@ -237,19 +237,24 @@ public partial class DashboardWebTests : IAsyncDisposable
             return await db.SaveChangesAsync();
         });
 
-        // one queue at a time, the default queue first: no "All"
+        // the default queue first; "All" is an empty queue in the query
         var initial = await client.GetStringAsync("/XactJobs/scheduled");
         var emails = await client.GetStringAsync("/XactJobs/scheduled?queue=emails");
+        var all = await client.GetStringAsync("/XactJobs/scheduled?queue=");
 
         Assert.Contains("<option value=\"emails\">", initial);
         Assert.Contains($"<option value=\"{QueueNames.Default}\" selected=\"selected\">", initial);
-        Assert.DoesNotContain("<option value=\"\">All</option>", initial);
+        Assert.Contains("<option value=\"\">All</option>", initial);
         Assert.Contains("<option value=\"emails\" selected=\"selected\">", emails);
+        Assert.DoesNotContain("selected=\"selected\"", all);
         Assert.Equal(2, Regex.Matches(initial, "<code>\\d+</code>").Count);
         Assert.Single(Regex.Matches(emails, "<code>\\d+</code>"));
+        Assert.Equal(3, Regex.Matches(all, "<code>\\d+</code>").Count);
 
-        // the table keeps the filter when it refreshes
+        // the table keeps the filter when it refreshes, "All" too
         Assert.Contains("?handler=Table&amp;p=1&amp;queue=emails", emails);
+        Assert.Contains("?handler=Table&amp;p=1&amp;queue=", all);
+        Assert.Equal(3, Regex.Matches(await client.GetStringAsync("/XactJobs/scheduled?handler=Table&p=1&queue="), "<code>\\d+</code>").Count);
     }
 
     [Fact]

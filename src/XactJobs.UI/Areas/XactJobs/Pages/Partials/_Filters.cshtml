@@ -28,10 +28,7 @@
         {
             <label for="xj-queue" class="text-muted small mb-0">Queue:</label>
             <select id="xj-queue" name="queue" class="form-select form-select-sm" style="width: auto;" onchange="xactJobsSubmitFilters(this.form)">
-                @if (Model.AllowsAllQueues)
-                {
                     <option value="">All</option>
-                }
                 @foreach (var queue in Model.Queues)
                 {
                     <option value="@queue" selected="@(queue == Model.Queue)">@XactJobsPageModel.DisplayQueue(queue)</option>

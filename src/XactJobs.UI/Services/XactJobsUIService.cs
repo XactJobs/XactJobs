@@ -162,14 +162,18 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     }
 
     public async Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
-        string queue, string? search, int page, int pageSize, CancellationToken ct = default)
+        string? queue, string? search, int page, int pageSize, CancellationToken ct = default)
     {
-        ArgumentException.ThrowIfNullOrEmpty(queue);
-
         (page, pageSize) = Normalize(page, pageSize);
 
-        // one queue: the primary key starts with it, so the rows are read in their order, without sorting the whole table
-        var query = db.Set<XactJob>().AsNoTracking().Where(j => j.Queue == queue);
+        // read in the primary key's order (queue, scheduled time, id), without sorting the whole table: all the queues are
+        // listed queue by queue
+        var query = db.Set<XactJob>().AsNoTracking();
+
+        if (!string.IsNullOrEmpty(queue))
+        {
+            query = query.Where(j => j.Queue == queue);
+        }
 
         if (JobSearch.Parse(search) is { } jobSearch)
         {
@@ -178,8 +182,11 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         var (totalCount, isCapped) = await CountAsync(query, ct);
 
-        var items = await query
-            .OrderBy(j => j.ScheduledAt)
+        var ordered = string.IsNullOrEmpty(queue)
+            ? query.OrderBy(j => j.Queue).ThenBy(j => j.ScheduledAt)
+            : query.OrderBy(j => j.ScheduledAt);
+
+        var items = await ordered
             .ThenBy(j => j.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

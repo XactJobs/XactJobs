@@ -49,6 +49,9 @@ public sealed class SqliteQueryPlanTests : IAsyncLifetime
     public Task ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey() => _scenarios.ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey();
 
     [Fact]
+    public Task ScheduledJobsOfAllQueues_AreReadInThePrimaryKeysOrder_WithoutASort() => _scenarios.ScheduledJobsOfAllQueues_AreReadInThePrimaryKeysOrder_WithoutASort();
+
+    [Fact]
     public Task JobQueues_JumpFromQueueToQueue() => _scenarios.JobQueues_JumpFromQueueToQueue();
 
     [Fact]
