@@ -84,7 +84,7 @@ The other options (page size, title, refresh interval) are in the [configuration
 
 A job that is running can't be changed: the dashboard never touches a job a worker has leased.
 
-The Scheduled, History and Periodic lists have a search field (Enter searches): the rows whose type, method or periodic job contains the
+The Scheduled, History and Periodic lists have a search field (Enter searches, and its question mark shows this help): the rows whose type, method or periodic job contains the
 text, ignoring case. To search only one of them, start with `type:`, `method:` or `periodic:` (e.g. `method: sendemail`); on the
 Periodic page, the periodic job is the id. The database searches within the list's queue or period, which it still reads through its
 index, but a search for text inside a value can't use one: it reads the rows of the queue or the period until it fills a page.
