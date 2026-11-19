@@ -162,7 +162,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     }
 
     public async Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
-        string queue, int page, int pageSize, CancellationToken ct = default)
+        string queue, string? search, int page, int pageSize, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(queue);
 
@@ -170,6 +170,11 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
 
         // one queue: the primary key starts with it, so the rows are read in their order, without sorting the whole table
         var query = db.Set<XactJob>().AsNoTracking().Where(j => j.Queue == queue);
+
+        if (JobSearch.Parse(search) is { } jobSearch)
+        {
+            query = jobSearch.Apply(query);
+        }
 
         var (totalCount, isCapped) = await CountAsync(query, ct);
 
@@ -261,7 +266,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     }
 
     public async Task<CursorPageDto<JobHistoryDto>> GetHistoryAsync(
-        HistoryCategory category, DateTime from, DateTime? to, string? queue, string? cursor, int pageSize, CancellationToken ct = default)
+        HistoryCategory category, DateTime from, DateTime? to, string? queue, string? search, string? cursor, int pageSize, CancellationToken ct = default)
     {
         (_, pageSize) = Normalize(1, pageSize);
 
@@ -273,6 +278,11 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         if (!string.IsNullOrEmpty(queue))
         {
             query = query.Where(h => h.Queue == queue);
+        }
+
+        if (JobSearch.Parse(search) is { } jobSearch)
+        {
+            query = jobSearch.Apply(query);
         }
 
         var (totalCount, isCapped) = await CountAsync(query, ct);
@@ -350,11 +360,16 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
     }
 
     public async Task<PagedResultDto<PeriodicJobDto>> GetPeriodicJobsAsync(
-        int page, int pageSize, CancellationToken ct = default)
+        string? search, int page, int pageSize, CancellationToken ct = default)
     {
         (page, pageSize) = Normalize(page, pageSize);
 
         var query = db.Set<XactJobPeriodic>().AsNoTracking();
+
+        if (JobSearch.Parse(search) is { } jobSearch)
+        {
+            query = jobSearch.Apply(query);
+        }
 
         var totalCount = await query.CountAsync(ct);
 

@@ -4,11 +4,18 @@
     var hasPeriod = periodPage?.HasPeriodFilter == true;
 }
 
-@if (Model.Queues != null || hasPeriod)
+@if (Model.Queues != null || hasPeriod || Model.HasSearch)
 {
     @* a GET form to the current page: a change starts again at the first page. The browser works out the period's times
        (xactJobsSubmitFilters), in its own time zone *@
-    <form method="get" class="d-flex align-items-center gap-2" data-xj-filters>
+    <form method="get" class="d-flex align-items-center gap-2" data-xj-filters onsubmit="xactJobsSubmitFilters(this); return false;">
+        @if (Model.HasSearch)
+        {
+            @* submitted with Enter; searched in the database, within the list's queue or period *@
+            <input type="search" name="search" class="form-control form-control-sm" style="width: 14rem;" value="@Model.Search"
+                   maxlength="200" placeholder="Search" aria-label="Search by type, method or periodic job"
+                   title="The rows whose type, method or periodic job contains the text, ignoring case. Only one of them: type: text, method: text or periodic: text. Press Enter to search." />
+        }
         @if (Model.Queues != null)
         {
             <label for="xj-queue" class="text-muted small mb-0">Queue:</label>

@@ -15,6 +15,8 @@ public class IndexModel : XactJobsPageModel
     // one queue at a time: the rows are read in the order of the primary key, which starts with the queue
     public override bool AllowsAllQueues => false;
 
+    public override bool HasSearch => true;
+
     protected override async Task LoadAsync(CancellationToken ct)
     {
         if (string.IsNullOrEmpty(Queue))
@@ -22,6 +24,6 @@ public class IndexModel : XactJobsPageModel
             Queue = QueueNames.Default;
         }
 
-        Jobs = await Service.GetScheduledJobsAsync(Queue, PageNumber, Options.DefaultPageSize, ct);
+        Jobs = await Service.GetScheduledJobsAsync(Queue, Search, PageNumber, Options.DefaultPageSize, ct);
     }
 }

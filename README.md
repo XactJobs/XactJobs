@@ -717,6 +717,7 @@ The API endpoints that change data require an antiforgery token, which the dashb
 - **History** - succeeded, failed (out of retries, or cancelled by the job with `XactJobCancelException`), cancelled from the dashboard, retried attempts, and skipped runs and continuations, with the reason. In a period: the last 24 hours (the default), today, yesterday, this week (from Monday) or a day, in the browser's time zone, the latest first, with *Newer* and *Older* pages
   - *Retry* enqueues a failed or cancelled job, or a skipped one that isn't a periodic run (a continuation whose condition wasn't met, a job a filter skipped), again as a new job. A run of a periodic job is enqueued as a one-off job
     (not one that had a state, which it would run without), and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations. Like a retry by a worker, it keeps the time the job was originally scheduled for
+- **Search** - the Scheduled, History and Periodic lists have a search field (Enter searches): the rows whose type, method or periodic job contains the text, ignoring case, or only one of them with `type:`, `method:` or `periodic:`. The database searches within the list's queue or period
 - **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress. The finished ones are in a period like the history, by the time their last job finished
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
 - **Periodic** - the periodic jobs, with their schedule and its time zone, their next run and their state
@@ -750,17 +751,17 @@ All under the API base path (`/api/XactJobs` by default):
 | GET | `/stats` | Dashboard counts |
 | GET | `/chart-data?from=&to=&intervalMinutes=` | Counts per interval (default: the last 24 hours) |
 | GET | `/queues` | The queues: of the workers configured in this process, of the pending jobs, and of the periodic jobs |
-| GET | `/jobs?queue=&page=&pageSize=` | Pending and running jobs of a queue (required) |
+| GET | `/jobs?queue=&search=&page=&pageSize=` | Pending and running jobs of a queue (required) |
 | GET | `/jobs/{id}?queue=&scheduledAt=` | A pending or running job |
 | POST | `/jobs/{id}/run-now?queue=&scheduledAt=` | Make a pending job due now |
 | POST | `/jobs/{id}/cancel?queue=&scheduledAt=` | Cancel a pending job |
-| GET | `/history?category=&from=&to=&queue=&cursor=&pageSize=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped`, in a period |
+| GET | `/history?category=&from=&to=&queue=&search=&cursor=&pageSize=` | History: `succeeded`, `failed`, `cancelled`, `retried` or `skipped`, in a period |
 | GET | `/history/{id}` | A history row |
 | POST | `/history/{id}/retry` | Enqueue a failed or cancelled job, or a skipped one that isn't a periodic run, again |
 | GET | `/batches/active?page=&pageSize=` | Batches with jobs left |
 | GET | `/batches/finished?from=&to=&cursor=&pageSize=` | Batches without jobs left, in a period |
 | GET | `/batches/{id}` | A batch with its jobs, history and continuations |
-| GET | `/periodic?page=&pageSize=` | Periodic jobs |
+| GET | `/periodic?search=&page=&pageSize=` | Periodic jobs |
 | GET | `/periodic/{id}` | A periodic job |
 | POST | `/periodic/{id}/pause` | Pause a periodic job |
 | POST | `/periodic/{id}/resume` | Resume a periodic job |
@@ -773,7 +774,7 @@ The lists count at most 10,000 rows (`TotalCount`, with `IsTotalCountCapped` whe
 The history and the finished batches are in a period, `from` (included) and `to` (excluded), in UTC, by default the last 24 hours, and at
 most 31 days. They're read a page at a time from the last row seen, the latest first: pass a page's `olderCursor` or `newerCursor` as
 `cursor` for the next page (no cursor: the latest page). A page doesn't shift when new rows arrive, and an older page costs the same as
-the first one.
+the first one. `search` narrows the scheduled jobs, the history and the periodic jobs as the dashboard's search field does.
 
 A pending job is identified by its primary key: its `id`, `queue` and `scheduledAt`, as `/jobs` returns them, with `scheduledAt` in UTC
 (e.g. `2026-11-07T10:00:00.1234567Z`). On most databases there's no index on the id alone, so a lookup by the id would read the whole job table.

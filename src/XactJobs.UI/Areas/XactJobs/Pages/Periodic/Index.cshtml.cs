@@ -17,8 +17,10 @@ public class IndexModel : XactJobsPageModel
     public string PeriodicApiUrl(PeriodicJobDto job, string action) =>
         ApiUrl("/periodic/" + Uri.EscapeDataString(job.Id) + action);
 
+    public override bool HasSearch => true;
+
     protected override async Task LoadAsync(CancellationToken ct)
     {
-        Jobs = await Service.GetPeriodicJobsAsync(PageNumber, Options.DefaultPageSize, ct);
+        Jobs = await Service.GetPeriodicJobsAsync(Search, PageNumber, Options.DefaultPageSize, ct);
     }
 }

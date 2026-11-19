@@ -54,6 +54,9 @@ public abstract class QueryPlanIntegrationTests(DatabaseFixture fixture) : IAsyn
     public Task BatchQueries_UseTheBatchIndexes() => _scenarios.BatchQueries_UseTheBatchIndexes();
 
     [DockerFact]
+    public Task ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey() => _scenarios.ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey();
+
+    [DockerFact]
     public Task JobQueues_JumpFromQueueToQueue() => _scenarios.JobQueues_JumpFromQueueToQueue();
 
     [DockerFact]

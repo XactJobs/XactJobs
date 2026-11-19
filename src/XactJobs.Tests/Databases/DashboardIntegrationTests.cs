@@ -89,7 +89,7 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         Assert.Equal(2, history.ErrorCount);
         Assert.Null(history.ErrorStackTrace);
 
-        var cancelled = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Cancelled, DateTime.UtcNow.AddDays(-1), null, null, null, 20));
+        var cancelled = await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Cancelled, DateTime.UtcNow.AddDays(-1), null, null, null, null, 20));
 
         Assert.Equal(pendingId, Assert.Single(cancelled.Items).Id);
     }
@@ -168,14 +168,14 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
 
         await WithServiceAsync(s => s.SetPeriodicJobActiveAsync(PeriodicId, false));
 
-        var paused = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(1, 20))).Items);
+        var paused = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(null, 1, 20))).Items);
 
         Assert.False(paused.IsActive);
         Assert.Null(paused.NextRunAt);
 
         await WithServiceAsync(s => s.SetPeriodicJobActiveAsync(PeriodicId, true));
 
-        var resumed = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(1, 20))).Items);
+        var resumed = Assert.Single((await WithServiceAsync(s => s.GetPeriodicJobsAsync(null, 1, 20))).Items);
 
         Assert.True(resumed.IsActive);
         Assert.NotNull(resumed.NextRunAt);
@@ -217,13 +217,13 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         await AddJobAsync(DateTime.UtcNow.AddMinutes(-1), leasedUntil: DateTime.UtcNow.AddMinutes(5));
 
         async Task<long> SingleIdAsync(HistoryCategory category) =>
-            Assert.Single((await WithServiceAsync(s => s.GetHistoryAsync(category, DateTime.UtcNow.AddDays(-1), null, null, null, 20))).Items).Id;
+            Assert.Single((await WithServiceAsync(s => s.GetHistoryAsync(category, DateTime.UtcNow.AddDays(-1), null, null, null, null, 20))).Items).Id;
 
         Assert.Equal(3, await SingleIdAsync(HistoryCategory.Failed));
         Assert.Equal(4, await SingleIdAsync(HistoryCategory.Cancelled));
         Assert.Equal(5, await SingleIdAsync(HistoryCategory.Retried));
         Assert.Equal(6, await SingleIdAsync(HistoryCategory.Skipped));
-        Assert.Equal(2, (await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddDays(-1), null, null, null, 20))).TotalCount);
+        Assert.Equal(2, (await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddDays(-1), null, null, null, null, 20))).TotalCount);
 
         var stats = await WithServiceAsync(s => s.GetDashboardStatsAsync());
 
@@ -240,7 +240,7 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
 
         Assert.Equal([QueueNames.Default, "emails"], queues);
 
-        var emails = await WithServiceAsync(s => s.GetScheduledJobsAsync("emails", 1, 20));
+        var emails = await WithServiceAsync(s => s.GetScheduledJobsAsync("emails", null, 1, 20));
 
         Assert.Equal("emails", Assert.Single(emails.Items).Queue);
     }
@@ -320,6 +320,59 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
         Assert.Equal(1, stats.AwaitingContinuations);
 
         Assert.Equal(ActionStatus.Done, (await WithServiceAsync(s => s.RetryJobAsync(31))).Status);
+    }
+
+    [DockerFact]
+    public async Task Search_NarrowsTheLists_IgnoringCase_ByAnyOrOneField_WithItsTextTakenLiterally()
+    {
+        const string queue = "search";
+        var processedAt = DateTime.UtcNow.AddMinutes(-5);
+
+        // (type, method, periodic job): "_" and "%" are LIKE's wildcards, and must be searched as text
+        (string Type, string Method, string? Periodic)[] rows =
+        [
+            ("App.Jobs.EmailSender, App", "Send(System.String)", null),
+            ("App.Jobs.ReportBuilder, App", "Build()", "Nightly_Report"),
+            ("App.Jobs.Cleanup, App", "Purge50%()", null),
+        ];
+
+        await WithDbAsync(async db =>
+        {
+            for (var i = 0; i < rows.Length; i++)
+            {
+                var (type, method, periodic) = rows[i];
+
+                db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(1 + i), type, method, "[]", queue, periodic, periodic != null ? "0 0 0 * * *" : null, periodic != null ? 99 : null)); // not the version of the periodic job's own run (unique)
+                db.JobHistory.Add(new XactJobHistory(100 + i, processedAt.AddSeconds(i), XactJobStatus.Completed, processedAt, type, method, "[]", queue, periodic));
+            }
+
+            await db.JobEnsurePeriodicAsync<DashboardIntegrationTests>(x => x.GetHashCode(), "Nightly_Report", "not-polled", "0 0 0 * * *", CancellationToken.None);
+
+            return await db.SaveChangesAsync();
+        });
+
+        async Task<string[]> ScheduledAsync(string search) =>
+            [.. (await WithServiceAsync(s => s.GetScheduledJobsAsync(queue, search, 1, 20))).Items.Select(j => j.MethodName).Order()];
+
+        async Task<string[]> HistoryAsync(string search) =>
+            [.. (await WithServiceAsync(s => s.GetHistoryAsync(HistoryCategory.Succeeded, DateTime.UtcNow.AddDays(-1), null, queue, search, null, 20))).Items.Select(h => h.MethodName).Order()];
+
+        foreach (var list in new Func<string, Task<string[]>>[] { ScheduledAsync, HistoryAsync })
+        {
+            Assert.Equal(["Send(System.String)"], await list("EMAIL"));
+            Assert.Equal(["Build()"], await list("type: report"));
+            Assert.Equal(["Send(System.String)"], await list("Method:SEND"));
+            Assert.Equal(["Build()"], await list("periodic: nightly"));
+            Assert.Empty(await list("type: string")); // only in a method
+            Assert.Equal(["Build()"], await list("_r"));
+            Assert.Equal(["Purge50%()"], await list("%("));
+            Assert.Equal(3, (await list("  ")).Length);
+        }
+
+        var periodic = await WithServiceAsync(s => s.GetPeriodicJobsAsync("periodic: NIGHTLY_", 1, 20));
+
+        Assert.Equal("Nightly_Report", Assert.Single(periodic.Items).Id);
+        Assert.Empty((await WithServiceAsync(s => s.GetPeriodicJobsAsync("method: purge", 1, 20))).Items);
     }
 
     private TestDbContext CreateDb()

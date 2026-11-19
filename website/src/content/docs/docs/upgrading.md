@@ -64,6 +64,7 @@ The dashboard reads less of large tables (see [Dashboard](../dashboard/#pages-an
 - `/batches?state=` is `/batches/active` and `/batches/finished`, and `GetBatchesAsync` is `GetActiveBatchesAsync` and
   `GetFinishedBatchesAsync`.
 - The counts stop at 10,000 (`IsTotalCountCapped`).
+- `GetScheduledJobsAsync`, `GetHistoryAsync` and `GetPeriodicJobsAsync` take a `search` (null for none), as the API's lists do.
 
 ## v0.9.0
 

@@ -46,6 +46,9 @@ public sealed class SqliteQueryPlanTests : IAsyncLifetime
     public Task BatchQueries_UseTheBatchIndexes() => _scenarios.BatchQueries_UseTheBatchIndexes();
 
     [Fact]
+    public Task ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey() => _scenarios.ScheduledJobsWithASearch_ReadTheirQueueThroughThePrimaryKey();
+
+    [Fact]
     public Task JobQueues_JumpFromQueueToQueue() => _scenarios.JobQueues_JumpFromQueueToQueue();
 
     [Fact]
