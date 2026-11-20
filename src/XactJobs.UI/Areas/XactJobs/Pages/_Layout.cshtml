@@ -7,6 +7,9 @@
 @{
     var basePath = Url.Content("~" + Options.BasePath);
     var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
+
+    // the menu keeps the filters, from page to page (FilterLinks)
+    string Link(string path) => XactJobs.UI.Pages.FilterLinks.Url(basePath + path, Context.Request);
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -27,7 +30,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
         <div class="container-fluid">
-            <a class="navbar-brand" href="@basePath">
+            <a class="navbar-brand" href="@Link("")">
                 <i class="bi bi-gear-wide-connected me-2"></i>@Options.DashboardTitle
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -36,22 +39,22 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
                     <li class="nav-item">
-                        <a class="nav-link" href="@basePath"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
+                        <a class="nav-link" href="@Link("")"><i class="bi bi-speedometer2 me-1"></i>Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="@basePath/scheduled"><i class="bi bi-clock me-1"></i>Scheduled</a>
+                        <a class="nav-link" href="@Link("/scheduled")"><i class="bi bi-clock me-1"></i>Scheduled</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="@basePath/history/succeeded"><i class="bi bi-check-circle me-1"></i>Succeeded</a>
+                        <a class="nav-link" href="@Link("/history/succeeded")"><i class="bi bi-check-circle me-1"></i>Succeeded</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="@basePath/history/failed"><i class="bi bi-x-circle me-1"></i>Failed</a>
+                        <a class="nav-link" href="@Link("/history/failed")"><i class="bi bi-x-circle me-1"></i>Failed</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="@basePath/batches"><i class="bi bi-collection me-1"></i>Batches</a>
+                        <a class="nav-link" href="@Link("/batches")"><i class="bi bi-collection me-1"></i>Batches</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="@basePath/periodic"><i class="bi bi-arrow-repeat me-1"></i>Periodic</a>
+                        <a class="nav-link" href="@Link("/periodic")"><i class="bi bi-arrow-repeat me-1"></i>Periodic</a>
                     </li>
                 </ul>
                 <ul class="navbar-nav ms-auto">

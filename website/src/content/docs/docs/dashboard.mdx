@@ -56,11 +56,12 @@ The other options (page size, title, refresh interval) are in the [configuration
 
 ## Pages and actions
 
-- **Dashboard**: due, scheduled and running jobs, continuations waiting for their batch, succeeded and failed jobs in the last 24 hours,
-  and a chart per hour
-- **Scheduled**: the pending and running jobs of a queue, the default queue first, or of all the queues. The job table is read in
-  the order of its primary key, which starts with the queue, so a backlog isn't sorted on each refresh: all the queues are listed
-  queue by queue, each one's earliest jobs first. A continuation that waits for its batch shows how many of the batch's jobs are left, and
+- **Dashboard**: due, scheduled and running jobs (without the periodic runs the worker would skip, as on Scheduled), continuations
+  waiting for their batch, succeeded and failed jobs in the last 24 hours, and a chart per hour
+- **Scheduled**: the pending and running jobs of all the queues, or of one. The job table is read in the order of its primary key,
+  which starts with the queue, so a backlog isn't sorted on each refresh: all the queues are listed queue by queue, each one's earliest
+  jobs first. Runs of periodic jobs that the worker would skip (the periodic job was deleted, or its definition changed since) aren't
+  listed. A continuation that waits for its batch shows how many of the batch's jobs are left, and
   jobs of batches link to their batch
   - *Run now* makes a pending job due now, and the job keeps the time it was scheduled for as `XactJobContext.OriginallyScheduledAt`. A
     continuation that waits for its batch can't: it starts when the batch is finished
@@ -89,6 +90,10 @@ The Scheduled, History and Periodic lists have a search field (Enter searches, a
 text, ignoring case. To search only one of them, start with `type:`, `method:` or `periodic:` (e.g. `method: sendemail`); on the
 Periodic page, the periodic job is the id. The database searches within the list's queue or period, which it still reads through its
 index, but a search for text inside a value can't use one: it reads the rows of the queue or the period until it fills a page.
+
+The filters (queue, period, search) are in the URL, and the menu and the tabs keep them from page to page, so each browser tab has
+its own. The days of the periods are in the browser's time zone, which the page sends with them (`tz`), and the server works them out
+at each request: a page or a link of today still shows today the next day.
 
 <Screenshot name="scheduled" alt="Scheduled jobs: running, scheduled and retrying jobs, with their queues" />
 

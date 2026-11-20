@@ -351,6 +351,9 @@ public abstract class DashboardIntegrationTests(DatabaseFixture fixture) : IAsyn
             return await db.SaveChangesAsync();
         });
 
+        // the row's version, so that Scheduled lists it (a run of another version would be skipped)
+        await WithDbAsync(db => db.Set<XactJobPeriodic>().ExecuteUpdateAsync(p => p.SetProperty(x => x.Version, 99)));
+
         async Task<string[]> ScheduledAsync(string search) =>
             [.. (await WithServiceAsync(s => s.GetScheduledJobsAsync(queue, search, 1, 20))).Items.Select(j => j.MethodName).Order()];
 

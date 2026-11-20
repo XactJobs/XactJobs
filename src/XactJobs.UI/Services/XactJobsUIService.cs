@@ -39,6 +39,16 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         this.jobsOptions = jobsOptions;
     }
 
+    /// <summary>
+    /// Without the periodic runs the worker will skip: of a periodic job deleted, or whose definition changed since (another
+    /// version). A paused job's pending run is deleted when it's paused. By the periodic table's primary key.
+    /// </summary>
+    private IQueryable<XactJob> WithoutRunsToSkip(IQueryable<XactJob> query)
+    {
+        return query.Where(j => j.PeriodicJobId == null
+            || db.Set<XactJobPeriodic>().Any(p => p.Id == j.PeriodicJobId && p.Version == j.PeriodicJobVersion));
+    }
+
     public async Task<DashboardStatsDto> GetDashboardStatsAsync(CancellationToken ct = default)
     {
         var now = DateTime.UtcNow;
@@ -47,7 +57,7 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         var awaiting = XactJobBase.AwaitingBatchScheduledAt;
 
         // one read of each table, with a count per condition (COUNT(CASE WHEN ... THEN 1 END)). No rows: no group
-        var jobs = await db.Set<XactJob>()
+        var jobs = await WithoutRunsToSkip(db.Set<XactJob>())
             .GroupBy(_ => 1)
             .Select(g => new
             {
@@ -179,6 +189,8 @@ public class XactJobsUIService<TDbContext> : IXactJobsUIService
         {
             query = jobSearch.Apply(query);
         }
+
+        query = WithoutRunsToSkip(query);
 
         var (totalCount, isCapped) = await CountAsync(query, ct);
 

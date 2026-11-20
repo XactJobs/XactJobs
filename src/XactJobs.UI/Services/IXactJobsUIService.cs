@@ -19,7 +19,8 @@ public interface IXactJobsUIService
     /// The pending and running jobs of a queue, or of all the queues if <paramref name="queue"/> is null or empty, read in the
     /// order of the primary key: the earliest scheduled first, and all the queues queue by queue (ordered by name), so the
     /// database never sorts the whole table. The count stops at <c>MaxCount</c>. See <see cref="GetHistoryAsync"/> for
-    /// <paramref name="search"/>.
+    /// <paramref name="search"/>. Runs of periodic jobs that the worker would skip (the periodic job was deleted, or its
+    /// definition changed since) aren't listed.
     /// </summary>
     Task<PagedResultDto<JobDto>> GetScheduledJobsAsync(
         string? queue, string? search, int page, int pageSize, CancellationToken ct = default);

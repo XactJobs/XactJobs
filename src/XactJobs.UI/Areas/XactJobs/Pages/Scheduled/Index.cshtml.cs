@@ -14,17 +14,8 @@ public class IndexModel : XactJobsPageModel
 
     public override bool HasSearch => true;
 
-    // the default queue first: "All" is an empty queue in the query (queue=), kept in the page's links
-    public override string FilterQuery =>
-        (string.IsNullOrEmpty(Queue) ? "&queue=" : QueryPart("queue", Queue)) + QueryPart("search", Search);
-
     protected override async Task LoadAsync(CancellationToken ct)
     {
-        if (string.IsNullOrEmpty(Queue) && !Request.Query.ContainsKey("queue"))
-        {
-            Queue = QueueNames.Default;
-        }
-
         Jobs = await Service.GetScheduledJobsAsync(Queue, Search, PageNumber, Options.DefaultPageSize, ct);
     }
 }

@@ -709,8 +709,8 @@ The API endpoints that change data require an antiforgery token, which the dashb
 
 ## Pages and Actions
 
-- **Dashboard** - due, scheduled and running jobs, continuations waiting for their batch, succeeded and failed jobs in the last 24 hours, and a chart per hour
-- **Scheduled** - the pending and running jobs of a queue, the default queue first, or of all the queues (the job table is read in the order of its primary key, which starts with the queue, so a backlog isn't sorted on each refresh: all the queues are listed queue by queue). A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
+- **Dashboard** - due, scheduled and running jobs (without the periodic runs the worker would skip, as on Scheduled), continuations waiting for their batch, succeeded and failed jobs in the last 24 hours, and a chart per hour
+- **Scheduled** - the pending and running jobs of all the queues, or of one (the job table is read in the order of its primary key, which starts with the queue, so a backlog isn't sorted on each refresh: all the queues are listed queue by queue). Runs of periodic jobs that the worker would skip (the periodic job was deleted, or its definition changed since) aren't listed. A continuation that waits for its batch shows how many of the batch's jobs are left, and jobs of batches link to their batch
   - *Run now* makes a pending job due now, and the job keeps the time it was scheduled for as `XactJobContext.OriginallyScheduledAt`. A continuation that waits for its batch can't: it starts when the batch is finished
   - *Cancel* moves a pending job to the history as cancelled. Running jobs can't be cancelled, and neither can runs of periodic jobs: pause the periodic job instead.
     A cancelled job of a batch counts as a failed job of the batch, and if it was the last one, the batch's continuations start
@@ -718,6 +718,7 @@ The API endpoints that change data require an antiforgery token, which the dashb
   - *Retry* enqueues a failed or cancelled job, or a skipped one that isn't a periodic run (a continuation whose condition wasn't met, a job a filter skipped), again as a new job. A run of a periodic job is enqueued as a one-off job
     (not one that had a state, which it would run without), and a job of a batch or a continuation runs outside of any batch, so it doesn't start continuations. Like a retry by a worker, it keeps the time the job was originally scheduled for
 - **Search** - the Scheduled, History and Periodic lists have a search field (Enter searches): the rows whose type, method or periodic job contains the text, ignoring case, or only one of them with `type:`, `method:` or `periodic:`. The database searches within the list's queue or period
+- **Filters** - the queue, the period and the search are in the URL, and the menu and the tabs keep them from page to page (each browser tab has its own). The days of the periods are in the browser's time zone, which the page sends, and the server works them out at each request, so a link to today still shows today the next day
 - **Batches** - the active batches, with jobs left, and the finished ones, as long as their history is kept, with their progress. The finished ones are in a period like the history, by the time their last job finished
   - A batch's page has its jobs left, its continuations and its history, and links to the batch it continues
 - **Periodic** - the periodic jobs, with their schedule and its time zone, their next run and their state

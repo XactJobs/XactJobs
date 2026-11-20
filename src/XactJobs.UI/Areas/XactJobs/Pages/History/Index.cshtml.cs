@@ -34,7 +34,7 @@ public class IndexModel : XactJobsPeriodPageModel
 
     public bool ShowsErrors => Category is HistoryCategory.Failed or HistoryCategory.Cancelled or HistoryCategory.Retried;
 
-    public string CategoryUrl(HistoryCategory category) => PageUrl("/history/" + category.ToString().ToLowerInvariant());
+    public string CategoryUrl(HistoryCategory category) => PageUrlWithFilters("/history/" + category.ToString().ToLowerInvariant());
 
     public override bool HasSearch => true;
 
