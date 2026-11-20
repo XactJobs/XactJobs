@@ -49,7 +49,8 @@ public partial class DashboardWebTests : IAsyncDisposable
     [InlineData("/XactJobs/periodic?handler=Table&p=1")]
     [InlineData("/api/XactJobs/stats")]
     [InlineData("/XactJobs/scheduled?queue=emails")]
-    [InlineData("/XactJobs/history/succeeded?period=today&from=2020-01-01T00:00:00.000Z&to=2020-01-02T00:00:00.000Z")]
+    [InlineData("/XactJobs/history/succeeded?period=today&tz=Europe/Zagreb")]
+    [InlineData("/XactJobs/history/succeeded?period=week&tz=Not/AZone")]
     [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=o638675712000000000_42")]
     [InlineData("/XactJobs/history/succeeded?handler=Table&cursor=not-a-cursor")]
     [InlineData("/api/XactJobs/jobs")]
@@ -86,7 +87,7 @@ public partial class DashboardWebTests : IAsyncDisposable
     [InlineData("/XactJobs/batch/" + SeedBatch + "?handler=Table&p=1")]
     [InlineData("/XactJobs/batch/00000000-0000-0000-0000-000000000001")]
     [InlineData("/XactJobs/history/skipped")]
-    [InlineData("/XactJobs/batches/finished?period=yesterday&from=2020-01-01T00:00:00.000Z&to=2020-01-02T00:00:00.000Z")]
+    [InlineData("/XactJobs/batches/finished?period=yesterday&tz=America/New_York")]
     [InlineData("/XactJobs/batches/finished?handler=Table&cursor=o638675712000000000_42")]
     [InlineData("/api/XactJobs/batches/active")]
     [InlineData("/api/XactJobs/batches/finished")]
@@ -237,24 +238,24 @@ public partial class DashboardWebTests : IAsyncDisposable
             return await db.SaveChangesAsync();
         });
 
-        // the default queue first; "All" is an empty queue in the query
+        // all the queues first ("All" is an empty queue)
         var initial = await client.GetStringAsync("/XactJobs/scheduled");
         var emails = await client.GetStringAsync("/XactJobs/scheduled?queue=emails");
         var all = await client.GetStringAsync("/XactJobs/scheduled?queue=");
 
         Assert.Contains("<option value=\"emails\">", initial);
-        Assert.Contains($"<option value=\"{QueueNames.Default}\" selected=\"selected\">", initial);
         Assert.Contains("<option value=\"\">All</option>", initial);
+        Assert.DoesNotContain("selected=\"selected\"", initial);
         Assert.Contains("<option value=\"emails\" selected=\"selected\">", emails);
         Assert.DoesNotContain("selected=\"selected\"", all);
-        Assert.Equal(2, Regex.Matches(initial, "<code>\\d+</code>").Count);
+        Assert.Equal(3, Regex.Matches(initial, "<code>\\d+</code>").Count);
         Assert.Single(Regex.Matches(emails, "<code>\\d+</code>"));
         Assert.Equal(3, Regex.Matches(all, "<code>\\d+</code>").Count);
 
-        // the table keeps the filter when it refreshes, "All" too
+        // the table keeps the filter when it refreshes
         Assert.Contains("?handler=Table&amp;p=1&amp;queue=emails", emails);
-        Assert.Contains("?handler=Table&amp;p=1&amp;queue=", all);
-        Assert.Equal(3, Regex.Matches(await client.GetStringAsync("/XactJobs/scheduled?handler=Table&p=1&queue="), "<code>\\d+</code>").Count);
+        Assert.Contains("?handler=Table&amp;p=1\"", initial);
+        Assert.Equal(3, Regex.Matches(await client.GetStringAsync("/XactJobs/scheduled?handler=Table&p=1"), "<code>\\d+</code>").Count);
     }
 
     [Fact]
@@ -265,14 +266,46 @@ public partial class DashboardWebTests : IAsyncDisposable
         await SeedAsync();
 
         var lastDay = await client.GetStringAsync("/XactJobs/history/succeeded");
-        var yesterday = await client.GetStringAsync("/XactJobs/history/succeeded?period=yesterday&from=2020-01-01T00:00:00.000Z&to=2020-01-02T00:00:00.000Z");
+        var day = await client.GetStringAsync("/XactJobs/history/succeeded?period=day&day=2020-01-01&tz=Europe/Zagreb");
 
         Assert.Contains("<option value=\"24h\" selected=\"selected\">Last 24 hours</option>", lastDay);
-        Assert.Contains("<option value=\"yesterday\" selected=\"selected\">Yesterday</option>", yesterday);
+        Assert.Contains("<option value=\"day\" selected=\"selected\">Day</option>", day);
 
         // nothing in 2020: the period is applied, and the table refreshes with it
-        Assert.Contains("No jobs found in this period", yesterday);
-        Assert.Contains("?handler=Table&amp;period=yesterday&amp;from=2020-01-01T00%3A00%3A00.000Z&amp;to=2020-01-02T00%3A00%3A00.000Z", yesterday);
+        Assert.Contains("No jobs found in this period", day);
+        Assert.Contains("?handler=Table&amp;period=day&amp;day=2020-01-01&amp;tz=Europe%2FZagreb", day);
+    }
+
+    [Fact]
+    public async Task Links_CarryTheFilters_AlsoTheOnesThePageDoesntHave()
+    {
+        var client = await StartAsync(o => o.AllowAnonymous());
+
+        await SeedAsync();
+
+        const string filters = "queue=emails&amp;search=run&amp;period=today&amp;tz=Europe%2FZagreb";
+
+        var scheduled = await client.GetStringAsync("/XactJobs/scheduled?queue=emails&search=run&period=today&tz=Europe/Zagreb");
+        var batches = await client.GetStringAsync("/XactJobs/batches?queue=emails&search=run&period=today&tz=Europe/Zagreb");
+        var home = await client.GetStringAsync("/XactJobs?queue=emails&search=run&period=today&tz=Europe/Zagreb");
+
+        // the menu, the tabs, and the table's refresh
+        foreach (var page in new[] { scheduled, batches, home })
+        {
+            Assert.Contains($"href=\"/XactJobs/history/succeeded?{filters}\"", page);
+            Assert.Contains($"href=\"/XactJobs/periodic?{filters}\"", page);
+        }
+
+        Assert.Contains($"href=\"/XactJobs/batches/finished?{filters}\"", batches);
+        Assert.Contains($"?handler=Table&amp;p=1&amp;{filters}", scheduled);
+
+        // the filters' form of Scheduled keeps the period, which it doesn't show
+        Assert.Contains("<input type=\"hidden\" name=\"period\" value=\"today\" />", scheduled);
+        Assert.Contains("<input type=\"hidden\" name=\"tz\" value=\"Europe/Zagreb\" />", scheduled);
+        Assert.DoesNotContain("name=\"from\"", scheduled);
+
+        // without filters, plain links
+        Assert.Contains("href=\"/XactJobs/scheduled\"", await client.GetStringAsync("/XactJobs"));
     }
 
     [Theory]

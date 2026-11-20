@@ -2,12 +2,18 @@
 @{
     var periodPage = Model as XactJobsPeriodPageModel;
     var hasPeriod = periodPage?.HasPeriodFilter == true;
+
+    // the filters of the other pages, kept as they are (FilterLinks); tz is always sent, set by the browser
+    var shown = new List<string> { "tz" };
+    if (Model.HasSearch) shown.Add("search");
+    if (Model.Queues != null) shown.Add("queue");
+    if (hasPeriod) shown.AddRange(["period", "day"]);
 }
 
 @if (Model.Queues != null || hasPeriod || Model.HasSearch)
 {
-    @* a GET form to the current page: a change starts again at the first page. The browser works out the period's times
-       (xactJobsSubmitFilters), in its own time zone *@
+    @* a GET form to the current page: a change starts again at the first page. It sends the browser's time zone, in which the
+       server works out the period's days (xactJobsSubmitFilters) *@
     <form method="get" class="d-flex align-items-center gap-2" data-xj-filters onsubmit="xactJobsSubmitFilters(this); return false;">
         @if (Model.HasSearch)
         {
@@ -46,8 +52,11 @@
             </select>
             <input type="date" name="day" class="form-control form-control-sm" style="width: auto;" value="@periodPage!.Day"
                    hidden="@(periodPage.CurrentPeriod != "day")" onchange="xactJobsSubmitFilters(this.form)" aria-label="Day" />
-            <input type="hidden" name="from" />
-            <input type="hidden" name="to" />
+        }
+        <input type="hidden" name="tz" value="@Context.Request.Query["tz"]" />
+        @foreach (var name in XactJobs.UI.Pages.FilterLinks.Names.Except(shown))
+        {
+            <input type="hidden" name="@name" value="@Context.Request.Query[name]" />
         }
     </form>
 }

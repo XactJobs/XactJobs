@@ -94,65 +94,33 @@ document.addEventListener('htmx:afterSwap', function (evt) {
 // the page itself, and content swapped in another way (outerHTML replaces the target)
 htmx.onLoad(xactJobsLocalizeTimes);
 
-// Submits a page's filters (_Filters.cshtml). The period's times are worked out here, in the browser's time zone, and sent as UTC
-// times (from, to); the last 24 hours, the default, are worked out by the server at each request, so they move with the time
+// Submits a page's filters (_Filters.cshtml), with the browser's time zone, in which the server works out the period's days. The
+// filters stay in the URL, and the links carry them to the other pages (FilterLinks)
 function xactJobsSubmitFilters(form) {
     const period = form.elements['period'];
+    const day = form.elements['day'];
 
-    if (period) {
-        const day = form.elements['day'];
+    // the page's own period (on the other pages, it's a hidden field kept as it is)
+    if (period && period.tagName === 'SELECT') {
         day.hidden = period.value !== 'day';
 
-        const range = xactJobsPeriodRange(period.value, day.value);
-
         // a day without a date yet: wait for one
-        if (period.value === 'day' && !range) {
+        if (period.value === 'day' && !day.value) {
             day.focus();
             return;
         }
-
-        form.elements['from'].value = range ? range.from.toISOString() : '';
-        form.elements['to'].value = range ? range.to.toISOString() : '';
     }
 
-    // without the empty fields in the URL, except a select's: an empty queue is "All", which on Scheduled isn't the default
+    try {
+        form.elements['tz'].value = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch (e) { /* no time zone: UTC */ }
+
+    // without the empty fields in the URL (an empty queue is "All", the default), nor a day that isn't the period's
     Array.from(form.elements).forEach(function (field) {
-        if (field.name && !field.value && field.tagName !== 'SELECT') field.disabled = true;
+        if (field.name && (!field.value || (period && field === day && period.value !== 'day'))) field.disabled = true;
     });
 
     form.submit();
-}
-
-// The local start (included) and end (excluded) of a period, or null for the last 24 hours. Weeks start on Monday
-function xactJobsPeriodRange(period, day) {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    // by the calendar, so a day with a daylight saving change still ends at midnight
-    function addDays(date, days) {
-        const result = new Date(date);
-        result.setDate(result.getDate() + days);
-        return result;
-    }
-
-    switch (period) {
-        case 'today':
-            return { from: today, to: addDays(today, 1) };
-        case 'yesterday':
-            return { from: addDays(today, -1), to: today };
-        case 'week': {
-            const monday = addDays(today, -((today.getDay() + 6) % 7));
-            return { from: monday, to: addDays(monday, 7) };
-        }
-        case 'day': {
-            const parts = (day || '').split('-').map(Number);
-            if (parts.length !== 3 || parts.some(isNaN)) return null;
-            const start = new Date(parts[0], parts[1] - 1, parts[2]);
-            return { from: start, to: addDays(start, 1) };
-        }
-        default:
-            return null;
-    }
 }
 
 // Marks the chosen theme in the switch, and shows its icon on the switch's button

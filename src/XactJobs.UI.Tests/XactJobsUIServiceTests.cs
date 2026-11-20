@@ -438,6 +438,8 @@ public class XactJobsUIServiceTests : IDisposable
         {
             db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(1), "App.EmailSender, App", "Send(System.String)", "[]", QueueNames.Default));
             db.Jobs.Add(new XactJob(0, DateTime.UtcNow.AddHours(2), "App.Cleanup, App", "Purge50%()", "[]", QueueNames.Default, "Nightly_Purge", Daily, 99));
+            db.Set<XactJobPeriodic>().Add(new XactJobPeriodic("Nightly_Purge", DateTime.UtcNow, DateTime.UtcNow, Daily, "App.Cleanup, App", "Purge50%()", "[]",
+                                                             QueueNames.Default, isActive: true, version: 99));
 
             await db.SaveChangesAsync();
         }
@@ -528,6 +530,51 @@ public class XactJobsUIServiceTests : IDisposable
         Assert.All(jobs.Where(j => !j.IsAwaitingBatch), j => Assert.Equal(batch, j.BatchId));
 
         Assert.Equal(2, (await WithServiceAsync(s => s.GetJobAsync(KeyOf(continuation))))!.BatchJobsLeft);
+    }
+
+    [Fact]
+    public async Task ScheduledJobsAndStats_LeaveOutPeriodicRunsTheWorkerWouldSkip()
+    {
+        await EnsurePeriodicAsync();
+        var jobId = await AddJobAsync(DateTime.UtcNow.AddHours(1));
+        var run = await GetPeriodicRunAsync();
+
+        async Task<long[]> ListedAsync()
+        {
+            var jobs = await WithServiceAsync(s => s.GetScheduledJobsAsync(null, null, 1, 20));
+
+            Assert.Equal(jobs.Items.Count, jobs.TotalCount);
+
+            // both scheduled later: the home page counts the same jobs
+            var stats = await WithServiceAsync(s => s.GetDashboardStatsAsync());
+            Assert.Equal((0, jobs.Items.Count), (stats.DueJobs, stats.ScheduledJobs));
+
+            return [.. jobs.Items.Select(j => j.Id).Order()];
+        }
+
+        Assert.Equal(new[] { jobId, run.Id }.Order(), await ListedAsync());
+
+        await using (var db = CreateDb())
+        {
+            // the definition changed: the run is of the old version
+            await db.Set<XactJobPeriodic>().ExecuteUpdateAsync(p => p.SetProperty(x => x.Version, x => x.Version + 1));
+        }
+
+        Assert.Equal([jobId], await ListedAsync());
+
+        await using (var db = CreateDb())
+        {
+            await db.Set<XactJobPeriodic>().ExecuteUpdateAsync(p => p.SetProperty(x => x.Version, x => x.Version - 1));
+        }
+
+        Assert.Equal(new[] { jobId, run.Id }.Order(), await ListedAsync());
+
+        await using (var db = CreateDb())
+        {
+            await db.Set<XactJobPeriodic>().ExecuteDeleteAsync();
+        }
+
+        Assert.Equal([jobId], await ListedAsync());
     }
 
     [Fact]

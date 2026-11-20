@@ -39,7 +39,7 @@ public class IndexModel : XactJobsPeriodPageModel
 
     public (BatchState State, string Title, string Icon, string Description) Current => States.First(s => s.State == State);
 
-    public string StateUrl(BatchState state) => PageUrl("/batches/" + state.ToString().ToLowerInvariant());
+    public string StateUrl(BatchState state) => PageUrlWithFilters("/batches/" + state.ToString().ToLowerInvariant());
 
     protected override async Task LoadAsync(CancellationToken ct)
     {

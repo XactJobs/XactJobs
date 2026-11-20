@@ -59,14 +59,14 @@ public abstract class XactJobsPageModel : PageModel
     }
 
     /// <summary>
-    /// The query of the page's filters, each one starting with &amp;.
+    /// The query of the filters, each one starting with &amp;: all of them, also the ones of other pages (see <see cref="FilterLinks"/>).
     /// </summary>
-    public virtual string FilterQuery => QueryPart("queue", Queue) + (HasSearch ? QueryPart("search", Search) : "");
+    public virtual string FilterQuery => FilterLinks.Query(Request);
 
-    protected static string QueryPart(string name, string? value)
-    {
-        return string.IsNullOrEmpty(value) ? "" : "&" + name + "=" + Uri.EscapeDataString(value);
-    }
+    /// <summary>A link to another page of the dashboard, with the filters.</summary>
+    internal string PageUrlWithFilters(string path) => FilterLinks.Url(PageUrl(path), Request);
+
+    protected static string QueryPart(string name, string? value) => FilterLinks.Part(name, value);
 
     public string ApiUrl(string path) => Url.Content("~" + Options.ApiBasePath + path);
 
