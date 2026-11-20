@@ -24,7 +24,7 @@ public static class ServiceCollectionExtensions
 
         // the scheduler saves them at start, and an invalid one there would stop the ones after it. Other problems of a periodic job
         // are reported by the scheduler, as before
-        CheckRetryAttributesOfPeriodicJobs(optionsBuilder.Options);
+        CheckPeriodicJobMethods(optionsBuilder.Options);
 
         services.AddSingleton(optionsBuilder.Options);
 
@@ -73,19 +73,20 @@ public static class ServiceCollectionExtensions
         }
     }
 
-    /// <exception cref="InvalidOperationException">With every periodic job whose method has an invalid [XactRetry].</exception>
-    private static void CheckRetryAttributesOfPeriodicJobs<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
+    /// <exception cref="InvalidOperationException">With every periodic job whose method can't be a job (e.g. an invalid [XactRetry],
+    /// an optional parameter).</exception>
+    private static void CheckPeriodicJobMethods<TDbContext>(XactJobsOptions<TDbContext> options) where TDbContext : DbContext
     {
         var errors = options.PeriodicJobs
             .Concat(options.IsolatedQueues.Values.SelectMany(q => q.PeriodicJobs))
-            .Select(p => (p.Key, Error: XactJobSerializer.CheckRetryAttribute(p.Value.JobExpression)))
+            .Select(p => (p.Key, Error: XactJobSerializer.CheckJobMethod(p.Value.JobExpression)))
             .Where(p => p.Error != null)
             .Select(p => $"periodic job '{p.Key}': {p.Error}")
             .ToList();
 
         if (errors.Count > 0)
         {
-            throw new InvalidOperationException($"Invalid [XactRetry] attributes:\n- {string.Join("\n- ", errors)}");
+            throw new InvalidOperationException($"Invalid periodic job methods:\n- {string.Join("\n- ", errors)}");
         }
     }
 

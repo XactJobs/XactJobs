@@ -114,16 +114,25 @@ namespace XactJobs.Internal
         }
 
         /// <summary>
-        /// The problem with the <see cref="XactRetryAttribute"/> of a job expression's method, or null. An expression that isn't a job is
-        /// refused where it's saved, as before: here it's null. See <see cref="CheckRetryAttribute(Type, MethodInfo)"/>.
+        /// Why a job expression's method can't be a job (as enqueueing it would throw, e.g. an optional parameter or an invalid
+        /// <see cref="XactRetryAttribute"/>), or null. An expression that isn't a method call is refused where it's saved: here it's null.
         /// </summary>
-        internal static string? CheckRetryAttribute(LambdaExpression jobExpression)
+        internal static string? CheckJobMethod(LambdaExpression jobExpression)
         {
             if (TryGetMethodCall(jobExpression) is not { } call) return null;
 
-            var jobType = call.Object?.Type ?? call.Method.DeclaringType;
+            if ((call.Object?.Type ?? call.Method.DeclaringType) is not { } jobType) return null;
 
-            return jobType == null ? null : CheckRetryAttribute(jobType, call.Method);
+            try
+            {
+                _jobMethods.GetOrAdd(new JobMethodKey(call.Method, jobType), static key => JobMethod.Create(key.Method, key.JobType));
+
+                return null;
+            }
+            catch (NotSupportedException ex)
+            {
+                return ex.Message;
+            }
         }
 
         /// <summary>
@@ -152,11 +161,17 @@ namespace XactJobs.Internal
         {
             var parameters = method.GetParameters();
 
-            if (parameters.Length == 0) return method.Name + "()";
+            return GetMethodSignature(method, parameters, parameters.Length);
+        }
+
+        /// <summary>The signature of a method's first <paramref name="count"/> parameters.</summary>
+        private static string GetMethodSignature(MethodInfo method, ParameterInfo[] parameters, int count)
+        {
+            if (count == 0) return method.Name + "()";
 
             var sb = new StringBuilder(method.Name, 64).Append('(');
 
-            for (var i = 0; i < parameters.Length; i++)
+            for (var i = 0; i < count; i++)
             {
                 if (i > 0) sb.Append(", ");
 
@@ -594,23 +609,62 @@ namespace XactJobs.Internal
         /// another one with <c>new</c>, the one declared on the most derived type (both have the same signature).
         /// </summary>
         /// <exception cref="XactJobNotFoundException">There's no such method.</exception>
+        /// <summary>
+        /// The method with exactly the stored signature, or else the only one that starts with its parameter types and has only
+        /// optional parameters after them (an optional parameter added since the job was stored: the compiler passes its default).
+        /// Like C#'s overload resolution: the exact match wins, and two methods that both need defaults are ambiguous.
+        /// </summary>
         private static MethodInfo FindMethod(Type type, string methodName)
         {
             var parenthesis = methodName.IndexOf('(');
             var name = parenthesis < 0 ? methodName : methodName[..parenthesis];
 
             MethodInfo? found = null;
+            Dictionary<string, MethodInfo>? withDefaults = null;
 
             foreach (var method in type.GetMethods(PublicMethods))
             {
-                if (method.Name == name && !method.IsGenericMethodDefinition && GetMethodSignature(method) == methodName)
+                if (method.Name != name || method.IsGenericMethodDefinition) continue;
+
+                var signature = GetMethodSignature(method);
+
+                if (signature == methodName)
                 {
                     found = MostDerived(found, method);
                 }
+                else if (found == null && StartsWithSignature(method, methodName))
+                {
+                    // by signature: an override and the method it overrides are one candidate
+                    withDefaults ??= [];
+                    withDefaults[signature] = withDefaults.TryGetValue(signature, out var other) ? MostDerived(other, method) : method;
+                }
             }
 
-            return found ?? throw new XactJobNotFoundException(
+            if (found != null) return found;
+
+            if (withDefaults?.Count == 1) return withDefaults.Values.Single();
+
+            if (withDefaults?.Count > 1)
+            {
+                throw new XactJobNotFoundException(
+                    $"The job's method '{methodName}' is ambiguous: the type '{type.FullName}' has no method with this signature, and more than one that starts with it and has only optional parameters after it ({string.Join(", ", withDefaults.Keys.Order(StringComparer.Ordinal))}).");
+            }
+
+            throw new XactJobNotFoundException(
                 $"The job's method '{methodName}' wasn't found: the type '{type.FullName}' has no public method with this signature.");
+        }
+
+        /// <summary>Whether the method's first parameters have the stored signature, and all the others are optional.</summary>
+        private static bool StartsWithSignature(MethodInfo method, string methodName)
+        {
+            var parameters = method.GetParameters();
+
+            for (var count = parameters.Length - 1; count >= 0 && parameters[count].IsOptional; count--)
+            {
+                if (GetMethodSignature(method, parameters, count) == methodName) return true;
+            }
+
+            return false;
         }
 
         /// <summary>Of two methods with the same signature, the one declared on the more derived type.</summary>

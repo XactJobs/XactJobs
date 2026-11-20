@@ -22,8 +22,11 @@ namespace XactJobs.Internal
 
     internal class XactJobCompiler
     {
-        /// <summary>Per job method: its delegate, the method and its parameters, and its <see cref="XactRetryAttribute"/> (null without one).</summary>
-        private static readonly ConcurrentDictionary<(string TypeName, string MethodName), (Func<IServiceProvider, object?[], Task?>, MethodInfo, ParameterInfo[], XactJobRetry?)> _compiledJobs = new();
+        /// <summary>
+        /// Per stored job method: its delegate, the method and its parameters, its <see cref="XactRetryAttribute"/> (null without one),
+        /// and the values of the optional parameters the method has after the stored ones (empty if it has the stored signature).
+        /// </summary>
+        private static readonly ConcurrentDictionary<(string TypeName, string MethodName), (Func<IServiceProvider, object?[], Task?>, MethodInfo, ParameterInfo[], XactJobRetry?, object?[])> _compiledJobs = new();
 
         public static Task CompileAndRunJobAsync(IServiceScope scope, XactJob job, XactJobContext context, CancellationToken stoppingToken)
         {
@@ -38,18 +41,22 @@ namespace XactJobs.Internal
         {
             using var jsonArgs = JsonDocument.Parse(job.MethodArgs);
 
-            var args = new object?[jsonArgs.RootElement.GetArrayLength()];
-
             // static, with the job as the factory's argument: a lambda capturing it would be allocated also when the job is cached.
             // The method name has the parameter types, so it tells overloads apart. Not found: XactJobNotFoundException, not cached
-            var (compiledFunc, method, parameters, retry) = _compiledJobs.GetOrAdd((job.TypeName, job.MethodName), static (_, job) =>
+            // The stored arguments are one per parameter of the stored signature, the same for each job of the key
+            var (compiledFunc, method, parameters, retry, defaults) = _compiledJobs.GetOrAdd((job.TypeName, job.MethodName), static (_, state) =>
             {
-                var (type, method) = job.ToMethodInfo();
-                return (BuildJobDelegate(type, method), method, method.GetParameters(), XactRetryAttribute.ReadFrom(method));
-            }, job);
+                var (type, method) = state.job.ToMethodInfo();
+                var parameters = method.GetParameters();
+
+                return (BuildJobDelegate(type, method), method, parameters, XactRetryAttribute.ReadFrom(method), DefaultValues(parameters, state.stored));
+            }, (job, stored: jsonArgs.RootElement.GetArrayLength()));
 
             // before the arguments, which can fail too: a failed attempt is retried as its method says
             context.Retry = retry;
+
+            var stored = parameters.Length - defaults.Length;
+            var args = new object?[parameters.Length];
 
             // set the args
             for (var i = 0; i < args.Length; i++)
@@ -62,6 +69,11 @@ namespace XactJobs.Internal
                 {
                     args[i] = context;
                 }
+                else if (i >= stored)
+                {
+                    // an optional parameter added since the job was stored
+                    args[i] = defaults[i - stored];
+                }
                 else if (jsonArgs.RootElement[i].ValueKind == JsonValueKind.Null)
                 {
                     args[i] = null;
@@ -73,6 +85,30 @@ namespace XactJobs.Internal
             }
 
             return new XactJobCall(compiledFunc, method, args);
+        }
+
+        /// <summary>The values of the parameters after the first <paramref name="stored"/> ones, all optional (see FindMethod).</summary>
+        private static object?[] DefaultValues(ParameterInfo[] parameters, int stored)
+        {
+            if (stored >= parameters.Length) return [];
+
+            var values = new object?[parameters.Length - stored];
+
+            for (var i = stored; i < parameters.Length; i++)
+            {
+                var parameter = parameters[i];
+                var value = parameter.HasDefaultValue ? parameter.DefaultValue : null;
+
+                // "= default" of a struct (a CancellationToken, a DateTime), or [Optional] without a value: the type's default
+                if (value == null && parameter.ParameterType.IsValueType && Nullable.GetUnderlyingType(parameter.ParameterType) == null)
+                {
+                    value = Activator.CreateInstance(parameter.ParameterType);
+                }
+
+                values[i - stored] = value;
+            }
+
+            return values;
         }
 
         public static Func<IServiceProvider, object?[], Task?> BuildJobDelegate(Type type, MethodInfo method)

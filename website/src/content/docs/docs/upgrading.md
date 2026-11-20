@@ -49,7 +49,8 @@ A job's method is found by the signature it was stored with only. Before, a job 
 its name and parameter count: the jobs stored before 0.1.7, which have no signature, and the jobs whose method's parameter types
 changed since. Such jobs aren't found now, and fail once the 24 hours below have passed. Before upgrading, let them run, or delete them; find them with
 `method_name NOT LIKE '%(%'` in the job table, and in the periodic job table, where `JobEnsurePeriodic` or `WithPeriodicJob` with
-the same method replaces them.
+the same method replaces them. The one exception is a method that only adds parameters with default values after the stored ones,
+which runs with the defaults (see [Changing a job](../jobs/#changing-a-job)).
 
 A worker that doesn't have a job's type or method puts the job back for another node, for 24 hours, instead of failing it: see
 [Rolling deployments](../jobs/#rolling-deployments).

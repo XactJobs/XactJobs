@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Runtime.InteropServices;
+using XactJobs.Internal;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,6 +41,7 @@ public class SqliteJobOverloadTests : IAsyncLifetime
         builder.Services.AddSingleton<CallRecorder>();
         builder.Services.AddScoped<OverloadedJob>();
         builder.Services.AddScoped<HidingJob>();
+        builder.Services.AddScoped<OptionalJob>();
 
         _host = builder.Build();
 
@@ -169,6 +172,69 @@ public class SqliteJobOverloadTests : IAsyncLifetime
         Assert.Equal(XactJobStatus.Completed, history.Single().Status);
     }
 
+    [Fact]
+    public async Task JobStoredBeforeOptionalParametersWereAdded_RunsTheMethod_WithTheirDefaults()
+    {
+        // as enqueued when the method was Send(string): its stored signature and arguments
+        var ids = new[]
+        {
+            await AddStoredJobAsync<OptionalJob>("Send(System.String)", "[\"a\"]"),
+            await AddStoredJobAsync<OptionalJob>("Note(System.String)", "[\"b\"]"),
+        };
+
+        var history = await RunAndGetHistoryAsync(ids);
+
+        Assert.All(history, h => Assert.Equal(XactJobStatus.Completed, h.Status));
+        Assert.Equal(new[] { "send a True Friday 1.5 0001-01-01 5 token context", "note b null 0" }.Order(), Recorder.Calls.Order());
+    }
+
+    [Fact]
+    public async Task JobWithTheStoredSignature_RunsItsMethod_NotOneWithDefaults()
+    {
+        var ids = new[]
+        {
+            await AddStoredJobAsync<OptionalJob>("Exact(System.String)", "[\"b\"]"),
+            await EnqueueAsync(db => db.JobEnqueue<OptionalJob>(x => x.Exact("c", true))),
+        };
+
+        var history = await RunAndGetHistoryAsync(ids);
+
+        Assert.All(history, h => Assert.Equal(XactJobStatus.Completed, h.Status));
+        Assert.Equal(new[] { "exact b", "exact c True" }.Order(), Recorder.Calls.Order());
+    }
+
+    [Theory]
+    [InlineData("Ambiguous(System.String)", "is ambiguous", "Ambiguous(System.String, System.Boolean), Ambiguous(System.String, System.Int32)")]
+    [InlineData("Required(System.String)", "wasn't found", "no public method with this signature")]
+    [InlineData("Send(System.Int32)", "wasn't found", "no public method with this signature")]
+    public void StoredSignature_WithoutOneMethodThatAddsOnlyOptionalParameters_IsntFound(string methodName, string error, string detail)
+    {
+        var ex = Assert.Throws<XactJobNotFoundException>(() => StoredJob<OptionalJob>(methodName, "[]").ToMethodInfo());
+
+        Assert.Contains(error, ex.Message);
+        Assert.Contains(detail, ex.Message);
+    }
+
+    [Fact]
+    public void MethodWithDefaults_AndItsOverride_AreOneCandidate_TheOverride()
+    {
+        var (_, method) = StoredJob<DerivedOptionalJob>("Virtual(System.String)", "[]").ToMethodInfo();
+
+        Assert.Equal(typeof(DerivedOptionalJob), method.DeclaringType);
+    }
+
+    private static XactJob StoredJob<T>(string methodName, string methodArgs)
+    {
+        var type = typeof(T);
+
+        return new XactJob(0, DateTime.UtcNow.AddMinutes(-1), $"{type.FullName}, {type.Assembly.GetName().Name}", methodName, methodArgs, QueueNames.Default);
+    }
+
+    private Task<long> AddStoredJobAsync<T>(string methodName, string methodArgs)
+    {
+        return EnqueueAsync(db => db.Jobs.Add(StoredJob<T>(methodName, methodArgs)).Entity);
+    }
+
     private Task<long> EnqueueAsync(Func<TestDbContext, XactJob> enqueue)
     {
         return WithDbAsync(async db =>
@@ -240,6 +306,37 @@ public class SqliteJobOverloadTests : IAsyncLifetime
 
             recorder.Add($"async int {value}");
         }
+    }
+
+    public class OptionalJob(CallRecorder recorder)
+    {
+        public void Send(string to, bool urgent = true, DayOfWeek day = DayOfWeek.Friday, decimal amount = 1.5m, DateTime at = default,
+                         int? count = 5, CancellationToken cancellationToken = default, XactJobContext? context = null)
+        {
+            recorder.Add(string.Join(" ", "send", to, urgent, day, amount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                                     at.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), count,
+                                     cancellationToken.CanBeCanceled ? "token" : "no token", context != null ? "context" : "no context"));
+        }
+
+        // C# allows [Optional] parameters only after the required ones, before any with a default value
+        public void Note(string value, [Optional] string? note, [Optional] int count) => recorder.Add($"note {value} {note ?? "null"} {count}");
+
+        public void Exact(string value) => recorder.Add($"exact {value}");
+
+        public void Exact(string value, bool flag = false) => recorder.Add($"exact {value} {flag}");
+
+        public void Ambiguous(string value, bool flag = false) { }
+
+        public void Ambiguous(string value, int count = 0) { }
+
+        public void Required(string value, int count) { }
+
+        public virtual void Virtual(string value, bool flag = false) { }
+    }
+
+    public sealed class DerivedOptionalJob(CallRecorder recorder) : OptionalJob(recorder)
+    {
+        public override void Virtual(string value, bool flag = false) { }
     }
 
     public sealed class HidingJob(CallRecorder recorder) : OverloadedJob(recorder)

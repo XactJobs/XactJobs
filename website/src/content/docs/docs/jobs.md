@@ -148,7 +148,12 @@ Jobs already in the database were stored with the method's signature, and their 
 
 - **Renaming it, or changing its parameter types** (also renaming a parameter's type, or moving it to another namespace) makes it a
   different job: the jobs enqueued before can't find it. Keep the old method until they have run, e.g. calling the new one.
-- **Adding a parameter** is a new overload: keep the old one in the same way.
+- **Adding a parameter with a default value** at the end is fine: the jobs enqueued before run the method with the default (and a
+  `CancellationToken` or `XactJobContext` added that way gets the worker's). That's the method whose first parameters are the stored
+  ones, with only optional parameters after them, when no method has the stored signature. If two methods would do (e.g.
+  `Send(string, bool = false)` and `Send(string, int = 0)` for a job stored as `Send(string)`), it's ambiguous, as the C# compiler
+  would say, and the job's method isn't found.
+- **Adding a parameter without a default** is a new overload: keep the old one in the same way.
 - **Adding a property to an argument's class** is fine for the jobs enqueued before: the property gets its default value. Make the
   method work without it.
 
