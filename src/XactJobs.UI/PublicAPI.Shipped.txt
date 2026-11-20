@@ -119,13 +119,11 @@ XactJobs.UI.Pages.XactJobsPeriodPageModel.Cursor.set -> void
 XactJobs.UI.Pages.XactJobsPeriodPageModel.CursorQuery(string? cursor) -> string!
 XactJobs.UI.Pages.XactJobsPeriodPageModel.Day.get -> string?
 XactJobs.UI.Pages.XactJobsPeriodPageModel.Day.set -> void
-XactJobs.UI.Pages.XactJobsPeriodPageModel.From.get -> string?
-XactJobs.UI.Pages.XactJobsPeriodPageModel.From.set -> void
 XactJobs.UI.Pages.XactJobsPeriodPageModel.GetPeriod() -> (System.DateTime From, System.DateTime? To)
 XactJobs.UI.Pages.XactJobsPeriodPageModel.Period.get -> string?
 XactJobs.UI.Pages.XactJobsPeriodPageModel.Period.set -> void
-XactJobs.UI.Pages.XactJobsPeriodPageModel.To.get -> string?
-XactJobs.UI.Pages.XactJobsPeriodPageModel.To.set -> void
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Tz.get -> string?
+XactJobs.UI.Pages.XactJobsPeriodPageModel.Tz.set -> void
 XactJobs.UI.Pages.XactJobsPeriodPageModel.XactJobsPeriodPageModel(XactJobs.UI.Services.IXactJobsUIService! service, XactJobs.UI.XactJobsUIOptions! options) -> void
 XactJobs.UI.Services.IXactJobsUIService
 XactJobs.UI.Services.IXactJobsUIService.CancelJobAsync(XactJobs.UI.Services.Models.JobKey! key, string? cancelledBy, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<XactJobs.UI.Services.Models.ActionResultDto!>!
@@ -495,10 +493,8 @@ override XactJobs.UI.Pages.Periodic.IndexModel.LoadAsync(System.Threading.Cancel
 override XactJobs.UI.Pages.RetryButtonModel.Equals(object? obj) -> bool
 override XactJobs.UI.Pages.RetryButtonModel.GetHashCode() -> int
 override XactJobs.UI.Pages.RetryButtonModel.ToString() -> string!
-override XactJobs.UI.Pages.Scheduled.IndexModel.FilterQuery.get -> string!
 override XactJobs.UI.Pages.Scheduled.IndexModel.HasSearch.get -> bool
 override XactJobs.UI.Pages.Scheduled.IndexModel.LoadAsync(System.Threading.CancellationToken ct) -> System.Threading.Tasks.Task!
-override XactJobs.UI.Pages.XactJobsPeriodPageModel.FilterQuery.get -> string!
 override XactJobs.UI.Pages.XactJobsPeriodPageModel.TableUrl.get -> string!
 override XactJobs.UI.Services.Models.ActionResultDto.Equals(object? obj) -> bool
 override XactJobs.UI.Services.Models.ActionResultDto.GetHashCode() -> int

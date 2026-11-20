@@ -1,9 +1,1 @@
 #nullable enable
-*REMOVED*override XactJobs.UI.Pages.Scheduled.IndexModel.FilterQuery.get -> string!
-*REMOVED*XactJobs.UI.Pages.XactJobsPeriodPageModel.From.get -> string?
-*REMOVED*XactJobs.UI.Pages.XactJobsPeriodPageModel.From.set -> void
-*REMOVED*XactJobs.UI.Pages.XactJobsPeriodPageModel.To.get -> string?
-*REMOVED*XactJobs.UI.Pages.XactJobsPeriodPageModel.To.set -> void
-*REMOVED*override XactJobs.UI.Pages.XactJobsPeriodPageModel.FilterQuery.get -> string!
-XactJobs.UI.Pages.XactJobsPeriodPageModel.Tz.get -> string?
-XactJobs.UI.Pages.XactJobsPeriodPageModel.Tz.set -> void
