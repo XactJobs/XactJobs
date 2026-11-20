@@ -102,6 +102,9 @@ public class InvalidJobs
     public async void AsyncVoid() => await Task.Yield();
 #pragma warning restore VSTHRD100
     internal void NotPublic() { }
+    public void WithDefault(int id, bool urgent = false) { }
+    public void WithOptionalToken(int id, CancellationToken cancellationToken = default) { }
+    public void WithOptionalAttribute(int id, [System.Runtime.InteropServices.Optional] string? name) { }
 }
 
 internal static class InternalJobs

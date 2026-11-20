@@ -37,6 +37,10 @@ public class SerializerValidationTests : IDisposable
         ("func parameter", db => db.JobEnqueue<InvalidJobs>(x => x.WithFunc(() => 1))),
         ("async void", db => db.JobEnqueue<InvalidJobs>(x => x.AsyncVoid())),
         ("internal method", db => db.JobEnqueue<InvalidJobs>(x => x.NotPublic())),
+        ("parameter with a default value", db => db.JobEnqueue<InvalidJobs>(x => x.WithDefault(1, false))),
+        ("cancellation token with a default value", db => db.JobEnqueue<InvalidJobs>(x => x.WithOptionalToken(1, default))),
+        ("[Optional] parameter", db => db.JobEnqueue<InvalidJobs>(x => x.WithOptionalAttribute(1, null))),
+        ("periodic parameter with a default value", db => db.JobEnsurePeriodic<InvalidJobs>(x => x.WithDefault(1, false), "golden_optional", Cron.Daily())),
         ("private static method", db => db.JobEnqueue(() => PrivateJob())),
         ("not a method call", db => db.JobEnqueue(() => SomeAction())),
         ("method of another instance", db => db.JobEnqueue<InstanceJobs>(x => new InstanceJobs().Run())),
@@ -56,6 +60,11 @@ public class SerializerValidationTests : IDisposable
         ["func parameter"] = typeof(System.NotSupportedException),
         ["async void"] = typeof(System.NotSupportedException),
         ["internal method"] = typeof(System.NotSupportedException),
+        // stored with all its parameters; a job stored before they were added runs the method with their defaults
+        ["parameter with a default value"] = null,
+        ["cancellation token with a default value"] = null,
+        ["[Optional] parameter"] = null,
+        ["periodic parameter with a default value"] = null,
         ["private static method"] = typeof(System.NotSupportedException),
         ["not a method call"] = typeof(System.ArgumentException),
         ["method of another instance"] = null, // stored as InstanceJobs.Run(): the worker creates its own instance
